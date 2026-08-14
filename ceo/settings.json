@@ -1,0 +1,50 @@
+{
+  "$comment": "Deny rules của CEO. P2 — model không sửa được file này. Model ghim ở đây để CEO không đổi theo settings global của máy.",
+  "permissions": {
+    "allow": [
+      "Bash(python3 ops/dispatch.py:*)"
+    ],
+    "deny": [
+      "Write",
+      "Edit",
+      "NotebookEdit",
+      "WebFetch",
+      "WebSearch",
+      "Task",
+      "Read",
+      "Skill",
+      "ToolSearch",
+      "Artifact",
+      "ScheduleWakeup",
+      "CronCreate",
+      "CronDelete",
+      "CronList",
+      "TaskCreate",
+      "TaskStop",
+      "SendMessage",
+      "PushNotification",
+      "RemoteTrigger",
+      "Monitor",
+      "Bash(rm:*)",
+      "Bash(sudo:*)",
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Bash(git:*)",
+      "Bash(sqlite3:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /home/tsix/companySpec/ceo/hooks/guard.py"
+          }
+        ]
+      }
+    ]
+  },
+  "model": "claude-sonnet-4-6"
+}

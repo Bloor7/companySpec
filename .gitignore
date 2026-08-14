@@ -1,0 +1,52 @@
+# Môi trường và phụ thuộc — tái tạo được, không commit
+.venv/
+venv/
+node_modules/
+__pycache__/
+*.pyc
+
+# Dữ liệu company — backup riêng theo company (C3.3)
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+# WAL đẻ ra CẢ HAI tệp phụ: -wal và -shm. Bản cũ chỉ chặn -wal, nên
+# companies/seoCompany/store.sqlite-shm suýt lọt vào commit đầu tiên — phát
+# hiện 2026-08-14 bằng cách dựng kho git thử ở thư mục tạm rồi soát `git add`,
+# chứ đọc .gitignore bằng mắt thì không thấy.
+*.sqlite-shm
+companies/*/store.sqlite
+backOffice/store.sqlite
+
+# Secret — không bao giờ nằm trong repo (F2)
+.env
+.env.*
+*.key
+*.pem
+
+# Định danh cá nhân — F6
+*.local.yaml
+*.local.json
+
+# Sản phẩm chạy ra
+companies/*/out/
+backOffice/reports/
+
+# Bản clone dự án ngoài (R1) — mỗi project company một thư mục. Tái tạo được
+# bằng repoClient.dong_bo(), và là repo git riêng nên không lồng vào repo này.
+workspaces/
+
+# n8n runtime
+ops/.env
+
+# khoá tiến trình
+ops/.poller.lock
+
+# Bản chụp Notion — dữ liệu thật, backup riêng
+backOffice/snapshots/
+
+# Môi trường chạy phần nghe tin thoại — F4: repo là đặc tả, không phải môi
+# trường. Dựng lại bằng: python3 -m venv .venv-stt && .venv-stt/bin/pip install -r requirements-stt.txt
+.venv-stt/
+backOffice/media/
+# Sổ ghi những lần đọc ảnh hỏng — dấu vết lúc chạy, không phải đặc tả (F4).
+backOffice/media-loi.jsonl

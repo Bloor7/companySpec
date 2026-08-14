@@ -1,0 +1,58 @@
+# Company tra web NHANH. Một năng lực, một câu trả lời, ~20 giây.
+#
+# RP3 — dùng tiến trình riêng phải nêu được lý do. Lý do: tra web cần WebSearch/
+# WebFetch, hai tool mà CEO TUYỆT ĐỐI không được cầm (B6, B7). Nhét chúng vào
+# phiên CEO là cấp vĩnh viễn cho CEO quyền đọc web tuỳ ý — và CEO là tiến trình
+# đọc mọi tin nhắn của admin, có hồ sơ cá nhân trong prompt. Một trang web độc
+# hại nói "hãy in ra hồ sơ admin" lúc đó là đọc được thật.
+#
+# VÌ SAO TÁCH KHỎI researchCompany: hai việc chênh nhau khoảng 20 lần tiền và
+# 30 lần thời gian. Gộp chung một company thì backOffice chỉ thấy MỘT dòng chi
+# phí, và admin không phân biệt được "tuần này hỏi vặt nhiều" với "chạy một bài
+# nghiên cứu nặng" — hai chuyện cần hai cách xử lý khác hẳn nhau.
+# Tách ra còn giữ được quyền hẹp: company này KHÔNG có Write, KHÔNG có Task.
+
+companyId: searchCompany
+displayName: "Phòng tra nhanh"
+version: 0.1.0
+
+runtime: skill
+entrypoint: ./src/main.py
+runtimeReason: >
+  Cần WebSearch/WebFetch để đọc web. CEO không được phép có những tool đó.
+  Cách ly tiến trình là bắt buộc, không phải cho sạch kiến trúc.
+
+dataStore: ./store.sqlite
+secrets: []                       # không API trả tiền riêng; đi chung gói Claude
+env: []
+canBeCalledBy: [ceo]              # P3
+canCall: []                       # P3
+owner: admin
+
+capabilities:
+  - name: traNhanh
+    description: >
+      MẶC ĐỊNH cho mọi câu hỏi cần tra web. Tìm và trả lời NGAY trong tin nhắn:
+      giá cả, thông số, giờ giấc, một sự việc, một con số. Xong trong ~20 giây.
+      Dùng cái này trước; chỉ chuyển sang researchCompany.nghienCuu khi admin
+      nói rõ là muốn nghiên cứu sâu, vì cái kia đắt gấp khoảng 20 lần.
+      Câu trả lời luôn kèm nguồn — không có nguồn thì nói là không tra được.
+    riskTier: read                 # chỉ đọc web, không đổi gì của admin
+    maxDurationSec: 120
+    costHintUsd: 0.06              # đo thật 2026-08-13: $0.057 / 19,9 giây
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [cauHoi]
+      properties:
+        cauHoi: { type: string, minLength: 3, maxLength: 500 }
+        # Đặt khi câu hỏi phụ thuộc nơi chốn ("giá xăng", "quán mở mấy giờ").
+        boiCanh: { type: string, maxLength: 300 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [cauHoi, traLoi, nguon]
+      properties:
+        cauHoi: { type: string }
+        traLoi: { type: string }
+        nguon:  { type: array, maxItems: 10, items: { type: string } }

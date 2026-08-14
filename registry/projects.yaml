@@ -1,0 +1,98 @@
+# Danh mục dự án ngoài mà hệ được phép làm việc cùng.
+#
+# VÌ SAO LÀ FILE CHỨ KHÔNG PHẢI COMPANY: dự án là DỮ LIỆU, không phải một tầng
+# trong sơ đồ gọi. P3 cấm company gọi company, nên "tầng quản lý dự án" không
+# được phép tồn tại dưới dạng một company đứng giữa. Nó tồn tại ở đây, dưới dạng
+# một khối khai báo mà mọi project company đều tra được.
+#
+# Thêm dự án thứ hai = thêm một khối trong file này. Không đẻ company mới, không
+# đụng CEO, không đụng dispatcher (C4).
+#
+# KHÔNG chứa secret (F2). Repo phải là repo công khai, hoặc token nằm ở ops/.env
+# và khai tên biến qua `secretToken` — không bao giờ khai giá trị ở đây.
+
+projects:
+  panharmon:
+    displayName: "Panharmon — blog giải mộng"
+
+    # Chỉ dùng để company tự clone một bản riêng. Company KHÔNG BAO GIỜ được
+    # trỏ vào thư mục làm việc của admin (~/panharmon): ở đó có việc đang làm
+    # dở và có .env.local chứa khoá Supabase, Resend thật.
+    repo: "https://github.com/Bloor7/handoff_panharmon.git"
+    congKhai: true              # clone được không cần token — đã kiểm 2026-08-06
+
+    # R2 — nhánh này chỉ admin ghi. Company đẩy nhánh phụ, hết.
+    nhanhBaoVe: main
+
+    khung: nextjs
+    site: "https://panharmon.com"
+
+    lenh:
+      build: "npm run build"
+      lint:  "npm run lint"
+      test:  null               # package.json chưa có script test — đừng bịa ra
+
+    # Nội dung blog nằm trong Supabase, KHÔNG nằm trong repo. Đăng bài là ghi
+    # vào bảng `posts`, không phải commit git.
+    #
+    # URL này công khai (app phơi nó qua NEXT_PUBLIC_SUPABASE_URL) nên để đây
+    # được. KHOÁ thì không: khai tên biến, giá trị nằm ở ops/.env (F2).
+    noiDung:
+      loai: supabase
+      # Lấy từ NEXT_PUBLIC_SUPABASE_URL của panharmon, đã xác minh phân giải
+      # được 2026-08-06. LƯU Ý: ref trong .env.local.example là dự án CŨ đã
+      # chết (ywdbxdvakoptyfldbyqf) — đừng chép từ đó.
+      url: "https://pbcdlilpbnoiquipsqwa.supabase.co"
+      # Khoá anon — CÔNG KHAI, app đã gửi thẳng xuống trình duyệt khách nên để
+      # đây không lộ thêm gì. Nó chỉ nói "dự án nào", không cấp quyền gì.
+      khoaCongKhai: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBiY2RsaWxwYm5vaXF1aXBzcXdhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5NjQ5OTgsImV4cCI6MjA5NTU0MDk5OH0.EPoF6NH0rxrKx4hjKwkOQ-kLks7tOQmraMF_-jEkfK4"
+
+      # Quyền THẬT đến từ tài khoản bot, không từ khoá vạn năng. Xem R-KHOÁ.
+      bienEmail: PANHARMON_BOT_EMAIL
+      bienMatKhau: PANHARMON_BOT_PASSWORD
+      bienRevalidate: PANHARMON_REVALIDATE_SECRET
+
+      # `content` của posts là JSON dạng TipTap, không phải markdown/HTML.
+      # Ghi markdown thô vào đây thì bài hiện ra một cục chữ không xuống dòng.
+      dinhDangNoiDung: tiptap
+
+      # Bài nháp KHÔNG có đường xem thử công khai: lib/articles.ts lọc
+      # status=published, và app/giai-ma/[slug] gọi notFound() khi không thấy —
+      # nên mọi link công khai tới bài nháp đều 404, kể cả đúng slug.
+      # Chỗ duy nhất xem được là trang soạn thảo, và phải trỏ đúng BÀI chứ
+      # không phải danh sách, nếu không admin lại phải tự đi tìm.
+      duongDanDuyet: "/admin/posts?edit={postId}"
+
+      # Bài không có danh mục thì trang công khai hiện KHÔNG tag nào —
+      # lib/articles.ts lấy tag hiển thị từ category, không từ bảng `tags`
+      # (bảng đó là tính năng CMS chưa nối vào site). Panharmon hiện chỉ có
+      # đúng một danh mục nên mặc định luôn, khỏi bắt CEO chọn.
+      danhMucMacDinh: "Giải mã giấc mơ"
+
+      # Ghi xong PHẢI gọi revalidate, nếu không trang tĩnh vẫn là bản cũ.
+      duongDanLamMoi: ["/blog", "/giai-ma", "/sitemap.xml"]
+
+    # Khuôn cho writerCompany. Rút ra từ bài đang đăng thật ("Nước trong giấc mơ")
+    # chứ không phải bịa ra — bài mới phải đứng cạnh bài cũ mà không lệch giọng.
+    vietBai:
+      ngonNgu: "tiếng Việt"
+      doDaiTu: 700
+      giongVan: >
+        Ấm, chậm, tôn trọng người đọc. Không phán "giấc mơ này báo điềm gì" —
+        mở ra cho người đọc tự soi. Dùng ca dao, ngũ hành, hình ảnh làng quê
+        Việt một cách tự nhiên, không lên gân. Xưng "bạn". Tránh giọng thầy bói
+        và tránh cả giọng giáo trình tâm lý học.
+      danBai:
+        - "Trong tâm thức người Việt"
+        - "Góc nhìn tâm lý học hiện đại"
+        - "Lời khuyên dịu dàng"
+
+      # Bài đầu tiên viết ra là 11 đoạn văn liền nhau — đúng giọng nhưng đọc
+      # thành một khối chữ, trong khi bài "Nước" đang đăng có gạch đầu dòng phá
+      # nhịp. Trên điện thoại khác biệt này quyết định người ta đọc hay lướt.
+      cauTruc: >
+        Ít nhất MỘT danh sách gạch đầu dòng (3-5 mục), đặt ở mục giữa, mỗi mục
+        mở đầu bằng một cụm in đậm rồi mới giải thích — ví dụ
+        "- **Nước trong, phẳng lặng** - bạn đang ở giai đoạn nội tâm bình an."
+        Trong phần văn xuôi, in đậm 2-3 cụm từ khoá đáng nhớ. Đoạn văn giữ ngắn,
+        3-4 câu, đừng để đoạn nào dài quá 5 câu.

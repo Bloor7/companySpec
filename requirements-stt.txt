@@ -1,0 +1,9 @@
+# Bộ nghe tin thoại — chạy HOÀN TOÀN trên máy admin, giọng nói không gửi đi đâu.
+#
+# Dựng lại:
+#   python3 -m venv .venv-stt
+#   .venv-stt/bin/pip install -r requirements-stt.txt
+#
+# Cần sẵn ffmpeg trong hệ thống (Telegram gửi .ogg/opus):
+#   sudo apt install ffmpeg
+faster-whisper>=1.0

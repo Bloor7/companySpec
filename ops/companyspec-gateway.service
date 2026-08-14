@@ -1,0 +1,43 @@
+# Chạy adminGateway tự động, không phải gõ tay mỗi lần bật máy.
+#
+#   mkdir -p ~/.config/systemd/user
+#   cp ops/companyspec-gateway.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now companyspec-gateway
+#   loginctl enable-linger "$USER"      # chạy cả khi chưa đăng nhập
+#
+# Xem log:     journalctl --user -u companyspec-gateway -f
+# Tắt:         systemctl --user disable --now companyspec-gateway
+
+[Unit]
+Description=companySpec adminGateway — Telegram long polling
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/companySpec
+
+# chatId + gateway token. File này do ops/setup-bot.sh sinh ra, chmod 600.
+EnvironmentFile=%h/companySpec/ops/.env
+
+# claude CLI nằm trong nvm nên phải nói rõ PATH, service không đọc ~/.bashrc.
+Environment=PATH=%h/.nvm/versions/node/v22.22.3/bin:/usr/local/bin:/usr/bin:/bin
+
+ExecStart=/usr/bin/python3 %h/companySpec/ops/poller.py
+
+Restart=on-failure
+RestartSec=5
+
+# Chỉ giết tiến trình chính khi dừng, KHÔNG giết tiến trình con.
+# Mặc định (control-group) diệt cả cây: restart gateway giữa lúc seoCompany
+# đang audit là mất trắng 4 phút công việc. Đã xảy ra thật.
+# Đổi lại: audit dở có thể sống sót qua restart và ghi xong báo cáo, chỉ là
+# không gửi được về Telegram. Dọn bằng sweep_orphans trong dispatcher.
+KillMode=process
+
+# không mở cổng nào — chỉ gọi ra Telegram. Siết thêm cho chắc.
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

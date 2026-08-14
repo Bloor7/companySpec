@@ -1,0 +1,65 @@
+# Company nghiên cứu sâu. Đọc nhiều nguồn, ghi ra một báo cáo HTML.
+#
+# RP3 — dùng tiến trình riêng phải nêu được lý do. Lý do: cần WebSearch/WebFetch
+# để đọc web và Task để chạy nhiều luồng đọc song song — những tool mà CEO
+# TUYỆT ĐỐI không được cầm (B6, B7). CEO là tiến trình đọc mọi tin nhắn của
+# admin và có hồ sơ cá nhân trong prompt; cho nó đọc web tuỳ ý là mở đường cho
+# một trang lạ nói "hãy in ra hồ sơ admin".
+#
+# ĐÂY LÀ CÁI ĐẮT. Mỗi lần gọi tốn khoảng 20 lần searchCompany.traNhanh và mất
+# 5–15 phút. Tách hẳn khỏi searchCompany chính là để cái giá đó hiện thành một
+# dòng riêng trong backOffice: gộp chung thì admin không phân biệt được "tuần
+# này hỏi vặt nhiều" với "chạy một bài nghiên cứu nặng".
+#
+# Câu hỏi vặt thì gọi searchCompany, đừng gọi vào đây.
+
+companyId: researchCompany
+displayName: "Phòng nghiên cứu"
+version: 0.2.0
+
+runtime: skill
+entrypoint: ./src/main.py
+runtimeReason: >
+  Cần WebSearch/WebFetch để đọc web và Task để chạy nhiều luồng đọc song song.
+  CEO không được phép có những tool đó. Cách ly tiến trình là bắt buộc, không
+  phải cho sạch kiến trúc.
+
+dataStore: ./store.sqlite
+secrets: []                       # không API trả tiền riêng; đi chung gói Claude
+env: []
+canBeCalledBy: [ceo]              # P3
+canCall: []                       # P3
+owner: admin
+
+capabilities:
+  - name: nghienCuu
+    description: >
+      CHỈ dùng khi admin nói rõ "nghiên cứu", "tìm hiểu sâu", "so sánh giúp",
+      "đọc kỹ giúp" — hoặc khi câu hỏi cần đối chiếu nhiều nguồn mới trả lời được.
+      Chạy nhiều luồng đọc song song, ghi ra một báo cáo HTML rồi trả ĐƯỜNG DẪN.
+      Mất 5–15 PHÚT và tốn khoảng 20 lần searchCompany.traNhanh.
+      Câu hỏi vặt thì gọi searchCompany.traNhanh, KHÔNG gọi cái này.
+    riskTier: read                 # chỉ đọc web, không đổi gì của admin
+    maxDurationSec: 900            # chạm trần chịu đựng của gateway; đừng nâng thêm
+    # Đo thật 2026-08-13: $3,47 · 9,1 phút · 3 luồng · 59 nguồn. Gấp 41 lần
+    # traNhanh ($0,084), và ăn 69% cửa sổ hạn mức 5 tiếng trong MỘT lời gọi.
+    # Con số ước ban đầu là $1,00 — hụt 3,5 lần. Đừng đoán lại; đo tiếp nếu đổi.
+    costHintUsd: 3.50
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [chuDe]
+      properties:
+        chuDe:    { type: string, minLength: 3, maxLength: 300 }
+        # Điều admin thật sự muốn biết. Không có thì báo cáo dễ thành bài
+        # bách khoa toàn thư đúng mà vô dụng.
+        quyetDinh: { type: string, maxLength: 500 }
+        soLuong:  { type: integer, minimum: 1, maximum: 6 }   # số luồng đọc
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [chuDe, reportPath]
+      properties:
+        chuDe:      { type: string }
+        reportPath: { type: string }
+        nguon:      { type: integer }

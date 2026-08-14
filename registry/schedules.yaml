@@ -1,0 +1,87 @@
+# Việc định kỳ. §12c — cửa vào thứ hai của hệ, hẹp hơn hẳn cửa của admin.
+#
+# S2 — MỌI lịch phải khai ở đây trước. CEO không được tự đặt lịch (§11 luật 13).
+#      Không có mục nào ở đây thì không có việc định kỳ nào chạy.
+# S3 — trần rủi ro của cron là `read`. Không lịch nào được ghi.
+# S5 — phiên riêng, không bao giờ nối vào luồng hội thoại của admin.
+# S6 — cron không đánh thức cron.
+#
+# Giờ theo múi Asia/Ho_Chi_Minh. Bộ chạy kiểm mỗi 15 phút (systemd timer), nên
+# lịch chỉ chính xác tới mức 15 phút — đủ cho báo cáo, không dùng cho việc gấp.
+
+schedules:
+  - scheduleId: morningReport
+    displayName: "Báo cáo sáng"
+    enabled: true
+    at: "05:30"                  # mỗi ngày — admin dậy 5h30 mở cửa, đọc luôn lúc đó
+    days: [2, 3, 4, 5, 6, 7, 8]  # 2=thứ Hai … 8=Chủ nhật
+    kind: digest                 # digest | companyCall
+    # Không dùng LLM (RP1) — mọi con số đều tra được bằng code cứng.
+    sections: [agenda, quota, activity, approvals, permissions, plan]
+    quietIfEmpty: false          # báo cáo sáng thì vẫn gửi dù không có gì lạ
+
+  - scheduleId: quotaWatch
+    displayName: "Canh hạn mức"
+    enabled: true
+    everyHours: 2
+    kind: digest
+    sections: [quota]
+    # Chỉ nhắn khi có chuyện. Cảnh báo mà nhắn suốt thì admin sẽ ngừng đọc.
+    quietIfEmpty: true
+
+  - scheduleId: calendarWatch
+    displayName: "Sắp tới giờ"
+    enabled: true
+    everyHours: 0.25             # bộ chạy 15 phút/lần, nên đây là "mỗi lần chạy"
+    kind: companyCall
+    companyId: calendarCompany
+    capability: upcomingEvents   # read — cron nhắc, không tự sửa lịch (S3)
+    input: { trongPhut: 30, danhDau: true }
+    # Không có gì sắp tới thì im. Mỗi sự kiện chỉ nhắc đúng một lần.
+    quietIfEmpty: true
+
+  - scheduleId: savingsNudge
+    displayName: "Nhắc nạp quỹ"
+    enabled: true
+    at: "08:00"
+    dayOfMonth: 1                # cùng ngày lương về — nhắc lúc còn tiền trong tay
+    kind: companyCall
+    companyId: savingsCompany
+    capability: fundProgress     # read — S3 cho phép; cron chỉ nhắc, không tự nạp
+    input: { nhacNap: true }     # báo cáo xong thì hỏi luôn: tháng này nạp bao nhiêu
+    # Vẫn gửi dù chưa có quỹ nào: tháng nào cũng thấy thanh tiến độ mới là nhắc.
+    quietIfEmpty: false
+
+  - scheduleId: dailyMoney
+    displayName: "Tiền cuối ngày"
+    enabled: true
+    at: "21:00"                   # trước lúc admin đi ngủ, còn kịp điều chỉnh
+    days: [2, 3, 4, 5, 6, 7, 8]
+    kind: digest                  # digest chứ không phải companyCall: cần ghép
+    sections: [tienbac]           # nhiều company lại, việc đó chỉ hạ tầng làm được
+    quietIfEmpty: false
+    # Không dùng LLM (RP1) — mọi con số đều tra được bằng code cứng, nên báo cáo
+    # này chạy mỗi tối mà không tốn một đồng hạn mức nào.
+
+  - scheduleId: goalNudge
+    displayName: "Bước sắp tới hạn"
+    enabled: true
+    at: "08:00"
+    days: [2]                    # sáng thứ Hai, cùng nhịp với tiến độ video
+    kind: companyCall
+    companyId: goalCompany
+    capability: dueSteps         # read — cron nhắc, admin mới đánh dấu (S3)
+    input: { trongNgay: 7, chiKhiCo: true }
+    # Tuần nào không có bước nào tới hạn thì im.
+    quietIfEmpty: true
+
+  - scheduleId: weeklyPlan
+    displayName: "Tiến độ 100 video"
+    enabled: true
+    at: "08:00"
+    days: [2]                    # sáng thứ Hai
+    kind: companyCall
+    companyId: planCompany
+    capability: progressReport   # riskTier phải là read, dispatcher tự kiểm (S3)
+    input: {}
+    quietIfEmpty: false

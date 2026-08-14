@@ -1,0 +1,78 @@
+# Company phân tích SEO. Bọc plugin claude-seo (31 skill, 18 subagent).
+#
+# ĐÂY LÀ COMPANY DUY NHẤT DÙNG LLM (runtime: skill).
+#
+# RP3 — dùng tiến trình riêng phải nêu được lý do. Lý do ở đây là thật và cứng:
+# skill SEO cần WebFetch, WebSearch, Task để đọc web và chạy subagent — những
+# tool mà CEO TUYỆT ĐỐI không được có (B6, B7). Chạy chung phiên với CEO nghĩa
+# là cấp vĩnh viễn cho CEO quyền đọc web tuỳ ý. Tiến trình riêng là cách duy
+# nhất giữ được ranh giới đó.
+#
+# Giá phải trả: mỗi lần gọi tốn ~31.500 token nạp mới (danh mục 31 skill) trước
+# khi làm gì. Đắt hơn mọi company khác một bậc — nên đừng gọi nó cho việc vặt.
+
+companyId: seoCompany
+displayName: "Phòng SEO"
+version: 0.1.0
+
+runtime: skill
+entrypoint: ./src/main.py         # runner: dựng prompt, gọi claude -p, gom kết quả
+runtimeReason: >
+  Cần WebFetch/WebSearch/Task để đọc web và chạy subagent — CEO không được phép
+  có những tool đó. Cách ly tiến trình là bắt buộc, không phải cho sạch kiến trúc.
+
+dataStore: ./store.sqlite
+secrets: []                       # không API trả tiền; chỉ dùng gói Pro
+env: []
+canBeCalledBy: [ceo]
+canCall: []
+owner: admin
+
+capabilities:
+  - name: auditPage
+    description: >
+      MẶC ĐỊNH cho mọi yêu cầu kiểm tra SEO. Phân tích sâu MỘT trang:
+      thẻ meta, cấu trúc, nội dung, schema, tốc độ. Xong trong khoảng 1 phút.
+      Dùng cái này trừ khi admin nói rõ muốn quét TOÀN BỘ site.
+    riskTier: read                 # chỉ đọc web, không đổi gì của admin
+    maxDurationSec: 600            # đọc web + suy luận, không nhanh được
+    costHintUsd: 0.35
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [url]
+      properties:
+        url:   { type: string, minLength: 8, maxLength: 300 }
+        focus: { type: string, maxLength: 200 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [url, reportPath]
+      properties:
+        url:        { type: string }
+        reportPath: { type: string }
+        findings:   { type: integer }
+
+  - name: auditSite
+    description: >
+      CHỈ dùng khi admin nói rõ "toàn site", "tất cả các trang", "quét cả web".
+      Thu thập nhiều trang, chạy song song nhiều chuyên gia. Mất 5–15 PHÚT và
+      tốn gấp 6 lần auditPage. Không dùng cho câu hỏi chung chung.
+    riskTier: read
+    maxDurationSec: 900            # chạm trần chịu đựng của gateway; đừng nâng thêm
+    costHintUsd: 2.00              # ĐẮT — nhiều subagent chạy song song
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [url]
+      properties:
+        url:      { type: string, minLength: 8, maxLength: 300 }
+        maxPages: { type: integer, minimum: 1, maximum: 50 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [url, reportPath]
+      properties:
+        url:        { type: string }
+        reportPath: { type: string }
+        findings:   { type: integer }

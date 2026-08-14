@@ -1,0 +1,131 @@
+# Company theo dõi thu nhập. Cất dữ liệu vào Notion.
+#
+# C4 — ranh giới là CÔNG VIỆC (tiền vào), không phải công cụ (Notion) và cũng
+# không phải chủ đề chung "tiền bạc". Chi tiêu là tiền ra, tiết kiệm là tiền để
+# dành: ba việc khác nhau, ba sổ khác nhau, ba company khác nhau (C3).
+#
+# Câu "tháng này còn dư bao nhiêu" KHÔNG thuộc company nào cả: CEO gọi
+# incomeCompany.sumIncomes và expenseCompany.sumExpenses rồi tự trừ. Cho company
+# này đọc sổ Chi tiêu là phá C3 — và từ đó không ai biết ai đang đọc dữ liệu của ai.
+
+companyId: incomeCompany
+displayName: "Phòng thu nhập"
+version: 0.1.0
+
+runtime: code                     # RP1 — đọc/ghi bản ghi có cấu trúc, không cần LLM
+entrypoint: ./src/main.py
+runtimeReason: "Việc xác định trước: cộng trừ trên bản ghi có cấu trúc. Không cần hiểu ngôn ngữ tự nhiên."
+
+dataStore: ./store.sqlite         # C3 — nhật ký riêng; dữ liệu thật ở Notion
+secrets: [NOTION_TOKEN]           # C2.4 — chỉ khai TÊN
+env:     [NOTION_INCOME_DATABASE_ID]
+canBeCalledBy: [ceo]              # P3
+canCall: []                       # P3
+owner: admin
+
+capabilities:
+  - name: listIncomes
+    description: "Liệt kê các khoản thu trong một khoảng thời gian."
+    riskTier: read
+    maxDurationSec: 20
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        tuNgay:  { type: string, minLength: 10, maxLength: 35 }
+        denNgay:    { type: string, minLength: 10, maxLength: 35 }
+        nguon:
+          enum: [lương, freelance, kinh doanh, đầu tư, thưởng, khác]
+        gioiHan: { type: integer, minimum: 1, maximum: 100 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [incomes, count]
+      properties:
+        count:   { type: integer }
+        incomes: { type: array }
+
+  - name: sumIncomes
+    description: "Cộng tổng thu nhập trong khoảng thời gian, tách theo nguồn."
+    riskTier: read
+    maxDurationSec: 20
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        tuNgay: { type: string, minLength: 10, maxLength: 35 }
+        denNgay:   { type: string, minLength: 10, maxLength: 35 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [total, count, byNguon, from, to]
+      properties:
+        total:   { type: number }
+        count:   { type: integer }
+        from:    { type: string }
+        to:      { type: string }
+        byNguon: { type: object }
+
+  - name: addIncome
+    description: "Ghi một khoản thu vào sổ Notion."
+    # W1 — company mới bắt đầu ở read. Năng lực này khai `write` nhưng lần chạy
+    # THẬT đầu tiên phải do admin bấm duyệt; trước đó chỉ chạy --dry-run (W2).
+    riskTier: write                # tạo được thì xoá được → hoàn tác được
+    maxDurationSec: 20
+    # G8 — whitelist theo nguồn thu. "Luôn cho phép ghi lương" thì hợp lý vì
+    # tháng nào cũng đúng một khoản đó; "luôn cho phép ghi khoản thu bất kỳ"
+    # thì không.
+    whitelistScope: [nguon]
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [soTien, nguon]
+      properties:
+        soTien: { type: number, minimum: 0, maximum: 1000000000 }
+        # Từ vựng ĐÓNG, cùng lý do như Danh mục của expenseCompany: để chuỗi tự
+        # do thì CEO tự đặt "Lương", "lương tháng", "salary"… và cộng tổng theo
+        # nguồn thành vô nghĩa. Muốn thêm nguồn thì sửa file này VÀ sửa select
+        # trong Notion — một hành động có chủ ý.
+        nguon:
+          enum: [lương, freelance, kinh doanh, đầu tư, thưởng, khác]
+        ghiChu: { type: string, maxLength: 500 }
+        ngay: { type: string, minLength: 10, maxLength: 35 }   # ngày, hoặc ISO kèm giờ
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [incomeId, amount, nguon, date]
+      properties:
+        incomeId: { type: string }
+        amount:   { type: number }
+        nguon:    { type: string }
+        date:     { type: string }
+        url:      { type: string }
+
+  - name: deleteIncome
+    description: >
+      Xoá một khoản thu đã ghi. PHẢI gọi listIncomes trước để lấy incomeId và
+      số tiền, ngày của đúng khoản đó — năng lực này không tự tìm hộ.
+      Notion giữ trong thùng rác 30 ngày nên khôi phục được.
+    riskTier: write                 # Notion giữ 30 ngày → hoàn tác được
+    maxDurationSec: 20
+    # CỐ Ý KHÔNG CÓ whitelistScope (G12). Xoá thì lần nào cũng phải hỏi.
+    inputSchema:
+      type: object
+      additionalProperties: false
+      # amount và date bắt buộc, KHÔNG phải để tìm kiếm mà để ĐỐI CHIẾU với thứ
+      # admin đã nhìn thấy lúc bấm duyệt. CEO nhầm hay bịa đều bị chặn.
+      required: [incomeId, soTien, ngay]
+      properties:
+        incomeId: { type: string, minLength: 32, maxLength: 40 }
+        soTien:   { type: number, minimum: 0 }
+        ngay:     { type: string, minLength: 10, maxLength: 10 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [incomeId, amount, nguon, date]
+      properties:
+        incomeId: { type: string }
+        amount:   { type: number }
+        nguon:    { type: [string, "null"] }
+        date:     { type: string }
+        note:     { type: string }

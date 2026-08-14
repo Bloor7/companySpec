@@ -1,0 +1,143 @@
+# Company quản trị dự án panharmon. Company ĐẦU TIÊN làm việc với dự án ngoài.
+#
+# VAI TRÒ: giữ chìa khoá ghi của panharmon. Đây là toàn bộ lý do nó tồn tại như
+# một company riêng thay vì một `blogCompany` dùng chung mọi dự án — whitelist
+# và duyệt gắn vào cặp companyId+capability (G7, G8), nên tách company chính là
+# tách quyền theo dự án. Bấm "luôn cho phép" ở đây không mở cửa cho dự án khác.
+#
+# NÓ KHÔNG GỌI COMPANY NÀO KHÁC (P3). Bài viết do writerCompany sinh, điểm SEO
+# do seoCompany chấm — CEO cầm kết quả đưa sang, không phải company này đi lấy.
+#
+# Nội dung nằm trong Supabase chứ không trong repo, nên company này KHÔNG dùng
+# repoClient. Khi nào làm tới khâu sửa code panharmon thì mới dùng.
+
+companyId: panharmonCompany
+displayName: "Quản trị Panharmon"
+version: 0.1.0
+
+runtime: code
+entrypoint: ./src/main.py
+runtimeReason: >
+  Đọc/ghi bản ghi có cấu trúc trên Supabase. Không suy luận gì — CEO đã quyết
+  đăng cái gì, company chỉ thực thi (RP1: tra được bằng code thì đừng gọi model).
+
+dataStore: ./store.sqlite
+
+# Chỉ hai khoá, và cả hai đều chỉ đủ cho việc của panharmon. Xem ghi chú R-KHOÁ
+# ở cuối file về việc KHÔNG dùng service_role.
+secrets: [PANHARMON_BOT_EMAIL, PANHARMON_BOT_PASSWORD, PANHARMON_REVALIDATE_SECRET]
+env:     []
+canBeCalledBy: [ceo]
+canCall: []                        # luôn rỗng — P3
+owner: admin
+
+capabilities:
+  - name: listPosts
+    description: >
+      Liệt kê bài viết của panharmon, lọc theo trạng thái (draft/published/scheduled).
+      Dùng để xem còn bài nháp nào chờ duyệt, hoặc tra lại bài đã đăng.
+    riskTier: read
+    maxDurationSec: 30
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        trangThai:
+          enum: [draft, published, scheduled]
+        gioiHan: { type: integer, minimum: 1, maximum: 50 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [posts, count]
+      properties:
+        count: { type: integer }
+        posts: { type: array }
+
+  - name: taoBaiNhap
+    description: >
+      Tạo một bài NHÁP từ nội dung writerCompany đã sinh. Chưa ai ngoài admin
+      thấy được — bài nháp không hiện trên site. Đây là bước để admin đọc lại
+      trước khi quyết đăng.
+    riskTier: write                # xoá/sửa lại được, và chưa ai ngoài thấy
+    maxDurationSec: 60
+    # G8 — KHÔNG whitelistScope. "Luôn cho phép tạo bài nháp" nghe vô hại,
+    # nhưng nó là cái cửa để một chuỗi hỏng đẻ ra 200 bài rác trong sổ thật.
+    # D1 — nhận ĐƯỜNG DẪN file thay vì nội dung là đường chính. Không phải để
+    # tiết kiệm token: bắt CEO chép lại nguyên văn một bài 700 từ sang lời gọi
+    # sau thì sớm muộn nó cũng chép sai vài chữ, và không ai phát hiện được.
+    # `noiDung` giữ lại cho bài ngắn admin đọc thẳng cho CEO.
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [tieuDe]
+      anyOf:
+        - required: [noiDung]
+        - required: [baiVietPath]
+      properties:
+        tieuDe:      { type: string, minLength: 1, maxLength: 200 }
+        noiDung:     { type: string, minLength: 1, maxLength: 60000 }
+        baiVietPath: { type: string, minLength: 1, maxLength: 400 }
+        slug:        { type: string, maxLength: 200 }
+        tomTat:      { type: string, maxLength: 500 }
+        danhMucId:   { type: string, maxLength: 64 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [postId, slug, trangThai]
+      properties:
+        postId:      { type: string }
+        slug:        { type: string }
+        trangThai:   { type: string }
+        linkDuyet:   { type: string }
+        soKyTu:      { type: integer }
+
+  - name: dangBai
+    description: >
+      Đưa một bài nháp lên CÔNG KHAI, hoặc hẹn giờ đăng. Sau bước này bất kỳ ai
+      trên internet cũng đọc được, và Google có thể đã lập chỉ mục.
+      PHẢI gọi listPosts hoặc taoBaiNhap trước để có postId đúng.
+    # G1 — người khác nhìn thấy được thì là irreversible, kể cả khi gỡ xuống
+    # được. Gỡ xuống không thu hồi được thứ đã có người đọc hoặc Google đã cache.
+    riskTier: irreversible
+    maxDurationSec: 90
+    inputSchema:
+      type: object
+      additionalProperties: false
+      # D7 — bắt khai tieuDe để ĐỐI CHIẾU. postId là chuỗi uuid không ai đọc
+      # được bằng mắt; nhầm một ký tự là đăng nhầm bài khác mà không ai biết.
+      required: [postId, tieuDe]
+      properties:
+        postId:  { type: string, minLength: 8, maxLength: 64 }
+        tieuDe:  { type: string, minLength: 1, maxLength: 200 }
+        henGio:
+          type: string
+          maxLength: 40
+          description: "ISO 8601. Có thì đặt lịch đăng, không có thì đăng ngay."
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [postId, trangThai]
+      properties:
+        postId:     { type: string }
+        trangThai:  { type: string }
+        link:       { type: string }
+        daLamMoi:   { type: boolean }
+
+# ─────────────────────────── R-KHOÁ ───────────────────────────
+#
+# Company này KHÔNG cầm SUPABASE_SERVICE_ROLE_KEY, và không bao giờ được cầm.
+#
+# service_role bỏ qua toàn bộ RLS: cầm nó là đọc được `conversations`,
+# `messages`, `contact_messages` — tức toàn bộ hội thoại và thông tin liên hệ
+# của khách. Một company chuyên đăng bài không có lý do gì cầm chừng đó quyền,
+# và nó lại là company nhận nội dung do model sinh ra.
+#
+# Thay vào đó nó ĐĂNG NHẬP bằng một tài khoản Supabase riêng (tài khoản bot),
+# rồi làm việc bằng quyền của tài khoản đó. Quyền ấy do luật RLS quy định:
+# ghi được `posts`, `seo_metadata`, `tags`, `categories` — hết. Không xoá được,
+# không đụng được bảng nào khác.
+#
+# Điểm mấu chốt: giới hạn nằm ở PHÍA DATABASE. Company có bị nội dung lạ lái đi
+# thì cũng không vượt ra được, vì Postgres từ chối chứ không phải model tự kiềm
+# chế. Khoá anon nằm trong registry/projects.yaml — nó công khai, chỉ nói "dự án
+# nào", không cấp quyền gì.

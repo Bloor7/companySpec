@@ -1,0 +1,121 @@
+# Company nhật ký. Cất vào Notion, cùng workspace với chi tiêu nhưng khác sổ.
+#
+# C4 — cùng dùng Notion với expenseCompany nhưng là hai công việc khác nhau,
+# nên là hai company. Chung thư viện lib/notionClient.py (C4.1), riêng dữ liệu.
+
+companyId: journalCompany
+displayName: "Phòng nhật ký"
+version: 0.1.0
+
+runtime: code                     # RP1
+entrypoint: ./src/main.py
+runtimeReason: "Ghi và đọc bản ghi có cấu trúc. CEO đã hiểu ý admin rồi, company chỉ cất."
+
+dataStore: ./store.sqlite
+secrets: [NOTION_TOKEN]
+env:     [NOTION_JOURNAL_DATABASE_ID]
+canBeCalledBy: [ceo]
+canCall: []
+owner: admin
+
+capabilities:
+  - name: addEntry
+    description: "Viết một mục nhật ký. Nội dung dài để trong thân trang Notion."
+    riskTier: write
+    maxDurationSec: 25
+    # G8 — whitelist theo chủ đề, giống cách expenseCompany khoá theo danh mục.
+    whitelistScope: [chuDe]
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [noiDung, chuDe]
+      properties:
+        noiDung: { type: string, minLength: 1, maxLength: 20000 }
+        # C2.5 — từ vựng đóng. Để tự do thì mỗi mục một chủ đề mới,
+        # vài tháng sau không gom nhóm được gì.
+        chuDe:
+          enum: [công việc, gia đình, sức khoẻ, học tập, quan hệ, suy nghĩ, khác]
+        mood:
+          enum: [rất tốt, tốt, bình thường, mệt, căng thẳng, buồn]
+        ngay: { type: string, minLength: 10, maxLength: 10 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [entryId, date, theme]
+      properties:
+        entryId: { type: string }
+        date:    { type: string }
+        theme:   { type: string }
+        mood:    { type: [string, "null"] }
+        url:     { type: string }
+
+  - name: listEntries
+    description: "Liệt kê các mục nhật ký gần đây, kèm trích đoạn mở đầu."
+    riskTier: read
+    maxDurationSec: 25
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        tuNgay:  { type: string, minLength: 10, maxLength: 10 }
+        denNgay:    { type: string, minLength: 10, maxLength: 10 }
+        chuDe:
+          enum: [công việc, gia đình, sức khoẻ, học tập, quan hệ, suy nghĩ, khác]
+        gioiHan: { type: integer, minimum: 1, maximum: 50 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [entries, count]
+      properties:
+        count:   { type: integer }
+        entries: { type: array }
+
+  - name: readEntry
+    description: "Đọc trọn vẹn nội dung một mục nhật ký theo entryId."
+    riskTier: read
+    maxDurationSec: 25
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [entryId]
+      properties:
+        entryId: { type: string, minLength: 32, maxLength: 40 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [entryId, content]
+      properties:
+        entryId: { type: string }
+        content: { type: string }
+        date:    { type: [string, "null"] }
+        theme:   { type: [string, "null"] }
+        mood:    { type: [string, "null"] }
+        url:     { type: string }
+
+  - name: deleteEntry
+    description: >
+      Xoá một mục nhật ký. PHẢI gọi listEntries trước để lấy entryId, ngày và
+      chủ đề của đúng mục đó. Notion giữ trong thùng rác 30 ngày.
+    riskTier: write
+    maxDurationSec: 20
+    # D8 — cố ý không có whitelistScope: xoá thì lần nào cũng phải hỏi.
+    inputSchema:
+      type: object
+      additionalProperties: false
+      # D7 — date và theme để ĐỐI CHIẾU, không phải để tìm. Admin duyệt dựa trên
+      # câu "xoá mục ngày 03/08 chủ đề công việc"; entryId trỏ chỗ khác là dừng.
+      required: [entryId, ngay, chuDe]
+      properties:
+        entryId: { type: string, minLength: 32, maxLength: 40 }
+        ngay:    { type: string, minLength: 10, maxLength: 10 }
+        chuDe:
+          enum: [công việc, gia đình, sức khoẻ, học tập, quan hệ, suy nghĩ, khác]
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [entryId, date, theme]
+      properties:
+        entryId: { type: string }
+        date:    { type: string }
+        theme:   { type: string }
+        title:   { type: string }

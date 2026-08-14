@@ -1,0 +1,20 @@
+# Việc định kỳ (§12c scheduledTrigger). Chạy một nhát rồi thoát — timer gọi lại.
+#
+#   cp ops/companyspec-scheduler.{service,timer} ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now companyspec-scheduler.timer
+#
+# Xem:  systemctl --user list-timers companyspec-scheduler.timer
+# Log:  journalctl --user -u companyspec-scheduler -f
+
+[Unit]
+Description=companySpec scheduledTrigger — việc định kỳ
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/companySpec
+EnvironmentFile=%h/companySpec/ops/.env
+Environment=PATH=%h/.nvm/versions/node/v22.22.3/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/python3 %h/companySpec/ops/scheduler.py run
+NoNewPrivileges=true

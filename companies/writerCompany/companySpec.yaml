@@ -1,0 +1,75 @@
+# Company viết bài. Dùng chung cho MỌI dự án — giọng văn và dàn bài lấy từ
+# registry/projects.yaml, không viết cứng ở đây.
+#
+# VÌ SAO KHÔNG TÁCH RIÊNG CHO TỪNG DỰ ÁN, trong khi panharmonCompany thì tách:
+# company này không ghi ra ngoài. Nó sinh văn bản rồi trả về một file trong thư
+# mục của chính nó. Không có quyền nào để mà phân chia theo dự án — ranh giới
+# quyền nằm ở company giữ chìa khoá ghi (panharmonCompany), không nằm ở đây.
+#
+# NÓ KHÔNG GỌI COMPANY NÀO KHÁC (P3). CEO cầm đường dẫn bài viết đưa sang
+# panharmonCompany, không phải company này tự đưa.
+
+companyId: writerCompany
+displayName: "Phòng nội dung"
+version: 0.1.0
+
+runtime: skill
+entrypoint: ./src/main.py
+runtimeReason: >
+  Viết một bài blog là việc phải hiểu ngôn ngữ, không tra bảng ra được. Đây là
+  ngoại lệ RP1 có lý do thật, không phải cho tiện.
+
+dataStore: ./store.sqlite
+secrets: []                        # không API trả tiền; chạy bằng gói Pro
+env:     []
+canBeCalledBy: [ceo]
+canCall: []                        # luôn rỗng — P3
+owner: admin
+
+capabilities:
+  - name: vietBai
+    description: >
+      Viết một bài blog MỚI theo giọng văn và dàn bài của dự án, trả về đường
+      dẫn file kèm tiêu đề/slug/tóm tắt. KHÔNG đăng gì — muốn đưa lên trang thì
+      gọi tiếp company quản trị của dự án đó.
+      KHÔNG dùng khi admin bảo ĐĂNG một bài đã có: lúc đó gọi listPosts của
+      company quản trị dự án để tìm bản nháp, rồi đăng bản đó. Viết lại là đẻ
+      ra bài trùng chủ đề và tốn tiền vô ích.
+    # read: nó không đổi gì ngoài thế giới thực, chỉ đẻ ra một file trong thư
+    # mục của chính mình. Admin chưa duyệt thì chưa ai ngoài đọc được.
+    riskTier: read
+    maxDurationSec: 300
+    costHintUsd: 0.30
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [duAn, chuDe]
+      properties:
+        duAn:    { type: string, minLength: 1, maxLength: 40 }
+        chuDe:   { type: string, minLength: 1, maxLength: 200 }
+        tuKhoa:  { type: string, maxLength: 200 }
+        doDaiTu: { type: integer, minimum: 200, maximum: 3000 }
+        ghiChu:  { type: string, maxLength: 500 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [baiVietPath, tieuDe, slug, soTu]
+      properties:
+        baiVietPath: { type: string }
+        tieuDe:      { type: string }
+        slug:        { type: string }
+        tomTat:      { type: string }
+        soTu:        { type: integer }
+
+# ─────────────────────────── R-NHỐT ───────────────────────────
+#
+# Tiến trình con chạy với `--tools ""` — KHÔNG MỘT TOOL NÀO.
+#
+# Chặt hơn seoCompany một bậc, và có lý do: seoCompany buộc phải đọc web nên
+# phải cầm WebFetch/WebSearch. Viết bài thì không cần đọc gì, không cần ghi gì
+# — chỉ sinh chữ. Tool nào cũng là cửa, mà cửa không dùng tới thì đừng mở.
+#
+# Hệ quả: nội dung model sinh ra KHÔNG THỂ tự đi đâu. Nó chỉ về được stdout,
+# rồi chính company (code Python) mới ghi ra file. Một bài viết bị lái bậy cũng
+# không tự đăng lên đâu được — muốn lên trang phải qua CEO, qua dispatcher, và
+# qua nút duyệt của admin.

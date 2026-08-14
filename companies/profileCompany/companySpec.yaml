@@ -1,0 +1,101 @@
+# Company giữ hồ sơ về admin — thứ CEO cần biết để hiểu ý nhanh hơn qua thời gian.
+#
+# C4 — ranh giới là công việc "nhớ giùm admin những điều về chính admin". Khác
+# journalCompany (nhật ký là chuyện đã xảy ra) ở chỗ hồ sơ là những điều LUÔN
+# đúng: cách admin gọi tên đồ vật, thói quen, bối cảnh sống.
+#
+# Điểm đặc biệt: sản phẩm của company này được NẠP THẲNG vào system prompt của
+# CEO ở mỗi lượt (gateway đọc PROFILE.md). Nên nó nguy hiểm hơn mọi company khác:
+# một dòng sai ở đây ảnh hưởng mọi câu trả lời sau đó, chứ không chỉ một bản ghi.
+# Vì thế KHÔNG năng lực nào ở đây được whitelist — lần nào cũng phải admin đồng ý.
+
+companyId: profileCompany
+displayName: "Phòng hồ sơ"
+version: 0.1.0
+
+runtime: code
+entrypoint: ./src/main.py
+runtimeReason: "Đọc/ghi một danh sách câu ngắn. Không cần hiểu ngôn ngữ tự nhiên."
+
+# Nguồn sự thật là FILE TEXT, không phải sqlite: admin phải mở ra đọc được bằng
+# mắt và sửa được bằng tay. Thứ quyết định cách CEO hiểu về admin mà lại nằm
+# trong một file nhị phân thì không ai kiểm được nó đang nói gì về mình.
+dataStore: ./PROFILE.md
+secrets: []
+env:     []
+canBeCalledBy: [ceo]
+canCall: []
+owner: admin
+
+capabilities:
+  - name: listFacts
+    description: "Đọc hồ sơ: những điều CEO đang nhớ về admin."
+    riskTier: read
+    maxDurationSec: 10
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        nhom:
+          enum: [xưng hô, thói quen, từ vựng riêng, bối cảnh, sở thích]
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [facts, count]
+      properties:
+        count: { type: integer }
+        facts: { type: array }
+
+  - name: rememberFact
+    description: >
+      Ghi thêm một điều về admin vào hồ sơ. Mỗi lần một câu ngắn, tự nó đứng
+      được — câu này sẽ xuất hiện trong mọi cuộc trò chuyện sau đó.
+    riskTier: write
+    maxDurationSec: 10
+    # CỐ Ý KHÔNG CÓ whitelistScope (G12). Mỗi dòng thêm vào đây đổi cách CEO
+    # hiểu admin ở MỌI lượt sau, nên "luôn cho phép ghi nhớ" là câu không ai
+    # thật sự muốn nói. Admin phải đọc từng câu trước khi nó có hiệu lực.
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [nhom, noiDung]
+      properties:
+        nhom:
+          enum: [xưng hô, thói quen, từ vựng riêng, bối cảnh, sở thích]
+        # Ngắn có chủ ý: hồ sơ nằm trong system prompt của mọi lượt. Dài dòng
+        # thì vừa tốn hạn mức mỗi lần nhắn, vừa loãng những điều thật sự quan trọng.
+        noiDung: { type: string, minLength: 3, maxLength: 200 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [factId, nhom, noiDung, tong]
+      properties:
+        factId:  { type: string }
+        nhom:    { type: string }
+        noiDung: { type: string }
+        tong:    { type: integer }
+
+  - name: forgetFact
+    description: >
+      Xoá một điều khỏi hồ sơ. PHẢI gọi listFacts trước để lấy factId và đúng
+      nội dung của dòng đó.
+    riskTier: write
+    maxDurationSec: 10
+    inputSchema:
+      type: object
+      additionalProperties: false
+      # D7 — noiDung để ĐỐI CHIẾU. Admin duyệt câu "quên chuyện lương mùng 1";
+      # nếu factId lại trỏ dòng khác thì company từ chối.
+      required: [factId, noiDung]
+      properties:
+        factId:  { type: string, minLength: 2, maxLength: 8 }
+        noiDung: { type: string, minLength: 3, maxLength: 200 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [factId, noiDung, tong]
+      properties:
+        factId:  { type: string }
+        nhom:    { type: [string, "null"] }
+        noiDung: { type: string }
+        tong:    { type: integer }

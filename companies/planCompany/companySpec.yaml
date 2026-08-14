@@ -1,0 +1,150 @@
+# Company theo dõi kế hoạch sản xuất. Bảng "BẢNG TỔNG QUAN 100 VIDEO" trên Notion.
+#
+# Khác expenseCompany và journalCompany ở một điểm quan trọng: đây là company
+# đầu tiên SỬA bản ghi đã có, không chỉ thêm mới. Ghi nhầm một khoản chi tiêu
+# thì thừa một dòng; sửa nhầm trạng thái thì MẤT giá trị cũ.
+# Vì thế updateProgress bắt buộc đọc giá trị cũ và khai vào sideEffects — không
+# có nó thì không hoàn tác được.
+
+companyId: planCompany
+displayName: "Phòng kế hoạch"
+version: 0.1.0
+
+runtime: code
+entrypoint: ./src/main.py
+runtimeReason: "Đọc/ghi bản ghi có cấu trúc. CEO đã hiểu ý admin, company chỉ thực thi."
+
+dataStore: ./store.sqlite
+secrets: [NOTION_TOKEN]
+env:     [NOTION_PLAN_DATABASE_ID]
+canBeCalledBy: [ceo]
+canCall: []
+owner: admin
+
+capabilities:
+  - name: progressReport
+    description: "Báo cáo tiến độ 100 video: đã đăng bao nhiêu, đang kẹt ở khâu nào, tách theo giai đoạn."
+    riskTier: read
+    maxDurationSec: 25
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        giaiDoan:
+          enum: [GD1, GD2, GD3, GD4]
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [total, done, byTrangThai, byGiaiDoan]
+      properties:
+        total:        { type: integer }
+        done:         { type: integer }
+        percentDone:  { type: number }
+        byTrangThai:  { type: object }
+        byGiaiDoan:   { type: object }
+        byLoaiChuDe:  { type: object }
+
+  - name: listTasks
+    description: "Liệt kê video theo giai đoạn, loại chủ đề hoặc trạng thái."
+    riskTier: read
+    maxDurationSec: 25
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        giaiDoan:
+          enum: [GD1, GD2, GD3, GD4]
+        loaiChuDe:
+          enum: [GIAI MA, KHOA HOC, CONG DONG, LUCID, VAN HOA]
+        trangThai:
+          enum: [chưa làm, đang viết, đã quay, đã dựng, đã đăng]
+        gioiHan: { type: integer, minimum: 1, maximum: 100 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [tasks, count]
+      properties:
+        count: { type: integer }
+        tasks: { type: array }
+
+  - name: updateProgress
+    description: "Đổi trạng thái một video (chưa làm → đang viết → đã quay → đã dựng → đã đăng)."
+    riskTier: write                 # sửa được thì đổi lại được
+    maxDurationSec: 25
+    # G8 — whitelist theo trạng thái đích. "Luôn cho phép đánh dấu đang viết"
+    # thì hợp lý; "luôn cho phép đổi trạng thái bất kỳ" thì không.
+    whitelistScope: [trangThai]
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [stt, trangThai]
+      properties:
+        # Nhận "8", "08", "008" đều được; company tự chuẩn hoá về 3 chữ số.
+        stt: { type: string, minLength: 1, maxLength: 3 }
+        trangThai:
+          enum: [chưa làm, đang viết, đã quay, đã dựng, đã đăng]
+        kpiDat: { type: boolean }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [stt, trangThai, previousTrangThai]
+      properties:
+        stt:               { type: string }
+        chuDe:             { type: string }
+        trangThai:         { type: string }
+        previousTrangThai: { type: [string, "null"] }
+        kpiDat:            { type: [boolean, "null"] }
+        url:               { type: string }
+
+  - name: addTask
+    description: "Thêm một video mới vào kế hoạch. Giai đoạn tự suy từ STT."
+    riskTier: write
+    maxDurationSec: 25
+    whitelistScope: [loaiChuDe]
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [stt, chuDe, loaiChuDe]
+      properties:
+        stt:   { type: string, minLength: 1, maxLength: 3 }
+        chuDe: { type: string, minLength: 1, maxLength: 200 }
+        loaiChuDe:
+          enum: [GIAI MA, KHOA HOC, CONG DONG, LUCID, VAN HOA]
+        kpiChinh: { type: string, maxLength: 200 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [stt, chuDe, giaiDoan]
+      properties:
+        stt:       { type: string }
+        chuDe:     { type: string }
+        giaiDoan:  { type: string }
+        loaiChuDe: { type: string }
+        url:       { type: string }
+
+  - name: archiveTask
+    description: >
+      Ẩn một video khỏi kế hoạch (bỏ ý tưởng đó). PHẢI gọi listTasks trước để lấy
+      đúng chủ đề. Không xoá vĩnh viễn — Notion giữ trong thùng rác 30 ngày.
+    riskTier: write
+    maxDurationSec: 25
+    # D8 — không whitelistScope. 90 video là dữ liệu admin soạn công phu;
+    # "luôn cho phép ẩn video" là câu không ai muốn nói.
+    inputSchema:
+      type: object
+      additionalProperties: false
+      # D7 — chuDe để ĐỐI CHIẾU. STT 008 và 009 đều là GD1, nên kiểm giai đoạn
+      # không bắt được nhầm lẫn; chỉ chủ đề mới phân biệt được.
+      required: [stt, chuDe]
+      properties:
+        stt:   { type: string, minLength: 1, maxLength: 3 }
+        chuDe: { type: string, minLength: 1, maxLength: 200 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [stt, chuDe]
+      properties:
+        stt:       { type: string }
+        chuDe:     { type: string }
+        giaiDoan:  { type: [string, "null"] }
+        trangThai: { type: [string, "null"] }

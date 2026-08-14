@@ -1,0 +1,184 @@
+# Company giữ lịch trình và nhắc trước giờ.
+#
+# C4 — ranh giới là "việc có giờ hẹn". Khác planCompany (kế hoạch 100 video là
+# việc không gắn giờ, đo bằng tiến độ) và khác journalCompany (chuyện đã xảy ra).
+#
+# Lát đầu CỐ Ý không có sự kiện lặp lại. Lặp lại kéo theo: tính lần kế tiếp, nhớ
+# đã nhắc lần nào, xử lý ngoại lệ "tuần này nghỉ" — ba thứ đó đáng một lát riêng.
+
+companyId: calendarCompany
+displayName: "Phòng lịch"
+version: 0.1.0
+
+runtime: code
+entrypoint: ./src/main.py
+runtimeReason: "Đọc/ghi bản ghi có giờ và so sánh thời gian. Không cần hiểu ngôn ngữ tự nhiên."
+
+dataStore: ./store.sqlite         # C3 — nhật ký + dấu 'đã nhắc'; lịch thật ở Notion
+secrets: [NOTION_TOKEN]
+env:     [NOTION_CALENDAR_DATABASE_ID]
+canBeCalledBy: [ceo]
+canCall: []
+owner: admin
+
+capabilities:
+  - name: todayAgenda
+    description: "Lịch của một ngày, mặc định hôm nay. Dùng cho tin nhắn buổi sáng."
+    riskTier: read
+    maxDurationSec: 20
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        ngay: { type: string, minLength: 10, maxLength: 10 }   # YYYY-MM-DD
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [events, count, ngay]
+      properties:
+        ngay:   { type: string }
+        count:  { type: integer }
+        events: { type: array }
+
+  - name: listEvents
+    description: "Liệt kê sự kiện trong một khoảng ngày, lọc được theo loại."
+    riskTier: read
+    maxDurationSec: 20
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        tuNgay: { type: string, minLength: 10, maxLength: 10 }
+        denNgay:   { type: string, minLength: 10, maxLength: 10 }
+        loai:
+          enum: [công việc, cá nhân, sức khoẻ, gia đình, khác]
+        gioiHan: { type: integer, minimum: 1, maximum: 100 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [events, count]
+      properties:
+        count:  { type: integer }
+        events: { type: array }
+
+  - name: upcomingEvents
+    description: >
+      Sự kiện sắp bắt đầu trong N phút tới. Đây là năng lực lịch nhắc gọi mỗi 15
+      phút; mỗi sự kiện chỉ nhắc đúng một lần trừ khi bị dời giờ.
+    riskTier: read
+    maxDurationSec: 20
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        trongPhut: { type: integer, minimum: 5, maximum: 240 }
+        # Cron bật cờ này để ghi dấu đã nhắc. Không có nó thì cứ 15 phút lại nhắc
+        # lại đúng sự kiện đó cho tới lúc nó bắt đầu — phiền tới mức admin tắt bot.
+        danhDau:   { type: boolean }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [events, count, trongPhut]
+      properties:
+        trongPhut: { type: integer }
+        count:     { type: integer }
+        events:    { type: array }
+
+  - name: addEvent
+    description: "Thêm một sự kiện vào lịch."
+    riskTier: write
+    maxDurationSec: 20
+    # G8 — whitelist theo loại. Phạm vi lấy từ trường BẮT BUỘC, không phải trường
+    # tuỳ chọn: trường tuỳ chọn bỏ trống thì quyền hẹp âm thầm thành quyền rộng.
+    whitelistScope: [loai]
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [ten, batDau, loai]
+      properties:
+        ten:    { type: string, minLength: 1, maxLength: 200 }
+        # "2026-08-05T09:00" hoặc "2026-08-05" cho việc cả ngày.
+        batDau: { type: string, minLength: 10, maxLength: 19 }
+        ketThuc: { type: string, minLength: 10, maxLength: 19 }
+        loai:
+          enum: [công việc, cá nhân, sức khoẻ, gia đình, khác]
+        diaDiem: { type: string, maxLength: 200 }
+        ghiChu:  { type: string, maxLength: 500 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [eventId, ten, batDau, loai]
+      properties:
+        eventId: { type: string }
+        ten:     { type: string }
+        batDau:  { type: string }
+        ketThuc: { type: [string, "null"] }
+        loai:    { type: string }
+        url:     { type: string }
+
+  - name: addEvents
+    description: >
+      Thêm NHIỀU sự kiện cùng lúc — dùng khi đặt lịch lặp lại (mỗi tối làm video
+      suốt 30 ngày) hoặc đặt cả tuần một lần. Một lời gọi, admin bấm duyệt MỘT lần.
+    riskTier: write
+    maxDurationSec: 120
+    # CỐ Ý KHÔNG whitelist (G12). Một lời gọi tạo tới 31 dòng lịch; "luôn cho phép
+    # đổ 31 sự kiện vào lịch mà không hỏi" là câu không ai muốn nói.
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [cacSuKien]
+      properties:
+        cacSuKien:
+          type: array
+          # Trần 31 = đúng một tháng. Dài hơn thì admin không đọc hết trước khi
+          # bấm duyệt, mà duyệt thứ mình chưa đọc thì nút duyệt chỉ là hình thức.
+          minItems: 1
+          maxItems: 31
+          items:
+            type: object
+            additionalProperties: false
+            required: [ten, batDau, loai]
+            properties:
+              ten:     { type: string, minLength: 1, maxLength: 200 }
+              batDau:  { type: string, minLength: 10, maxLength: 19 }
+              ketThuc: { type: string, minLength: 10, maxLength: 19 }
+              loai:
+                enum: [công việc, cá nhân, sức khoẻ, gia đình, khác]
+              diaDiem: { type: string, maxLength: 200 }
+              ghiChu:  { type: string, maxLength: 500 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [count, events]
+      properties:
+        count:   { type: integer }
+        boQua:   { type: integer }
+        tuNgay:  { type: [string, "null"] }
+        denNgay: { type: [string, "null"] }
+        events:  { type: array }
+
+  - name: deleteEvent
+    description: >
+      Bỏ một sự kiện khỏi lịch. PHẢI gọi listEvents hoặc todayAgenda trước để lấy
+      eventId và đúng tên sự kiện. Notion giữ thùng rác 30 ngày.
+    riskTier: write
+    maxDurationSec: 20
+    # CỐ Ý KHÔNG whitelist (G12) — xoá thì lần nào cũng hỏi.
+    inputSchema:
+      type: object
+      additionalProperties: false
+      # D7 — ten để ĐỐI CHIẾU với thứ admin nhìn thấy lúc bấm duyệt.
+      required: [eventId, ten]
+      properties:
+        eventId: { type: string, minLength: 32, maxLength: 40 }
+        ten:     { type: string, minLength: 1, maxLength: 200 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [eventId, ten]
+      properties:
+        eventId: { type: string }
+        ten:     { type: string }
+        batDau:  { type: [string, "null"] }
+        loai:    { type: [string, "null"] }

@@ -1,0 +1,187 @@
+# Company theo dõi tiết kiệm theo QUỸ CÓ MỤC TIÊU.
+#
+# C4 — ranh giới là công việc "để dành cho một mục tiêu", khác hẳn expenseCompany
+# (tiền ra) và incomeCompany (tiền vào). Một khoản nạp quỹ không phải khoản chi:
+# tiền vẫn là của admin, chỉ đổi chỗ đứng.
+#
+# Mô hình: mỗi DÒNG trong sổ Notion là MỘT QUỸ, không phải một giao dịch.
+# Quỹ có mục tiêu, hạn, số đã có. Nạp/rút là SỬA số đã có của quỹ đó —
+# nên depositFund/withdrawFund bắt buộc khai previousValue (D5), giống
+# planCompany.updateProgress. Lịch sử từng lần nạp/rút nằm ở eventLog trong
+# store.sqlite của company (C3), không nhân bản lên Notion.
+#
+# Tên quỹ là từ vựng MỞ (admin tự đặt "Mua laptop", "Dự phòng 6 tháng") — khác
+# với Danh mục/Nguồn là từ vựng đóng. An toàn vì quỹ là một BẢN GHI có id thật:
+# muốn nạp thì phải có fundId lấy từ listFunds, CEO không đặt tên mới ra được.
+# Chỉ LOẠI quỹ là đóng, để cộng tổng theo loại còn có nghĩa.
+
+companyId: savingsCompany
+displayName: "Phòng tiết kiệm"
+version: 0.1.0
+
+runtime: code                     # RP1 — cộng trừ và chia, không cần LLM
+entrypoint: ./src/main.py
+runtimeReason: "Việc xác định trước: theo dõi số dư quỹ và tính tiến độ. Không cần hiểu ngôn ngữ tự nhiên."
+
+dataStore: ./store.sqlite         # C3
+secrets: [NOTION_TOKEN]           # C2.4 — chỉ khai TÊN
+env:     [NOTION_SAVINGS_DATABASE_ID]
+canBeCalledBy: [ceo]              # P3
+canCall: []                       # P3
+owner: admin
+
+capabilities:
+  - name: listFunds
+    description: "Liệt kê các quỹ tiết kiệm, kèm số đã có và tiến độ phần trăm."
+    riskTier: read
+    maxDurationSec: 20
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        loai:
+          enum: [chi tiêu, đầu tư, dự phòng]
+        trangThai:
+          enum: [đang góp, đã đạt, tạm dừng]
+        gioiHan: { type: integer, minimum: 1, maximum: 100 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [funds, count]
+      properties:
+        count: { type: integer }
+        funds: { type: array }
+
+  - name: fundProgress
+    description: >
+      Tính tiến độ tiết kiệm: tổng đã có so với tổng mục tiêu, tách theo loại quỹ,
+      còn thiếu bao nhiêu và mỗi tháng cần để dành bao nhiêu để kịp hạn.
+    riskTier: read
+    maxDurationSec: 20
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        loai:
+          enum: [chi tiêu, đầu tư, dự phòng]
+        # Lịch hằng tháng bật cờ này: báo cáo xong thì HỎI admin tháng này nạp
+        # bao nhiêu. Nhắc mà không hỏi thì admin đọc xong rồi thôi.
+        nhacNap: { type: boolean }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [tongDaCo, tongMucTieu, phanTram, canMoiThang, byLoai, funds]
+      properties:
+        tongDaCo:    { type: number }
+        tongMucTieu: { type: number }
+        phanTram:    { type: number }
+        # Tổng số tiền cần để dành mỗi tháng để mọi quỹ còn hạn kịp về đích.
+        # Đây là con số admin thật sự cần khi lập kế hoạch chi tiêu tháng.
+        canMoiThang: { type: number }
+        byLoai:      { type: object }
+        funds:       { type: array }
+
+  - name: createFund
+    description: "Mở một quỹ tiết kiệm mới với mục tiêu tiền và hạn hoàn thành."
+    # W1 — lần chạy THẬT đầu tiên phải do admin bấm duyệt; trước đó chỉ --dry-run (W2).
+    riskTier: write                # tạo được thì xoá được → hoàn tác được
+    maxDurationSec: 20
+    # G8 — whitelist theo loại quỹ. "Luôn cho phép mở quỹ chi tiêu" thì hợp lý.
+    whitelistScope: [loai]
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [ten, loai, mucTieu]
+      properties:
+        ten:     { type: string, minLength: 1, maxLength: 100 }
+        loai:
+          enum: [chi tiêu, đầu tư, dự phòng]
+        mucTieu: { type: number, minimum: 0, maximum: 100000000000 }
+        # Quỹ đã có sẵn tiền từ trước thì khai luôn, khỏi phải nạp bù.
+        daCo:    { type: number, minimum: 0, maximum: 100000000000 }
+        han:     { type: string, minLength: 10, maxLength: 10 }   # YYYY-MM-DD
+        ghiChu:  { type: string, maxLength: 500 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [fundId, ten, loai, mucTieu, daCo]
+      properties:
+        fundId:  { type: string }
+        ten:     { type: string }
+        loai:    { type: string }
+        mucTieu: { type: number }
+        daCo:    { type: number }
+        han:     { type: [string, "null"] }
+        url:     { type: string }
+
+  - name: depositFund
+    description: >
+      Nạp thêm tiền vào một quỹ. PHẢI gọi listFunds trước để lấy fundId và đúng
+      tên quỹ. Đủ mục tiêu thì quỹ tự chuyển sang trạng thái "đã đạt".
+    riskTier: write                # sửa số → đổi lại được, có previousValue
+    maxDurationSec: 20
+    # G8 — whitelist theo TÊN QUỸ, và tên quỹ là trường BẮT BUỘC.
+    #
+    # Bản đầu lấy phạm vi theo `loai`, một trường tuỳ chọn. CEO không truyền nó
+    # thì phạm vi thành rỗng, và "luôn cho phép nạp quỹ chi tiêu" âm thầm trở
+    # thành "luôn cho phép nạp bất kỳ quỹ nào". Phạm vi quyền không bao giờ được
+    # phụ thuộc vào một trường mà lời gọi có quyền bỏ trống.
+    #
+    # Theo tên quỹ cũng đúng ý hơn: admin bấm "luôn cho phép" khi đang nhìn câu
+    # "nạp 5 triệu vào quỹ Laptop" — thứ họ đồng ý là QUỸ ĐÓ, không phải cả loại.
+    whitelistScope: [tenQuy]
+    inputSchema:
+      type: object
+      additionalProperties: false
+      # D7 — tenQuy vừa để ĐỐI CHIẾU vừa làm phạm vi quyền. Admin duyệt câu "nạp
+      # 5 triệu vào quỹ Laptop"; nếu fundId lại trỏ quỹ khác thì company từ chối.
+      required: [fundId, soTien, tenQuy]
+      properties:
+        fundId: { type: string, minLength: 32, maxLength: 40 }
+        soTien: { type: number, minimum: 0, maximum: 100000000000 }
+        tenQuy: { type: string, minLength: 1, maxLength: 100 }
+        ghiChu:   { type: string, maxLength: 500 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [fundId, ten, daCo, previousDaCo, mucTieu, phanTram]
+      properties:
+        fundId:       { type: string }
+        ten:          { type: string }
+        daCo:         { type: number }
+        previousDaCo: { type: number }
+        mucTieu:      { type: number }
+        phanTram:     { type: number }
+        trangThai:    { type: [string, "null"] }
+        conThieu:     { type: number }
+
+  - name: withdrawFund
+    description: >
+      Rút tiền khỏi một quỹ. PHẢI gọi listFunds trước để lấy fundId và đúng tên quỹ.
+      Không rút quá số đang có.
+    riskTier: write
+    maxDurationSec: 20
+    # CỐ Ý KHÔNG CÓ whitelistScope (G12). Rút tiền khỏi quỹ là đi ngược mục tiêu
+    # mình đã tự đặt ra — "luôn cho phép rút" là câu không ai muốn nói.
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [fundId, soTien, tenQuy]
+      properties:
+        fundId: { type: string, minLength: 32, maxLength: 40 }
+        soTien: { type: number, minimum: 0, maximum: 100000000000 }
+        tenQuy: { type: string, minLength: 1, maxLength: 100 }
+        ghiChu:   { type: string, maxLength: 500 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [fundId, ten, daCo, previousDaCo, mucTieu, phanTram]
+      properties:
+        fundId:       { type: string }
+        ten:          { type: string }
+        daCo:         { type: number }
+        previousDaCo: { type: number }
+        mucTieu:      { type: number }
+        phanTram:     { type: number }
+        trangThai:    { type: [string, "null"] }
+        conThieu:     { type: number }

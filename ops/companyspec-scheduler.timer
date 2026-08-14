@@ -1,0 +1,13 @@
+# Gõ cửa 15 phút một lần. Lịch trong registry/schedules.yaml quyết định cái gì
+# thật sự chạy — timer chỉ hỏi "có gì tới hạn chưa".
+[Unit]
+Description=Gọi companySpec scheduledTrigger mỗi 15 phút
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=15min
+# Máy tắt qua đêm thì sáng bật lên vẫn chạy bù báo cáo sáng.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

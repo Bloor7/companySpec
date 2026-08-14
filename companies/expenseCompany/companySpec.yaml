@@ -1,0 +1,128 @@
+# Company theo dõi chi tiêu. Cất dữ liệu vào Notion.
+#
+# C4 — ranh giới là CÔNG VIỆC (theo dõi chi tiêu), không phải công cụ (Notion).
+# journalCompany sau này cũng dùng Notion nhưng là company khác.
+
+companyId: expenseCompany
+displayName: "Phòng chi tiêu"
+version: 0.1.0
+
+runtime: code                     # RP1 — không cần LLM, gọi REST là đủ
+entrypoint: ./src/main.py
+runtimeReason: "Việc xác định trước: đọc/ghi bản ghi có cấu trúc. Không cần hiểu ngôn ngữ tự nhiên."
+
+dataStore: ./store.sqlite         # C3 — nhật ký riêng; dữ liệu thật ở Notion
+secrets: [NOTION_TOKEN]           # C2.4 — chỉ khai TÊN
+env:     [NOTION_EXPENSE_DATABASE_ID]   # cấu hình, không phải secret
+canBeCalledBy: [ceo]              # P3
+canCall: []                       # P3
+owner: admin
+
+capabilities:
+  - name: addExpense
+    description: "Ghi một khoản chi vào sổ Notion."
+    riskTier: write                # tạo được thì xoá được → hoàn tác được
+    maxDurationSec: 20
+    # G8 — whitelist theo danh mục. "Luôn cho phép ghi chi tiêu ăn uống" thì hợp lý;
+    # "luôn cho phép ghi bất cứ khoản nào" thì không.
+    whitelistScope: [danhMuc]
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [soTien, danhMuc]
+      properties:
+        soTien: { type: number, minimum: 0, maximum: 1000000000 }
+        # Từ vựng ĐÓNG. Để chuỗi tự do thì CEO tự đặt "Cà phê", "Trà sữa",
+        # "Cafe"… — Notion tự tạo danh mục mới, whitelist khoá vào một danh mục
+        # dùng đúng một lần, và cộng tổng thành vô nghĩa. Muốn thêm danh mục
+        # thì sửa file này VÀ sửa select trong Notion — một hành động có chủ ý,
+        # không phải tai nạn của model.
+        danhMuc:
+          enum: [ăn uống, đi lại, nhà cửa, sức khoẻ, học tập, giải trí, công việc, khác]
+        ghiChu: { type: string, maxLength: 500 }
+        ngay:     { type: string, minLength: 10, maxLength: 35 }   # ngày, hoặc ISO kèm giờ
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [expenseId, amount, category, date]
+      properties:
+        expenseId: { type: string }
+        amount:    { type: number }
+        category:  { type: string }
+        date:      { type: string }
+        url:       { type: string }
+
+  - name: listExpenses
+    description: "Liệt kê các khoản chi trong một khoảng thời gian."
+    riskTier: read
+    maxDurationSec: 20
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        tuNgay:     { type: string, minLength: 10, maxLength: 10 }
+        denNgay:       { type: string, minLength: 10, maxLength: 10 }
+        danhMuc:
+          enum: [ăn uống, đi lại, nhà cửa, sức khoẻ, học tập, giải trí, công việc, khác]
+        gioiHan: { type: integer, minimum: 1, maximum: 100 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [expenses, count]
+      properties:
+        count:    { type: integer }
+        expenses: { type: array }
+
+  - name: sumExpenses
+    description: "Cộng tổng chi tiêu trong khoảng thời gian, tách theo danh mục."
+    riskTier: read
+    maxDurationSec: 20
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        tuNgay: { type: string, minLength: 10, maxLength: 35 }
+        denNgay:   { type: string, minLength: 10, maxLength: 35 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [total, count, byCategory, from, to]
+      properties:
+        total:      { type: number }
+        count:      { type: integer }
+        from:       { type: string }
+        to:         { type: string }
+        byCategory: { type: object }
+
+  - name: deleteExpense
+    description: >
+      Xoá một khoản chi đã ghi. PHẢI gọi listExpenses trước để lấy expenseId và
+      số tiền, ngày của đúng khoản đó — năng lực này không tự tìm hộ.
+      Notion giữ trong thùng rác 30 ngày nên khôi phục được.
+    riskTier: write                 # Notion giữ 30 ngày → hoàn tác được
+    maxDurationSec: 20
+    # CỐ Ý KHÔNG CÓ whitelistScope.
+    # Xoá thì lần nào cũng phải hỏi. "Luôn cho phép xoá chi tiêu ăn uống" là câu
+    # không ai thật sự muốn nói — G12 nói capability không khai thì không
+    # whitelist được, và ở đây đó chính là điều ta muốn.
+    inputSchema:
+      type: object
+      additionalProperties: false
+      # amount và date bắt buộc, KHÔNG phải để tìm kiếm mà để ĐỐI CHIẾU.
+      # Admin duyệt dựa trên câu "xoá 20.000đ ngày 03/08"; nếu expenseId lại trỏ
+      # tới khoản khác thì company từ chối. CEO nhầm hay bịa đều bị chặn.
+      required: [expenseId, soTien, ngay]
+      properties:
+        expenseId: { type: string, minLength: 32, maxLength: 40 }
+        soTien:    { type: number, minimum: 0 }
+        ngay:      { type: string, minLength: 10, maxLength: 10 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [expenseId, amount, category, date]
+      properties:
+        expenseId: { type: string }
+        amount:    { type: number }
+        category:  { type: [string, "null"] }
+        date:      { type: string }
+        note:      { type: string }

@@ -1,0 +1,141 @@
+# Company giữ HẠN MỨC chi tiêu theo tháng — "tháng này định tiêu bao nhiêu".
+#
+# C4 — ranh giới là DỰ ĐỊNH, còn expenseCompany giữ THỰC TẾ. Hai thứ phải nằm
+# hai chỗ: trộn dự định vào sổ chi tiêu là cộng tổng ra số vô nghĩa.
+#
+# ─────────────────────────────────────────────────────────────────────────
+# VÌ SAO KHÔNG TỰ SO VỚI THỰC TẾ Ở ĐÂY
+#
+# Spec đầu (CEO đề xuất) có `checkBudget` tự gọi expenseCompany.sumExpenses để
+# tính % đã dùng. Nhưng company không được đọc dữ liệu của company khác (C3) và
+# không được gọi company khác (P3) — phá luật đó thì rất nhanh sau sẽ không ai
+# biết ai đang đọc sổ của ai.
+#
+# Việc ghép hai nửa lại là của người ĐỨNG TRÊN: CEO khi admin hỏi, hoặc
+# scheduler khi dựng báo cáo tối. Cả hai đều được phép gọi nhiều company.
+# Company này chỉ trả lời đúng một câu: "hạn mức tháng này là bao nhiêu".
+
+companyId: budgetCompany
+displayName: "Phòng ngân sách"
+version: 0.1.0
+
+runtime: code
+runtimeReason: "Lưu và đọc hạn mức theo tháng. Việc so sánh và khuyên nhủ là của CEO."
+entrypoint: ./src/main.py
+
+dataStore: ./store.sqlite
+secrets: [NOTION_TOKEN]
+env:     [NOTION_BUDGET_DATABASE_ID]
+canBeCalledBy: [ceo]
+canCall: []
+owner: admin
+
+capabilities:
+  - name: getBudget
+    description: >
+      Hạn mức đã đặt cho một tháng, tách theo danh mục. Muốn biết đã tiêu bao
+      nhiêu phần thì gọi thêm expenseCompany.sumExpenses rồi so — company này cố
+      ý không tự đọc sổ chi tiêu.
+    riskTier: read
+    maxDurationSec: 20
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        thang: { type: string, minLength: 7, maxLength: 7 }   # YYYY-MM
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [thang, hanMuc, tong, count]
+      properties:
+        thang:  { type: string }
+        count:  { type: integer }
+        tong:   { type: number }
+        # { "ăn uống": 2000000, "đi lại": 500000, … } — CEO trừ với thực tế.
+        hanMuc: { type: object }
+        # { "ăn uống": "2026-08-04T12:49:00+07:00", … } — mốc bắt đầu đếm. Chi
+        # tiêu TRƯỚC mốc này không tính vào hạn mức: admin đặt hạn mức lúc trưa
+        # là nói về phần còn lại của tháng, không phải trừ ngược buổi sáng.
+        datLuc: { type: object }
+        items:  { type: array }
+
+  - name: setBudget
+    description: >
+      Đặt hạn mức cho một danh mục trong một tháng. Đặt lại là ghi đè. Danh mục
+      dùng đúng từ vựng của sổ chi tiêu để hai bên còn so được với nhau.
+    riskTier: write
+    maxDurationSec: 20
+    # G8 — phạm vi theo danh mục, một trường bắt buộc: "luôn cho phép đặt hạn mức
+    # ăn uống" thì hợp lý; "luôn cho phép đặt hạn mức bất kỳ" thì không.
+    whitelistScope: [danhMuc]
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [danhMuc, hanMuc]
+      properties:
+        danhMuc:
+          enum: [ăn uống, đi lại, nhà cửa, sức khoẻ, học tập, giải trí, công việc, khác]
+        hanMuc: { type: number, minimum: 0, maximum: 1000000000 }
+        # Bỏ trống thì hiểu là tháng hiện tại — đặt ngân sách cho tháng đang sống
+        # là việc thường nhất, không nên bắt gõ thêm.
+        thang:  { type: string, minLength: 7, maxLength: 7 }
+        ghiChu: { type: string, maxLength: 200 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [thang, danhMuc, hanMuc, tong]
+      properties:
+        thang:    { type: string }
+        danhMuc:  { type: string }
+        hanMuc:   { type: number }
+        previous: { type: [number, "null"] }
+        tong:     { type: number }
+
+  - name: copyBudget
+    description: >
+      Sao chép toàn bộ hạn mức của một tháng sang tháng khác. Dùng đầu tháng để
+      khỏi phải đặt lại từng danh mục.
+    riskTier: write
+    maxDurationSec: 30
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [tuThang, denThang]
+      properties:
+        tuThang:  { type: string, minLength: 7, maxLength: 7 }
+        denThang: { type: string, minLength: 7, maxLength: 7 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [tuThang, denThang, soDanhMuc, tong]
+      properties:
+        tuThang:   { type: string }
+        denThang:  { type: string }
+        soDanhMuc: { type: integer }
+        tong:      { type: number }
+
+  - name: deleteBudget
+    description: >
+      Bỏ hạn mức của một danh mục trong một tháng. PHẢI gọi getBudget trước để
+      lấy đúng số tiền đang đặt.
+    riskTier: write
+    maxDurationSec: 20
+    # CỐ Ý KHÔNG whitelist (G12).
+    inputSchema:
+      type: object
+      additionalProperties: false
+      # D7 — hanMuc để ĐỐI CHIẾU với thứ admin nhìn thấy lúc bấm duyệt.
+      required: [danhMuc, hanMuc]
+      properties:
+        danhMuc:
+          enum: [ăn uống, đi lại, nhà cửa, sức khoẻ, học tập, giải trí, công việc, khác]
+        hanMuc: { type: number, minimum: 0 }
+        thang:  { type: string, minLength: 7, maxLength: 7 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [thang, danhMuc, hanMuc]
+      properties:
+        thang:   { type: string }
+        danhMuc: { type: string }
+        hanMuc:  { type: number }

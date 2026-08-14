@@ -1,0 +1,271 @@
+# Company giữ kế hoạch dài hạn — mục tiêu chia thành các bước, theo dõi tiến độ.
+#
+# C4 — ranh giới là "việc nhiều bước hướng tới một mục tiêu". Khác:
+#   · planCompany   — đóng cứng vào đúng một bảng (100 video), từ vựng riêng của
+#                     dự án đó. Company này thì mở: bao nhiêu kế hoạch cũng được.
+#   · calendarCompany — việc có GIỜ HẸN. Bước kế hoạch chỉ có hạn chót, không giờ.
+#   · savingsCompany  — mục tiêu đo bằng TIỀN. Ở đây đo bằng số bước đã xong.
+#
+# MỖI KẾ HOẠCH MỘT BẢNG NOTION RIÊNG. Bản đầu gộp chung một sổ; admin nhìn thấy
+# một kế hoạch 6 bước đã kín trang và nói đúng điều sắp xảy ra: thêm kế hoạch thứ
+# hai là không đọc nổi. Bảng riêng thì mỗi mục tiêu có một trang sạch.
+#
+# Điểm thiết kế quan trọng: createPlan tạo CẢ kế hoạch trong MỘT lời gọi, nên
+# admin bấm duyệt đúng một lần cho 10 bước. Nếu bắt gọi addStep 10 lần thì admin
+# phải bấm 10 nút — và đến nút thứ ba thì không ai đọc nữa, tức là guardrail
+# biến thành thao tác vô nghĩa.
+
+companyId: goalCompany
+displayName: "Phòng mục tiêu"
+version: 0.1.0
+
+runtime: code
+runtimeReason: "Đọc/ghi bản ghi có cấu trúc và đếm tiến độ. Việc NGHĨ RA các bước là của CEO, không phải của company."
+entrypoint: ./src/main.py
+
+dataStore: ./store.sqlite
+secrets: [NOTION_TOKEN]
+env:     [NOTION_PARENT_PAGE_ID]
+canBeCalledBy: [ceo]
+canCall: []
+owner: admin
+
+capabilities:
+  - name: listPlans
+    description: "Liệt kê các kế hoạch đang có, kèm tiến độ bao nhiêu bước đã xong."
+    riskTier: read
+    maxDurationSec: 20
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        chuaXong: { type: boolean }   # chỉ kế hoạch còn dở
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [plans, count]
+      properties:
+        count: { type: integer }
+        plans: { type: array }
+
+  - name: planSteps
+    description: "Các bước của một kế hoạch, theo thứ tự, kèm trạng thái và hạn."
+    riskTier: read
+    maxDurationSec: 20
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [keHoach]
+      properties:
+        keHoach:   { type: string, minLength: 1, maxLength: 100 }
+        trangThai:
+          enum: [chưa làm, đang làm, xong]
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [steps, count, keHoach]
+      properties:
+        keHoach:  { type: string }
+        count:    { type: integer }
+        xong:     { type: integer }
+        phanTram: { type: number }
+        steps:    { type: array }
+
+  - name: dueSteps
+    description: >
+      Các bước sắp tới hạn hoặc đã quá hạn, gộp mọi kế hoạch. Đây là năng lực
+      lịch nhắc gọi — kế hoạch lập xong mà không ai nhắc thì nằm im tới lúc quên.
+    riskTier: read
+    maxDurationSec: 20
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        trongNgay: { type: integer, minimum: 1, maximum: 90 }
+        # Cron bật cờ này để im khi không có bước nào tới hạn (S7).
+        chiKhiCo:  { type: boolean }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [steps, count, quaHan, trongNgay]
+      properties:
+        trongNgay: { type: integer }
+        count:     { type: integer }
+        quaHan:    { type: integer }
+        steps:     { type: array }
+
+  - name: createPlan
+    description: >
+      Lập một kế hoạch mới: tạo hẳn một BẢNG riêng trên Notion rồi đổ toàn bộ các
+      bước vào, trong MỘT lần. Tên kế hoạch nên nói rõ mục tiêu và mốc thời gian,
+      ví dụ "Học tiếng Anh giao tiếp trong 3 tháng" — nó thành tên bảng.
+    riskTier: write
+    maxDurationSec: 40
+    # CỐ Ý KHÔNG whitelist (G12). Một lời gọi tạo tới 20 dòng và định hình vài
+    # tháng sắp tới của admin — đó không phải loại việc nên chạy tự động.
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [ten, cacBuoc]
+      properties:
+        ten:    { type: string, minLength: 3, maxLength: 100 }
+        hanChot: { type: string, minLength: 10, maxLength: 10 }   # YYYY-MM-DD
+        # Ưu tiên quyết định thứ tự trong mọi bản liệt kê và trong bức tranh CEO
+        # đọc mỗi lượt. Bỏ trống thì "vừa".
+        uuTien:
+          enum: [cao, vừa, thấp]
+        cacBuoc:
+          type: array
+          # Trần 20: kế hoạch dài hơn thì admin không đọc hết trước khi bấm duyệt,
+          # mà duyệt cái mình chưa đọc thì nút duyệt chỉ còn là hình thức.
+          minItems: 1
+          maxItems: 20
+          items:
+            type: object
+            additionalProperties: false
+            required: [ten]
+            properties:
+              ten:    { type: string, minLength: 3, maxLength: 200 }
+              han:    { type: string, minLength: 10, maxLength: 10 }
+              ghiChu: { type: string, maxLength: 300 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [keHoach, soBuoc]
+      properties:
+        keHoach: { type: string }
+        soBuoc:  { type: integer }
+        hanChot: { type: [string, "null"] }
+        uuTien:  { type: string }
+        # Link tới bảng vừa tạo — admin bấm vào là mở thẳng kế hoạch trên Notion.
+        url:     { type: string }
+        steps:   { type: array }
+
+  - name: setPriority
+    description: >
+      Đổi thứ tự ưu tiên của một kế hoạch (cao / vừa / thấp). Ưu tiên quyết định
+      thứ tự hiện ra và việc CEO nên nhắc kế hoạch nào trước.
+    riskTier: write
+    maxDurationSec: 20
+    # G8 — phạm vi theo mức ưu tiên: "luôn cho phép hạ xuống thấp" là câu có nghĩa.
+    whitelistScope: [uuTien]
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [keHoach, uuTien]
+      properties:
+        keHoach: { type: string, minLength: 1, maxLength: 100 }
+        uuTien:
+          enum: [cao, vừa, thấp]
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [keHoach, uuTien]
+      properties:
+        keHoach:  { type: string }
+        uuTien:   { type: string }
+        previous: { type: [string, "null"] }
+
+  - name: addStep
+    description: "Thêm một bước vào kế hoạch đã có. Kế hoạch phải tồn tại sẵn."
+    riskTier: write
+    maxDurationSec: 20
+    # G8 — phạm vi là TÊN KẾ HOẠCH, một trường bắt buộc: "luôn cho phép thêm bước
+    # vào kế hoạch Học tiếng Anh" là câu có nghĩa và hẹp đúng mức.
+    whitelistScope: [keHoach]
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [keHoach, ten]
+      properties:
+        keHoach: { type: string, minLength: 1, maxLength: 100 }
+        ten:     { type: string, minLength: 3, maxLength: 200 }
+        han:     { type: string, minLength: 10, maxLength: 10 }
+        ghiChu:  { type: string, maxLength: 300 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [stepId, keHoach, ten, thuTu]
+      properties:
+        stepId:  { type: string }
+        keHoach: { type: string }
+        ten:     { type: string }
+        thuTu:   { type: integer }
+        han:     { type: [string, "null"] }
+        url:     { type: string }
+
+  - name: updateStep
+    description: >
+      Đổi trạng thái một bước (chưa làm → đang làm → xong). PHẢI gọi planSteps
+      trước để lấy stepId và đúng tên bước.
+    riskTier: write
+    maxDurationSec: 20
+    whitelistScope: [trangThai]
+    inputSchema:
+      type: object
+      additionalProperties: false
+      # D7 — ten để ĐỐI CHIẾU với thứ admin nhìn thấy lúc bấm duyệt.
+      required: [stepId, ten, trangThai]
+      properties:
+        stepId: { type: string, minLength: 32, maxLength: 40 }
+        ten:    { type: string, minLength: 3, maxLength: 200 }
+        trangThai:
+          enum: [chưa làm, đang làm, xong]
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [stepId, ten, trangThai, previousTrangThai]
+      properties:
+        stepId:            { type: string }
+        keHoach:           { type: [string, "null"] }
+        ten:               { type: string }
+        trangThai:         { type: string }
+        previousTrangThai: { type: [string, "null"] }
+        phanTram:          { type: number }
+
+  - name: deleteStep
+    description: >
+      Bỏ một bước khỏi kế hoạch. PHẢI gọi planSteps trước để lấy stepId và đúng
+      tên bước. Notion giữ thùng rác 30 ngày.
+    riskTier: write
+    maxDurationSec: 20
+    # CỐ Ý KHÔNG whitelist (G12).
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [stepId, ten]
+      properties:
+        stepId: { type: string, minLength: 32, maxLength: 40 }
+        ten:    { type: string, minLength: 3, maxLength: 200 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [stepId, ten]
+      properties:
+        stepId:  { type: string }
+        keHoach: { type: [string, "null"] }
+        ten:     { type: string }
+
+  - name: archivePlan
+    description: >
+      Bỏ CẢ một kế hoạch (cả bảng Notion) vào thùng rác. PHẢI gọi listPlans trước
+      để lấy đúng tên và số bước. Notion giữ 30 ngày nên khôi phục được.
+    riskTier: write
+    maxDurationSec: 30
+    # CỐ Ý KHÔNG whitelist (G12). Xoá cả một bảng thì lần nào cũng phải hỏi.
+    inputSchema:
+      type: object
+      additionalProperties: false
+      # D7 — soBuoc để ĐỐI CHIẾU. Admin duyệt câu "bỏ kế hoạch X, 6 bước"; nếu
+      # con số đã đổi thì cái sắp mất không còn là cái admin đồng ý bỏ.
+      required: [keHoach, soBuoc]
+      properties:
+        keHoach: { type: string, minLength: 1, maxLength: 100 }
+        soBuoc:  { type: integer, minimum: 0, maximum: 100 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [keHoach, soBuoc]
+      properties:
+        keHoach: { type: string }
+        soBuoc:  { type: integer }

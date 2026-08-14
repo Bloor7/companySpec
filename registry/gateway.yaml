@@ -1,0 +1,44 @@
+# Cấu hình adminGateway.
+#
+# KHÔNG chứa secret và KHÔNG chứa định danh cá nhân (F2).
+# Token bot  → ops/.env (chmod 600, .gitignore chặn).
+# adminChatId → biến môi trường COMPANYSPEC_ADMIN_CHAT_ID, hoặc file
+#               registry/gateway.local.yaml (đã bị .gitignore chặn).
+#
+# Bỏ trống có chủ đích: hệ phải từ chối chạy khi chưa được cấu hình, thay vì
+# chạy với một giá trị đoán được.
+
+adminChatId: null
+
+sessionPolicy:
+  windowMinutes: 30              # R3 — trong cửa sổ này thì nối thread gần nhất
+  maxTurnsPerSession: 25         # trần phiên — quá thì mở phiên mới kèm tóm tắt
+
+approval:
+  requestTtlHours: 12            # G11 — yêu cầu duyệt sống lâu, admin còn ngủ
+  tokenTtlMinutes: 10            # G11 — token sau khi bấm nút thì sống ngắn, dùng 1 lần
+
+whitelist:
+  defaultDays: 90                # G7 — quyền không bao giờ vĩnh viễn
+  defaultMaxPerDay: 20           # G8 — có trần dùng mỗi ngày
+
+# L7 — cầu dao hạn mức.
+#
+# NGƯỠNG CHƯA HIỆU CHUẨN. Anthropic không công bố cách quy đổi con số này sang
+# hạn mức Pro thật, và không có API nào trả về "còn bao nhiêu phần trăm".
+# Nên đây là cầu dao chống CHẠY HOANG, không phải thước đo trần thật:
+# mục tiêu là chặn một chuỗi auditSite đốt sạch buổi chiều.
+#
+# Mốc thực đo ngày 2026-08-03: một auditPage ≈ 0,72 · một lượt CEO ≈ 0,02–0,10.
+# Hiệu chuẩn: mở `claude` tương tác, gõ /usage, so với `backoffice.py usage`.
+quota:
+  # Hiệu chuẩn sơ bộ 2026-08-03 bằng /usage. LƯU Ý con số đó bị nhiễu nặng:
+  # 99% hạn mức hôm đó đến từ một phiên trò chuyện dài 8+ tiếng của admin,
+  # KHÔNG phải từ companySpec. Nên đây vẫn là ước lượng thận trọng, chưa phải
+  # số đo sạch. Đo lại sau một ngày chỉ dùng companySpec.
+  #
+  # Neo theo việc đắt nhất: một auditPage = 0,72.
+  window5hWarn: 3.0      # ≈ 4 lần auditPage — cảnh báo, vẫn chạy
+  window5hStop: 5.0      # ≈ 7 lần auditPage — khoá GHI, đọc vẫn được
+  weeklyWarn:  20.0
+  weeklyStop:  30.0

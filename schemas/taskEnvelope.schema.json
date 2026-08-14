@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "companySpec/taskEnvelope",
+  "title": "taskEnvelope — CEO giao việc xuống company (PRINCIPLES.md §4)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["taskId", "traceId", "companyId", "capability", "input", "budget", "policy", "issuedBy", "issuedAt"],
+  "properties": {
+    "taskId":       { "type": "string", "pattern": "^tsk_[0-9A-Za-z]+$" },
+    "traceId":      { "type": "string", "pattern": "^trc_(cron_)?[0-9A-Za-z]+$" },
+    "parentTaskId": { "type": ["string", "null"] },
+    "companyId":    { "type": "string", "pattern": "^[a-z][a-zA-Z0-9]*Company$" },
+    "capability":   { "type": "string", "pattern": "^[a-z][a-zA-Z0-9]*$" },
+    "input":        { "type": "object" },
+
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "adminIntent":  { "type": "string", "maxLength": 500 },
+        "priorResults": { "type": "array" }
+      }
+    },
+
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["depth", "maxDepth", "deadlineAt"],
+      "properties": {
+        "depth":       { "type": "integer", "minimum": 1 },
+        "maxDepth":    { "type": "integer", "minimum": 1, "maximum": 2 },
+        "stepsUsed":   { "type": "integer", "minimum": 0 },
+        "maxSteps":    { "type": "integer", "minimum": 1 },
+        "deadlineAt":  { "type": "string" },
+        "costUsedUsd": { "type": "number", "minimum": 0 },
+        "maxCostUsd":  { "type": "number", "minimum": 0 }
+      }
+    },
+
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["riskTier"],
+      "properties": {
+        "riskTier":      { "enum": ["read", "write", "irreversible"] },
+        "approvalToken": { "type": ["string", "null"] },
+        "dryRun":        { "type": "boolean" }
+      }
+    },
+
+    "issuedBy": { "enum": ["ceo", "scheduledTrigger"] },
+    "issuedAt": { "type": "string" }
+  }
+}

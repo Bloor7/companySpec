@@ -1,0 +1,29 @@
+{
+  "$comment": "Quyền của tiến trình tra nhanh. Nó ĐƯỢC đọc web — thứ CEO không bao giờ được. Đổi lại nó KHÔNG có gì khác: không Bash, không Write, không Task, không Read. Nó chỉ đi ra internet rồi trả về chữ, nên không cần chạm vào đĩa lấy một lần. Đây là lợi ích thật của việc tách khỏi researchCompany: cái kia phải có Write để ghi báo cáo, cái này thì không, và mặt tấn công nhỏ hơn hẳn. Lưu ý: khai trong --tools mới chỉ là NẠP tool; phải có mặt trong allow thì mới CHẠY được.",
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch"
+    ],
+    "deny": [
+      "Bash",
+      "Read",
+      "Write",
+      "Edit",
+      "NotebookEdit",
+      "Glob",
+      "Grep",
+      "Task",
+      "Skill",
+      "ToolSearch",
+      "Artifact",
+      "SendMessage",
+      "PushNotification",
+      "RemoteTrigger",
+      "Monitor",
+      "ScheduleWakeup",
+      "CronCreate",
+      "TaskCreate"
+    ]
+  }
+}

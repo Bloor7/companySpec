@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "companySpec/companyResult",
+  "title": "companyResult — company trả lên CEO (PRINCIPLES.md §4)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "taskId",
+    "traceId",
+    "status",
+    "summary"
+  ],
+  "properties": {
+    "taskId": {
+      "type": "string"
+    },
+    "traceId": {
+      "type": "string"
+    },
+    "status": {
+      "description": "D4 — đúng 6 giá trị. Mơ hồ thì là failed.",
+      "enum": [
+        "ok",
+        "needsApproval",
+        "needsInput",
+        "failed",
+        "budgetExceeded",
+        "rejected"
+      ]
+    },
+    "output": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "D2 — viết cho CEO đọc, không phải cho admin đọc"
+    },
+    "artifacts": {
+      "description": "D1 — payload lớn ghi ra file, trả đường dẫn ở đây",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "kind"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "sideEffects": {
+      "description": "D3 — BẮT BUỘC khai báo mọi thứ đã đổi ngoài thế giới thực",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "target",
+          "reversible"
+        ],
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "idempotencyKey": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reversible": {
+            "type": "boolean"
+          },
+          "previousValue": {
+            "description": "Giá trị TRƯỚC khi ghi đè. Bắt buộc với mọi thao tác sửa — không có nó thì không ai hoàn tác được, kể cả admin.",
+            "type": [
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "steps": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "costUsd": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "approvalRequest": {
+      "description": "Chỉ có khi status = needsApproval. G5 — nói hậu quả, không nói tên hàm. G13 — KHÔNG chứa payloadHash: biết hash từng là biết cách tự duyệt.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "approvalId",
+        "consequence"
+      ],
+      "properties": {
+        "approvalId": {
+          "type": "string"
+        },
+        "consequence": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "riskTier": {
+          "enum": [
+            "write",
+            "irreversible"
+          ]
+        },
+        "canWhitelist": {
+          "type": "boolean"
+        }
+      }
+    },
+    "error": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

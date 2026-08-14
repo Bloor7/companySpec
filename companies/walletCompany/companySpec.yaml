@@ -1,0 +1,160 @@
+# Company giữ SỐ DƯ THỰC — tiền đang thật sự nằm trong tay admin.
+#
+# C4 — ranh giới là "có bao nhiêu tiền", khác hẳn ba company kia:
+#   · incomeCompany  — tiền ĐÃ VÀO (dòng chảy)
+#   · expenseCompany — tiền ĐÃ RA (dòng chảy)
+#   · savingsCompany — tiền để dành theo mục tiêu (đã trích ra khỏi ví)
+#   · walletCompany  — tiền CÒN LẠI ở một thời điểm (mức nước, không phải dòng chảy)
+#
+# ─────────────────────────────────────────────────────────────────────────
+# SỐ DƯ SỐNG, KHÔNG PHẢI MỐC KIỂM KÊ (đổi ngày 2026-08-04)
+#
+# Bản đầu chỉ giữ mốc "ngày X ví có Y đồng", số hiện tại thì TÍNH RA. Về mặt
+# phép tính thì không bao giờ lệch được. Nhưng admin mở Notion lên thấy 4.000đ
+# trong khi trong túi có 84.000đ, và nói đúng: con số nằm trong sổ mà không phải
+# con số thật thì cái sổ đó vô dụng.
+#
+# Nên giờ ví cộng trừ thẳng: mỗi lần tiền vào/ra, CEO gọi adjustBalance ngay sau
+# khi ghi thu/chi. Rủi ro của cách này là CEO quên bước hai và số dư lệch dần.
+# Bù lại bằng HAI thứ, không phải bằng hy vọng:
+#   1. `setBalance` — đếm tiền thật rồi ghi đè, lệch bao nhiêu nó nói rõ bấy nhiêu.
+#   2. Báo cáo tối đối chiếu ví với sổ thu chi trong ngày; lệch thì báo ngay,
+#      nên sai sót lộ ra trong 24 giờ chứ không tích luỹ âm thầm hàng tháng.
+
+companyId: walletCompany
+displayName: "Phòng ví"
+version: 0.1.0
+
+runtime: code
+runtimeReason: "Lưu và đọc vài con số có mốc thời gian. Không cần hiểu ngôn ngữ tự nhiên."
+entrypoint: ./src/main.py
+
+dataStore: ./store.sqlite
+secrets: [NOTION_TOKEN]
+env:     [NOTION_WALLET_DATABASE_ID]
+canBeCalledBy: [ceo]
+canCall: []
+owner: admin
+
+capabilities:
+  - name: getBalance
+    description: >
+      Số dư hiện tại của từng ví và tổng. Đây là con số THẬT, đã tính mọi khoản
+      thu chi đã ghi — không phải mốc cần cộng thêm gì nữa.
+    riskTier: read
+    maxDurationSec: 20
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        vi:
+          enum: [tiền mặt, tài khoản]
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [vi, tong, kiemKeTu]
+      properties:
+        vi:        { type: array }
+        tong:      { type: number }
+        # Lần cuối số dư được đụng tới — để biết nó có còn tươi không.
+        kiemKeTu:  { type: [string, "null"] }
+
+  - name: setBalance
+    description: >
+      Kiểm kê một ví: ghi lại "hôm nay ví này có đúng bấy nhiêu". Dùng lần đầu,
+      hoặc bất cứ khi nào đếm lại tiền thật và thấy lệch với số hệ thống tính ra.
+    riskTier: write
+    maxDurationSec: 20
+    # CỐ Ý KHÔNG whitelist (G12). Kiểm kê là ghi đè một con số gốc mà mọi tính
+    # toán sau đó dựa vào — "luôn cho phép đặt lại số dư" là câu không ai muốn nói.
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [vi, soTien]
+      properties:
+        vi:
+          enum: [tiền mặt, tài khoản]
+        soTien: { type: number, minimum: 0, maximum: 100000000000 }
+        ngay:   { type: string, minLength: 10, maxLength: 35 }   # ISO, nên kèm giờ
+        ghiChu: { type: string, maxLength: 200 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [vi, soTien, ngay]
+      properties:
+        vi:       { type: string }
+        soTien:   { type: number }
+        ngay:     { type: string }
+        previous: { type: [number, "null"] }
+        tong:     { type: number }
+
+  - name: adjustBalance
+    description: >
+      Cộng hoặc trừ vào số dư một ví. CEO gọi NGAY SAU mỗi lần ghi thu/chi/nạp quỹ
+      có động tới tiền thật. `soTien` LUÔN là số dương (độ lớn khoản tiền);
+      `loai` quyết định cộng hay trừ. Đừng gửi số âm.
+    riskTier: write
+    maxDurationSec: 20
+    # G8 — phạm vi theo ví, một trường bắt buộc. "Luôn cho phép cộng trừ ví tiền
+    # mặt" là hợp lý: nó chỉ đi kèm một khoản thu/chi mà admin vừa duyệt rồi.
+    whitelistScope: [vi]
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [vi, soTien, loai]
+      properties:
+        vi:
+          enum: [tiền mặt, tài khoản]
+        # ĐỘ LỚN, luôn dương. Chiều tiền do `loai` quyết, không do dấu.
+        #
+        # Bản trước nhận số có dấu, và bắt dấu phải khớp `loai`. Chốt đó bắt
+        # được lỗi thật ba lần — nhưng cả ba lần CEO đều gửi số dương kèm loai
+        # "chi", tức hợp đồng đang mời gọi đúng một kiểu sai. Bỏ dấu đi thì
+        # không còn cách nào diễn đạt sai nữa.
+        soTien: { type: number, minimum: 0, maximum: 100000000000 }
+        loai:
+          # 'điều chỉnh' tách làm tăng/giảm để KHÔNG còn trường hợp nào
+          # phải suy chiều từ dấu.
+          enum: [thu, chi, nạp quỹ, rút quỹ, điều chỉnh tăng, điều chỉnh giảm]
+        ghiChu: { type: string, maxLength: 200 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [vi, thayDoi, soDuMoi, tong]
+      properties:
+        vi:       { type: string }
+        thayDoi:  { type: number }
+        soDuCu:   { type: number }
+        soDuMoi:  { type: number }
+        tong:     { type: number }
+
+  - name: transferBalance
+    description: >
+      Chuyển tiền giữa hai ví — rút ATM, nạp tiền vào tài khoản. Tổng không đổi,
+      chỉ đổi chỗ đứng, nên đây KHÔNG phải khoản thu hay khoản chi.
+    riskTier: write
+    maxDurationSec: 20
+    # G8 — phạm vi theo ví nguồn, một trường bắt buộc: "luôn cho phép rút từ tài
+    # khoản ra tiền mặt" là câu có nghĩa và hẹp đúng mức.
+    whitelistScope: [tuVi]
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [tuVi, denVi, soTien]
+      properties:
+        tuVi:
+          enum: [tiền mặt, tài khoản]
+        denVi:
+          enum: [tiền mặt, tài khoản]
+        soTien: { type: number, minimum: 1, maximum: 100000000000 }
+        ghiChu: { type: string, maxLength: 200 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [tuVi, denVi, soTien]
+      properties:
+        tuVi:    { type: string }
+        denVi:   { type: string }
+        soTien:  { type: number }
+        conLai:  { type: object }
+        tong:    { type: number }
