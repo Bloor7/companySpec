@@ -84,6 +84,39 @@ python3 ops/snapshot.py save expense   # budget|calendar|expense|income|journal|
 
 ---
 
+## Phiên bản và cách quay về
+
+Admin tự đẩy lên GitHub (kho **private**) — token nằm trong tay admin, không
+nằm trong hệ. Việc của phía này là **đặt mốc** để còn quay về được.
+
+```bash
+git tag -n1                    # xem các mốc đã đặt và trạng thái lúc đó
+git log --oneline -10          # lịch sử gần đây
+```
+
+**Đặt mốc mới** — chỉ đặt sau khi đã CHẠY THẬT và thấy đúng, không đặt theo
+cảm giác. Phần mô tả phải ghi *đã kiểm những gì*, vì đó mới là thứ quyết định
+có dám quay về mốc đó hay không:
+
+```bash
+git tag -a on-dinh-$(date +%F) -m "Đã chạy thật và thấy đúng: <liệt kê>"
+```
+
+**Quay về một mốc:**
+
+```bash
+git stash                              # cất việc đang làm dở, nếu có
+git checkout on-dinh-2026-08-14        # xem lại trạng thái đó (chưa đổi nhánh)
+git checkout main                      # quay lại hiện tại
+git reset --hard on-dinh-2026-08-14    # ⚠ VỨT mọi thứ sau mốc đó, không lấy lại được
+```
+
+Ba thứ **không nằm trong git** nên quay về không kéo chúng theo: sổ sqlite của
+company, dữ liệu thật trên Notion, và `ops/.env`. Muốn lùi dữ liệu Notion thì
+dùng `ops/snapshot.py` (W7), đó là cơ chế riêng.
+
+---
+
 ## Ranh giới không được vượt
 
 - **CEO không có tool `Read`, `WebFetch`, `WebSearch`, `Write`.** Mở ra là nó
