@@ -90,6 +90,102 @@ def cong_ty() -> list:
     return ra
 
 
+def _hop_dong() -> dict:
+    """companyId → {tên năng lực: inputSchema}. Manifest là nguồn sự thật."""
+    ra = {}
+    d = os.path.join(ROOT, "companies")
+    for cid in sorted(os.listdir(d)):
+        p = os.path.join(d, cid, "companySpec.yaml")
+        if not os.path.isfile(p):
+            continue
+        try:
+            spec = yaml.safe_load(open(p, encoding="utf-8")) or {}
+        except Exception:
+            continue
+        ra[cid] = {c["name"]: (c.get("inputSchema") or {})
+                   for c in (spec.get("capabilities") or []) if c.get("name")}
+    return ra
+
+
+def _soat_mot_loi_goi(cid: str, cap: str, khoa: set, hd: dict, o_dau: str) -> list:
+    """Đối chiếu MỘT lời gọi với hợp đồng. Trả danh sách chỗ phạm."""
+    if cid not in hd:
+        return [f"C2.1 · {o_dau}: không có company '{cid}'"]
+    if cap not in hd[cid]:
+        co = ", ".join(sorted(hd[cid])) or "(không có năng lực nào)"
+        return [f"C2.2 · {o_dau}: '{cid}' không có năng lực '{cap}'. Có: {co}"]
+    isc = hd[cid][cap]
+    props = set((isc.get("properties") or {}).keys())
+    pham = []
+    if isc.get("additionalProperties") is False:
+        la = khoa - props
+        if la:
+            pham.append(f"C2.3 · {o_dau}: {cid}.{cap} không khai trường "
+                        f"{', '.join(sorted(la))} — có: {', '.join(sorted(props)) or '(không trường nào)'}")
+    thieu = set(isc.get("required") or []) - khoa
+    if thieu:
+        pham.append(f"C2.3 · {o_dau}: {cid}.{cap} thiếu trường bắt buộc "
+                    f"{', '.join(sorted(thieu))}")
+    return pham
+
+
+def soat_ten_truong(tep: dict) -> list:
+    """Tên trường ở nơi GỌI phải khớp `inputSchema` trong manifest.
+
+    VÌ SAO CÓ LUẬT NÀY: đây là con bug tốn công nhất của dự án. Báo cáo tiền
+    cuối ngày gọi sổ thu/chi bằng `from` trong khi hợp đồng khai `tuNgay`;
+    dispatcher trả `rejected`, code nuốt lỗi bằng `or {}`, và hệ in
+    "thu 0đ · chi 0đ" mỗi tối SUỐT NHIỀU TUẦN mà không ai nghi — vì số 0 trông
+    y hệt "hôm nay không tiêu gì". Hỏi lại CEO thì số đúng, nên càng khó ngờ.
+
+    Chỉ soát được lời gọi VIẾT CỨNG (tên company, tên năng lực và dict đều là
+    hằng). Lời gọi dựng động thì bỏ qua — soát nửa vời còn tệ hơn không soát,
+    vì nó tạo cảm giác đã kiểm rồi. CEO gọi động nên không nằm trong tầm này;
+    bù lại CEO được đưa sẵn danh mục kèm tên trường mỗi lượt (gateway).
+    """
+    hd = _hop_dong()
+    pham = []
+
+    # (1) Lời gọi trong Python: hàm nào có dạng f("<x>Company", "<cap>", {...})
+    for rel, p in sorted(tep.items()):
+        try:
+            cay = ast.parse(open(p, encoding="utf-8").read())
+        except (SyntaxError, OSError):
+            continue
+        for n in ast.walk(cay):
+            if not isinstance(n, ast.Call) or len(n.args) < 3:
+                continue
+            a0, a1, a2 = n.args[0], n.args[1], n.args[2]
+            if not (isinstance(a0, ast.Constant) and isinstance(a0.value, str)
+                    and a0.value.endswith("Company")
+                    and isinstance(a1, ast.Constant) and isinstance(a1.value, str)
+                    and isinstance(a2, ast.Dict)):
+                continue
+            # Dict có khoá động (**kwargs hoặc khoá không phải hằng) thì không
+            # kết luận được — bỏ qua thay vì báo bừa.
+            if any(k is None or not isinstance(k, ast.Constant) for k in a2.keys):
+                continue
+            khoa = {k.value for k in a2.keys}
+            pham += _soat_mot_loi_goi(a0.value, a1.value, khoa, hd,
+                                      f"{rel}:{n.lineno}")
+
+    # (2) Lịch định kỳ: registry/schedules.yaml khai input tĩnh. Cron chạy lúc
+    # admin ngủ, sai ở đây thì không ai thấy cho tới khi đọc báo cáo.
+    lich = os.path.join(ROOT, "registry", "schedules.yaml")
+    if os.path.isfile(lich):
+        try:
+            ds = (yaml.safe_load(open(lich, encoding="utf-8")) or {}).get("schedules") or []
+        except Exception:
+            ds = []
+        for s in ds:
+            if not s.get("companyId") or not s.get("capability"):
+                continue
+            pham += _soat_mot_loi_goi(
+                s["companyId"], s["capability"], set((s.get("input") or {}).keys()),
+                hd, f"schedules.yaml:{s.get('scheduleId', '?')}")
+    return pham
+
+
 def soat(tep: dict, canh: dict) -> list:
     """Ba luật kiến trúc, soát được bằng code. Trả danh sách chỗ phạm.
 
@@ -126,6 +222,7 @@ def soat(tep: dict, canh: dict) -> list:
             for dong in noi.splitlines():
                 if dong.strip().startswith(("import ", "from ")) and "companies" in dong:
                     pham.append(f"C2 · {rel} import thẳng vào company: {dong.strip()[:60]}")
+    pham += soat_ten_truong(tep)
     return pham
 
 

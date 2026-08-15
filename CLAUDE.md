@@ -11,8 +11,16 @@ Trả lời admin **bằng tiếng Việt**, xưng "tớ", gọi admin là "đ�
 
 ```bash
 python3 ops/codemap.py          # tầng, phụ thuộc thật, số company/năng lực
-python3 ops/codemap.py --check  # soát 3 luật kiến trúc; phạm thì thoát mã 1
+python3 ops/codemap.py --check  # soát luật kiến trúc; phạm thì thoát mã 1
 ```
+
+`--check` soát bốn thứ: **P3** company không gọi company · **C4.1** `lib/` không
+phụ thuộc ngược · **C2** không ai import thẳng vào ruột company · **C2.1/2.2/2.3**
+tên company, tên năng lực và **tên trường đầu vào** ở mọi lời gọi viết cứng
+(`ops/*.py` và `registry/schedules.yaml`) phải khớp `companySpec.yaml`.
+
+Cái cuối là cổng chặn con bug tốn công nhất dự án — xem dòng đầu bảng dưới.
+Nó **chỉ soát lời gọi viết cứng**; lời gọi dựng động (CEO) nằm ngoài tầm.
 
 **Đừng chép con số vào tài liệu.** README từng ghi "11 company · 48 năng lực"
 trong khi thật là 15 và 56 — chép tay thì lặng lẽ cũ đi, không ai phát hiện.
@@ -50,7 +58,7 @@ Mỗi dòng là một bug đã tốn công lần ra. Trước khi viết mã đ�
 
 | Bẫy | Biểu hiện | Luật |
 |---|---|---|
-| **Sai tên trường đầu vào** | Gọi company bằng tên trường không có trong `companySpec.yaml` → `rejected`. Báo cáo tối in "thu 0đ · chi 0đ" suốt nhiều tuần | Tên trường lấy từ manifest, KHÔNG suy từ company khác — chúng không thống nhất |
+| **Sai tên trường đầu vào** | Gọi company bằng tên trường không có trong `companySpec.yaml` → `rejected`. Báo cáo tối in "thu 0đ · chi 0đ" suốt nhiều tuần | Tên trường lấy từ manifest, KHÔNG suy từ company khác — chúng không thống nhất. **`codemap --check` bắt được** |
 | **Nuốt lỗi thành giá trị hợp lệ** | `or {}`, `or 0`, `except: return ""` → số 0 trông y hệt "hôm nay không tiêu gì" | **O10** |
 | **Chi phí phiên hỏng ghi $0** | Cầu dao càng mù khi hệ càng hỏng | **L7.1** |
 | **Timeout bằng ngân sách** | Timeout HTTP = `maxDurationSec` → dispatcher giết tiến trình trước khi company kịp báo lỗi tử tế | Timeout phải nhỏ hơn HẲN ngân sách |
