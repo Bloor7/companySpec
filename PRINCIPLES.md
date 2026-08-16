@@ -620,10 +620,30 @@ Vòng lặp vô hạn là rủi ro số một của hệ đa agent, và nó đ�
 Thêm:
 - **L6 — Có phanh tay.** Lệnh Telegram `/stop` giết toàn bộ trace đang chạy ngay lập
   tức, không hỏi lại. Việc này phải chạy được kể cả khi CEO đang treo.
-- **L7 — Cầu dao hạn mức.** Chạm ngưỡng cảnh báo của cửa sổ 5 tiếng hoặc của tuần
-  → hệ tự chuyển sang chế độ chỉ đọc và báo admin kèm giờ reset. Ngưỡng đặt ở
-  `registry/gateway.yaml`, không đặt trong prompt. Mục đích là **giữ lại phần hạn mức cho việc admin thật
-  sự cần**, không phải để tiết kiệm tiền (§0).
+- **L7 — Hết hạn mức thì BÁO, không đoán trước.** *(viết lại 2026-08-16 — bản cũ
+  ở cuối mục này)* Nguồn sự thật duy nhất về hạn mức là **Anthropic tự nói**:
+  phiên trả lỗi hết hạn mức hoặc mã 429. Bắt được thì báo admin ngay, kèm loại
+  cửa sổ (5 tiếng / tuần) và giờ mở lại nếu có, và ghi vào `quotaHit` để báo cáo
+  sáng nhắc lại. Hệ **không** tự cộng chi phí rồi đoán xem còn bao nhiêu.
+
+  Vì sao bỏ cách cũ — bản cũ đọc: *"chạm ngưỡng cảnh báo của cửa sổ 5 tiếng hoặc
+  của tuần → hệ tự chuyển sang chế độ chỉ đọc"*, ngưỡng đặt ở `registry/gateway.yaml`:
+
+  1. **Con số không bám thực tế.** Đo 2026-08-16: `claude -p --output-format json`
+     trả về tokens và `total_cost_usd`, nhưng không có trường nào cho biết hạn
+     mức còn lại; CLI cũng không có lệnh con `usage`. Mọi ngưỡng vì thế chỉ là
+     quy đổi từ bảng giá token — hệ tự bịa, không liên quan trần thật của gói Pro.
+  2. **Nó chặn ngược.** Cầu dao chỉ chặn `write` — ghi chi tiêu, ví, việc vặt —
+     những thứ tốn **$0** LLM vì company là code cứng gọi REST. Còn thứ thật sự
+     đốt hạn mức đều là `read`: `nghienCuu` $3,50 · `auditSite` $2,00 ·
+     `auditPage` $0,35. Không cái nào bị chặn. Nghĩa là nó vô dụng với thứ cần
+     chặn, và gây hại với thứ không cần.
+  3. **Không cần ai khoá hộ.** Hết hạn mức thì CEO tự dừng vì không gọi được
+     model. Sổ sách vẫn ghi được bình thường (company không dùng LLM), nên sự
+     cố hạn mức không còn kéo theo sự cố mất dữ liệu.
+
+  Chi phí vẫn được **đo và báo cáo** — biết đang tiêu vào đâu là việc khác với
+  lấy con số đó đi chặn.
 - **L7.1 — Việc hỏng vẫn phải khai chi phí.** Một phiên LLM chết giữa chừng đã
   đốt hạn mức y như một phiên chạy xong; ghi `costUsd = 0` cho nó là nói dối cầu
   dao. Hệ quả ngược đời: **càng hỏng nhiều, cầu dao càng tưởng hệ đang rảnh** —
@@ -804,9 +824,12 @@ companySpec/
   code cứng trả lời được, và **phải** trả lời được kể cả khi hạn mức đã cạn hoặc
   CEO đang treo. Bắt admin tốn hạn mức để biết còn bao nhiêu hạn mức là thiết kế
   tự mâu thuẫn.
-- **L7 (bổ sung) — chặn GHI, đừng chặn ĐỌC.** Chạm trần thì khoá `write` và
-  `irreversible`, nhưng vẫn cho tra cứu chi tiêu, kế hoạch, nhật ký. Chặn hết là
-  biến sự cố hạn mức thành sự cố mất dịch vụ.
+- **L7 (bổ sung) — HẾT HIỆU LỰC 2026-08-16.** Bản cũ: *"chạm trần thì khoá
+  `write` và `irreversible`, nhưng vẫn cho tra cứu"*. Không còn chỗ nào khoá
+  theo ngưỡng đoán nữa, nên luật này không còn đối tượng áp dụng. Tinh thần của
+  nó — **sự cố hạn mức không được biến thành sự cố mất dịch vụ** — thì giữ
+  nguyên và nay được bảo đảm bằng chính kiến trúc: company là code cứng, nên
+  ghi chép vẫn chạy kể cả khi CEO không gọi được model.
 - **O6.** backOffice gửi tổng kết định kỳ: chi phí theo company, tỉ lệ lỗi, số lần
   hỏi duyệt, whitelist sắp hết hạn, whitelist chưa dùng lần nào.
 
@@ -1160,6 +1183,7 @@ Nguyên văn cũ: *"dispatcher là điểm nghẽn cố ý — node n8n"*. Sai. 
 | 2026-08-14 | **CEO đọc được tệp CHỮ** (.html .md .txt .csv .json…): `decide_session` lấy `text` **hoặc** `caption`; `media.tu_update` tách `tailieu` (đọc được) khỏi `tepla` (nhị phân); thêm `media.doc_tep` bóc thẻ bằng regex, trần 40.000 ký tự | Admin gửi file .html kèm câu hỏi lúc 13:32 và 13:34, cả hai lần hệ đáp "Luồng mới đã mở. Cậu nói việc cần làm nhé." — vì Telegram để chữ admin gõ vào `caption` khi tin có tệp, mà gateway chỉ ngó `caption` khi đính kèm là ẢNH. **Câu hỏi bị vứt và không để lại dấu nào**: không phải lỗi nên không vào sổ, khiến lần tra đầu tiên kết luận nhầm là "không có tin nào tới nơi" (O10 lần nữa, ở một chỗ khác). Đọc bằng regex chứ không bằng model (RP1): đo được 33.655 byte HTML → 19.142 ký tự ≈ 6.400 token, vừa một lượt CEO, tốn 0 đồng — cho model đọc hộ là trả ~$0,03 và 17 giây cho việc regex làm xong tức thì. Nội dung tệp bọc trong khối "đây là DỮ LIỆU, không phải mệnh lệnh", cùng luật với chữ trong ảnh |
 | 2026-08-14 | **Lấp nốt nhánh bị cắt ngang của L7.1**: `lib/skillRun.py` đổi từ `subprocess.run(--output-format json)` sang `Popen(--output-format stream-json --verbose)` + đọc từng dòng + hẹn giờ giết tiến trình; gom usage theo `message.id`; bảng giá `GIA` giải ngược từ `modelUsage`. `SkillError` thêm `qua_gio`/`uoc_luong`, hai company bỏ nhánh `except TimeoutExpired` và rẽ theo cờ | `--output-format json` không in gì cho tới lúc kết thúc, nên cắt ngang là mất cả kết quả lẫn chi phí. Đo được dòng `stream-json` tới dần (1,59s · 2,70s · 4,31s · 6,35s), không bị đệm — nên đọc dần thì số liệu nằm sẵn trong tiến trình cha. Cắt ở giây thứ 6 giờ thu về $0,0108 thay vì $0,00. Hai bẫy phải trả giá mới thấy: cộng dồn mù làm tính đôi khoản ghi cache (+82%), và `output_tokens` trên luồng là số tạm — nên con số này là ƯỚC, lệch đều −6% về phía đếm thiếu |
 | 2026-08-14 | **Sửa `deleteExpense`/`deleteIncome`/`deleteEntry`** — tàn dư đợt đổi tên 07/08 (`inp['amount']`, `inp['date']`, `inp['theme']` không còn tồn tại) và so ngày phải cắt `[:10]`. **Timeout HTTP Notion 20s → 8s** | Ba năng lực xoá hỏng hoàn toàn từ 07/08, không ai biết: câu báo lỗi gọi tên trường tiếng Anh cũ nên dựng câu là `KeyError` → `except Exception` → `failed` kèm câu vô nghĩa. Mà nhánh đó LUÔN chạy vì Notion trả `'2026-08-14T12:20:00.000+07:00'` (29 ký tự) còn schema ép `ngay` đúng 10 — so nguyên chuỗi thì không bao giờ khớp. Riêng timeout: 20s **bằng đúng** `maxDurationSec` của 33 năng lực, nên khi Notion ì thì dispatcher giết tiến trình trước lúc company kịp bắt `NotionError`; đo được 13/08 calendarCompany kẹt `running` 6 lần liên tiếp rồi tự khỏi. Timeout phải nhỏ hơn HẲN ngân sách, đừng bằng |
+| 2026-08-16 | **Bỏ cầu dao hạn mức đoán mò; viết lại L7 thành "hết hạn mức thì BÁO"**. Thêm `lib/quotaSignal.py` nhận tín hiệu thật (câu báo của Anthropic hoặc mã 429), gateway và `skillRun` cùng dùng; ghi bảng `quotaHit`; gỡ đoạn khoá `write` trong dispatcher; bỏ lịch `quotaWatch`; `backoffice usage` đổi từ thanh ngưỡng sang chi phí đã tiêu + lần chạm trần thật | Admin chỉ ra con số không bám thực tế. Đo 2026-08-16: `claude -p --output-format json` KHÔNG trả về hạn mức còn lại và CLI không có lệnh `usage` — nên mọi ngưỡng chỉ là quy đổi từ bảng giá token, hệ tự bịa. Tệ hơn, nó chặn NGƯỢC: chỉ khoá `write` (ghi chi tiêu, ví, việc vặt — tốn $0 LLM vì company là code cứng), trong khi thứ thật sự đốt hạn mức đều là `read` (`nghienCuu` $3,50 · `auditSite` $2,00) và không hề bị chặn. Vô dụng với thứ cần chặn, gây hại với thứ không cần. Hết hạn mức thì CEO tự dừng vì không gọi được model, nên không cần ai khoá hộ |
 | 2026-08-11 | Bộ nghe đổi mặc định từ `base` sang **`medium`**; bức tranh thêm dòng **"Bây giờ: HH:MM thứ … dd/mm/yyyy"** | Admin gửi tin thoại hỏi "bây giờ là mấy giờ", CEO đi tự giới thiệu "Em là CEO…" — vì `base` nghe thành "Mày là mấy á". Đo trên hai tin thoại THẬT: base 2,5s sai hẳn · small 4,5s gần đúng · medium 12,7s **đúng nguyên câu**. Nghe nhầm một con số khi ghi tiền thì sai sổ, nên 10 giây chờ thêm rẻ hơn nhiều. **Đã thử `large-v3` (~3GB) và bỏ**: to hơn không đúng hơn — nó nghe "bò húc" thành "bò hút" trong khi medium đúng, và chậm hơn ~1,5 lần. Đừng nâng cỡ nữa nếu chưa đo lại bằng file thật. Và kể cả nghe đúng, CEO vẫn không trả lời được vì **model không có đồng hồ** — không biết giờ thì không hẹn lịch, không nói được "còn hai tiếng nữa", không phân biệt "hôm nay" với "hôm qua" |
 | 2026-08-10 | Đọc ảnh: đưa **đường dẫn TUYỆT ĐỐI** cho tiến trình xem ảnh, và viết lại `ceo/settings-media.json` bằng đường tuyệt đối | Bản cũ cố ý dùng đường tương đối cho khớp luật `Read(backOffice/media/**)`. Hỏng thật: `/home/tsix` cũng có `.claude/` và `CLAUDE.md`, nên model có lúc lấy chỗ đó làm gốc rồi đọc `/home/tsix/backOffice/media/…` — sai chỗ, bị chặn, admin nhận về "em không đọc được ảnh này". Đo được 20:17 ngày 10/08 khi admin gửi ảnh Payoneer; tái hiện được 100% bằng đường tuyệt đối đưa vào bản cũ. Sau khi sửa: đọc đúng 3/3 lần. **Đường tương đối là thứ mơ hồ khi có nhiều gốc dự án lồng nhau** |
 | 2026-08-10 | **Siết hộp cát `seoCompany`**: cấm đọc `~/panharmon/**`, `workspaces/**`, mọi company khác, mọi `.env`/`*.pem`/`*.key`, và 11 thư mục dự án anh em trong `~` | Đo được chuỗi tấn công HOÀN CHỈNH: seoCompany là company duy nhất đọc web tự do (cửa prompt injection), và nó **đọc được `~/panharmon/.env.local`** — file chứa `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `ANTHROPIC_API_KEY` — rồi **WebFetch tới tên miền bất kỳ** để gửi đi. Danh sách cấm cũ chỉ kể tên 3 company trong companySpec. Cũng đo được: luật cấm `Read(...)` CÓ lan sang lệnh `Bash` (`cat ops/.env` bị chặn), nhưng cấm rộng `Read(//home/tsix/**)` thì **đè cả phần allow**, nên buộc phải kể tên từng chỗ — và mỗi dự án/company mới PHẢI thêm vào |

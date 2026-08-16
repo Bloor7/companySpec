@@ -32,14 +32,16 @@ schedules:
     # Không có việc nào thì im. listTodos trả summary rỗng đúng lúc đó (S7).
     quietIfEmpty: true
 
-  - scheduleId: quotaWatch
-    displayName: "Canh hạn mức"
-    enabled: true
-    everyHours: 2
-    kind: digest
-    sections: [quota]
-    # Chỉ nhắn khi có chuyện. Cảnh báo mà nhắn suốt thì admin sẽ ngừng đọc.
-    quietIfEmpty: true
+  # BỎ lịch "canh hạn mức" ngày 2026-08-16 (admin quyết).
+  #
+  # Nó chạy mỗi 2 tiếng để so chi phí với một ngưỡng đoán rồi kêu "sắp chạm
+  # trần". Con số đó hệ tự cộng từ bảng giá token, không phải hạn mức thật —
+  # `claude -p` không trả về hạn mức còn lại và CLI không có lệnh `usage`.
+  # Canh một con số bịa thì cảnh báo cũng bịa.
+  #
+  # Thay bằng: khi Anthropic THẬT SỰ chặn, gateway bắt được ngay lúc đó và
+  # nhắn admin (lib/quotaSignal.py). Không cần ai đi tuần mỗi 2 tiếng.
+  # Số đã tiêu vẫn nằm trong báo cáo sáng, ở mục quota, dưới dạng thông tin.
 
   - scheduleId: calendarWatch
     displayName: "Sắp tới giờ"

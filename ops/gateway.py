@@ -32,6 +32,7 @@ import stt  # noqa: E402
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "lib"))
 import db  # noqa: E402
+import quotaSignal  # noqa: E402
 
 CEO_STORE = os.path.join(ROOT, "ceo", "store.sqlite")
 SYSTEM_PROMPT = os.path.join(ROOT, "ceo", "SYSTEM.md")
@@ -629,10 +630,11 @@ def _ly_do_chet(proc) -> str:
     trống trơn, không biết hỏng gì để mà sửa. Đo được 2026-08-06: OAuth hết hạn
     làm CEO chết cả buổi sáng, không một chữ nào trong thông báo nhắc tới auth.
     """
-    ly_do = ""
+    ly_do, ma_loi = "", None
     try:
         kq = json.loads(proc.stdout)
         ly_do = str(kq.get("result") or "").strip()
+        ma_loi = kq.get("api_error_status")
 
         # Chạm trần --max-turns: CLI báo lỗi mà KHÔNG có trường `result`, nên
         # nhánh dưới sẽ đổ nguyên khối JSON ra Telegram. Đo được 2026-08-06:
@@ -649,9 +651,43 @@ def _ly_do_chet(proc) -> str:
     # Thứ tự: JSON của CLI → stderr (lỗi trước khi CLI kịp chạy, ví dụ không
     # tìm thấy lệnh) → stdout thô (JSON hỏng).
     ly_do = ly_do or proc.stderr.strip() or proc.stdout.strip()
+
+    # HẾT HẠN MỨC — kiểm TRƯỚC auth, vì thông báo quota đôi khi cũng nhắc tới
+    # tài khoản, mà khuyên admin đi `/login` lúc chỉ cần chờ vài tiếng là gửi
+    # họ đi sửa nhầm chỗ. Đây là nguồn sự thật DUY NHẤT về quota: Anthropic
+    # tự nói, chứ hệ không đoán nữa (xem lib/quotaSignal.py).
+    hit = quotaSignal.phat_hien(ly_do, ma_loi)
+    if hit:
+        ghi_quota_hit(hit)
+        return quotaSignal.cau_bao_admin(hit)
+
     if "authenticate" in ly_do.lower() or "oauth" in ly_do.lower():
         return "Phiên đăng nhập Claude hết hạn. Chạy `claude /login` rồi nhắn lại."
     return ly_do[:200] or "CLI không nói gì thêm."
+
+
+def ghi_quota_hit(hit: dict) -> None:
+    """Ghi lại lần chạm trần, để báo cáo sáng nói được "hôm qua hết hạn mức".
+
+    Không nuốt lỗi ở đây thì hỏng ghi sổ sẽ làm hỏng luôn câu trả lời cho
+    admin — mà câu trả lời mới là thứ quan trọng lúc này. Nên bọc try, nhưng
+    in ra stderr để còn tra được (O10: nuốt im lặng mới là điều cấm).
+    """
+    try:
+        conn = db.connect(os.path.join(ROOT, "backOffice", "store.sqlite"))
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS quotaHit (
+              hitId INTEGER PRIMARY KEY AUTOINCREMENT, loai TEXT NOT NULL,
+              resetLuc TEXT, nguyenVan TEXT, createdAt TEXT NOT NULL)"""
+        )
+        conn.execute(
+            "INSERT INTO quotaHit (loai, resetLuc, nguyenVan, createdAt) VALUES (?,?,?,?)",
+            (hit["loai"], hit.get("resetLuc"), hit.get("nguyenVan"), now()))
+        conn.commit()
+        conn.close()
+    except Exception as exc:
+        print(f"[gateway] không ghi được quotaHit: {type(exc).__name__}: {exc}",
+              file=sys.stderr)
 
 
 def danh_muc_block() -> str:

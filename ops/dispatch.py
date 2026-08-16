@@ -27,9 +27,6 @@ import yaml
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import approvals  # noqa: E402  (cùng thư mục ops/)
-sys.path.insert(0, os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backOffice", "src"))
-from backoffice import quota_state  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 COMPANIES = os.path.join(ROOT, "companies")
@@ -310,21 +307,21 @@ def cmd_call(args) -> dict:
             f"S3 — việc định kỳ chỉ được phép ĐỌC. '{args.capability}' là "
             f"'{risk}'. Cron quan sát và chuẩn bị; muốn hành động thì chờ admin.")
 
-    # L7 — cầu dao hạn mức. Chạm trần thì chặn mọi việc GHI nhưng vẫn cho ĐỌC:
-    # admin còn tra cứu được chi tiêu, kế hoạch, nhật ký. Chặn hết là biến sự cố
-    # hạn mức thành sự cố mất dịch vụ.
-    if risk in ("write", "irreversible"):
-        try:
-            q = quota_state()
-            if q["state"] == "stop":
-                w5 = q["window5h"]
-                return bail(
-                    f"L7 — đã dùng {w5['total']:.1f}/{w5['stopAt']:.1f} hạn mức "
-                    "trong 5 tiếng qua. Tạm khoá mọi việc ghi cho tới khi cửa sổ "
-                    "trượt qua; đọc thì vẫn bình thường.",
-                    status="budgetExceeded")
-        except Exception:
-            pass  # cầu dao hỏng thì không được kéo sập cả hệ
+    # KHÔNG CÒN CẦU DAO HẠN MỨC Ở ĐÂY — gỡ ngày 2026-08-16, admin quyết.
+    #
+    # Bản cũ cộng chi phí token rồi so với một ngưỡng đoán, chạm thì khoá việc
+    # GHI. Sai hai tầng:
+    #   · Con số không bám thực tế. `claude -p --output-format json` không trả
+    #     về hạn mức còn lại, CLI cũng không có lệnh `usage` — nên "3,95/5" là
+    #     hệ tự bịa từ bảng giá, không liên quan trần thật của gói Pro.
+    #   · Nó chặn NGƯỢC. Chỉ chặn `write` — ghi chi tiêu, ví, việc vặt — vốn
+    #     tốn $0 LLM vì company là code cứng. Thứ thật sự đốt hạn mức lại đều
+    #     là `read`: nghienCuu $3,50 · auditSite $2,00. Không cái nào bị chặn.
+    #
+    # Thay bằng: đợi Anthropic tự nói hết hạn mức rồi BÁO admin
+    # (lib/quotaSignal.py). Lúc đó CEO tự dừng vì không gọi được model nữa,
+    # nên không cần ai khoá hộ; còn sổ sách vẫn ghi được bình thường vì company
+    # không dùng LLM. Chi phí vẫn được đo và báo cáo, chỉ không dùng để chặn.
     fingerprint = payload_hash(args.company, args.capability, inp)
 
     # 3. C2.3 vào

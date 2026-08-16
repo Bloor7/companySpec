@@ -63,7 +63,8 @@ Mỗi dòng là một bug đã tốn công lần ra. Trước khi viết mã đ�
 | **Sai tên trường đầu vào** | Gọi company bằng tên trường không có trong `companySpec.yaml` → `rejected`. Báo cáo tối in "thu 0đ · chi 0đ" suốt nhiều tuần | Tên trường lấy từ manifest, KHÔNG suy từ company khác — chúng không thống nhất. **`codemap --check` bắt được** |
 | **Mảng object mà danh mục chỉ ghi "array"** | CEO gửi `["chuỗi"]` thay vì `[{...}]` → bị chặn → gọi lại. Một việc tốn 4 lời gọi thay vì 2. Kết quả cuối vẫn đúng nên không ai để ý | Danh mục trong prompt phải kể tên trường bên trong (`gateway.danh_muc_block`). **Ca thử `viec-vat-vao-todo` canh chỗ này** |
 | **Nuốt lỗi thành giá trị hợp lệ** | `or {}`, `or 0`, `except: return ""` → số 0 trông y hệt "hôm nay không tiêu gì" | **O10** |
-| **Chi phí phiên hỏng ghi $0** | Cầu dao càng mù khi hệ càng hỏng | **L7.1** |
+| **Chi phí phiên hỏng ghi $0** | Số liệu càng sai khi hệ càng hỏng | **L7.1** |
+| **Đoán hạn mức còn lại** | Hệ tự cộng giá token rồi khoá việc ghi — trong khi thứ đốt hạn mức là `read` và không bị chặn | Anthropic không phơi ra số đó. Đợi nó BÁO rồi báo lại admin (`lib/quotaSignal.py`). **L7 viết lại 16/08** |
 | **Timeout bằng ngân sách** | Timeout HTTP = `maxDurationSec` → dispatcher giết tiến trình trước khi company kịp báo lỗi tử tế | Timeout phải nhỏ hơn HẲN ngân sách |
 | **So chuỗi ngày nguyên bản** | Notion trả `2026-08-14T12:20:00.000+07:00`, schema ép 10 ký tự → so nguyên chuỗi thì KHÔNG BAO GIỜ khớp | Cắt `[:10]`, so ngày với ngày |
 | **Đổi tên trường mà quên câu báo lỗi** | `inp['amount']` còn sót sau khi schema đổi sang `soTien` → `KeyError` đúng lúc cần báo lỗi tử tế | Đổi tên thì grep cả chuỗi f-string |
@@ -80,7 +81,7 @@ toàn thì ghi vào bảng thay đổi cuối `PRINCIPLES.md` kèm lý do (W5).
 ```bash
 python3 ops/codemap.py --check                  # luật kiến trúc
 python3 ops/dispatch.py list                    # danh mục company thật
-python3 backOffice/src/backoffice.py usage      # hạn mức còn bao nhiêu
+python3 backOffice/src/backoffice.py usage      # đã tiêu bao nhiêu, có lần nào chạm trần chưa
 python3 backOffice/src/backoffice.py report --days 3   # lỗi gần đây, kèm lý do CEO chết
 ```
 

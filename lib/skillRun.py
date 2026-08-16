@@ -23,6 +23,8 @@ import subprocess
 import threading
 import time
 
+import quotaSignal  # cùng tầng lib/ — C4.1: kỹ thuật thuần, không biết nghiệp vụ
+
 # ───────────────────────── bảng giá ─────────────────────────
 #
 # Đơn vị: đô-la trên MỘT TRIỆU token.
@@ -214,6 +216,17 @@ def chay(prompt: str, *, settings: str, tools: str, max_turns: int,
                                    and not (ket_qua.get("result") or "").strip()):
         ly_do = ket_qua.get("subtype") or ket_qua.get("terminal_reason") or "không rõ lý do"
         them = "; ".join(str(e) for e in (ket_qua.get("errors") or []))[:200]
+
+        # HẾT HẠN MỨC nói riêng ra, đừng gộp vào "phiên không trả về nội dung".
+        # Company và CEO dùng chung một gói: hết là hết cả hai. Admin cần đọc
+        # được "chờ vài tiếng" thay vì một câu lỗi kỹ thuật khiến họ tưởng
+        # company hỏng rồi đi sửa nhầm chỗ.
+        hit = quotaSignal.phat_hien(
+            f'{ket_qua.get("result") or ""} {ly_do} {them}',
+            ket_qua.get("api_error_status"))
+        if hit:
+            raise SkillError(quotaSignal.cau_bao_admin(hit), gia)
+
         raise SkillError(
             f"phiên không trả về nội dung: {ly_do} {them} "
             f"({ket_qua.get('num_turns')} lượt, {giay}s)".strip(), gia)

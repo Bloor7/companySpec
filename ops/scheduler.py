@@ -119,14 +119,26 @@ def tien(x) -> str:
 
 
 def section_quota() -> tuple[str, bool]:
-    q = bo.quota_state()
+    """Chi phí đã tiêu, và những lần THẬT SỰ chạm trần.
+
+    Bản cũ so chi phí với một ngưỡng đoán rồi kêu "sắp chạm trần". Bỏ ngày
+    2026-08-16: con số đó hệ tự cộng từ bảng giá token, không phải hạn mức
+    thật của gói Pro — nên lời cảnh báo vừa không đáng tin vừa làm admin lo
+    hão. Giờ chỉ nói số đã tiêu (thông tin), và chỉ ĐÁNG BÁO khi Anthropic
+    thật sự đã chặn (lib/quotaSignal.py bắt được).
+    """
+    q = bo.chi_phi_gan_day()
     w5, wk = q["window5h"], q["week"]
-    body = (f"Hạn mức 5 tiếng: {w5['total']:.2f}/{w5['stopAt']:.0f}\n"
-            f"Tuần này: {wk['total']:.2f}/{wk['stopAt']:.0f}")
-    if q["state"] == "stop":
-        return ("⛔ ĐÃ CHẠM TRẦN — mọi việc ghi đang bị khoá.\n" + body), True
-    if q["state"] == "warn":
-        return ("⚠ Sắp chạm trần hạn mức.\n" + body), True
+    body = (f"Đã tiêu 5 tiếng qua: ${w5['total']:.2f}\n"
+            f"Tuần này: ${wk['total']:.2f}")
+    hits = [h for h in q["hits"]
+            if h["createdAt"] >= (datetime.now(timezone.utc) - timedelta(days=1))
+            .strftime("%Y-%m-%dT%H:%M:%SZ")]
+    if hits:
+        h = hits[0]
+        return (f"⛔ Hết hạn mức {h['loai']} lúc {h['createdAt'][11:16]} hôm qua"
+                + (f", mở lại {h['resetLuc']}" if h["resetLuc"] else "")
+                + f" ({len(hits)} lần trong 24h).\n" + body), True
     return body, False   # bình thường thì không có gì đáng báo
 
 

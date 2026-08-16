@@ -22,23 +22,20 @@ whitelist:
   defaultDays: 90                # G7 — quyền không bao giờ vĩnh viễn
   defaultMaxPerDay: 20           # G8 — có trần dùng mỗi ngày
 
-# L7 — cầu dao hạn mức.
+# NGƯỠNG HẠN MỨC ĐÃ BỎ ngày 2026-08-16 (admin quyết).
 #
-# NGƯỠNG CHƯA HIỆU CHUẨN. Anthropic không công bố cách quy đổi con số này sang
-# hạn mức Pro thật, và không có API nào trả về "còn bao nhiêu phần trăm".
-# Nên đây là cầu dao chống CHẠY HOANG, không phải thước đo trần thật:
-# mục tiêu là chặn một chuỗi auditSite đốt sạch buổi chiều.
+# Trước đây ở đây có bốn con số warn/stop cho cửa sổ 5 tiếng và tuần, và
+# dispatcher dùng chúng để khoá việc GHI. Bỏ vì hai lẽ:
 #
-# Mốc thực đo ngày 2026-08-03: một auditPage ≈ 0,72 · một lượt CEO ≈ 0,02–0,10.
-# Hiệu chuẩn: mở `claude` tương tác, gõ /usage, so với `backoffice.py usage`.
-quota:
-  # Hiệu chuẩn sơ bộ 2026-08-03 bằng /usage. LƯU Ý con số đó bị nhiễu nặng:
-  # 99% hạn mức hôm đó đến từ một phiên trò chuyện dài 8+ tiếng của admin,
-  # KHÔNG phải từ companySpec. Nên đây vẫn là ước lượng thận trọng, chưa phải
-  # số đo sạch. Đo lại sau một ngày chỉ dùng companySpec.
-  #
-  # Neo theo việc đắt nhất: một auditPage = 0,72.
-  window5hWarn: 3.0      # ≈ 4 lần auditPage — cảnh báo, vẫn chạy
-  window5hStop: 5.0      # ≈ 7 lần auditPage — khoá GHI, đọc vẫn được
-  weeklyWarn:  20.0
-  weeklyStop:  30.0
+#   · Con số không bám thực tế. Đo 2026-08-16: `claude -p --output-format json`
+#     trả về tokens và total_cost_usd nhưng KHÔNG có trường nào nói hạn mức còn
+#     lại; CLI cũng không có lệnh con `usage`. Nên mọi ngưỡng ở đây chỉ là quy
+#     đổi từ bảng giá token — hệ tự bịa, không liên quan trần thật của gói Pro.
+#
+#   · Nó chặn NGƯỢC. Cầu dao chỉ chặn `write` (ghi chi tiêu, ví, việc vặt) vốn
+#     tốn $0 LLM vì company là code cứng; trong khi thứ thật sự đốt hạn mức đều
+#     là `read` (nghienCuu $3,50 · auditSite $2,00) và không hề bị chặn.
+#
+# Thay bằng: đợi Anthropic tự nói hết hạn mức rồi báo admin ngay lúc đó —
+# lib/quotaSignal.py. Chi phí vẫn được đo và hiện trong báo cáo sáng, nhưng
+# chỉ để BIẾT, không dùng để chặn.

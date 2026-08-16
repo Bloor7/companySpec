@@ -65,63 +65,70 @@ def spent_since(conn, since: str) -> dict:
 
 # ───────────────────────── L7 — cầu dao hạn mức ─────────────────────────
 
-def quota_state() -> dict:
-    """Trả về ok | warn | stop cho cả cửa sổ 5 tiếng lẫn tuần.
+def quota_hits(gio: int = 168) -> list:
+    """Những lần Anthropic THẬT SỰ nói hết hạn mức, mới nhất trước.
 
-    NGƯỠNG CHƯA ĐƯỢC HIỆU CHUẨN. Anthropic không công bố công thức quy đổi từ
-    con số này sang hạn mức Pro thật, và không có API nào trả về "còn bao nhiêu".
-    Nên đây là cầu dao chống CHẠY HOANG, không phải thước đo chính xác:
-    mục tiêu là chặn một chuỗi auditSite đốt sạch buổi chiều, chứ không phải
-    đoán đúng trần của Anthropic.
-    Cách hiệu chuẩn: mở `claude` tương tác, gõ /usage, so với con số ở đây.
+    Đây là nguồn sự thật duy nhất về quota kể từ 2026-08-16 — xem
+    lib/quotaSignal.py. Bảng có thể chưa tồn tại (chưa lần nào chạm trần), và
+    đó là trạng thái bình thường chứ không phải lỗi.
     """
-    cfg = approvals.config().get("quota", {})
+    conn = store()
+    try:
+        rows = [dict(r) for r in conn.execute(
+            "SELECT loai, resetLuc, createdAt FROM quotaHit WHERE createdAt >= ? "
+            "ORDER BY hitId DESC LIMIT 20", (utc_ago(hours=gio),))]
+    except sqlite3.OperationalError:
+        rows = []
+    conn.close()
+    return rows
+
+
+def chi_phi_gan_day() -> dict:
+    """Chi phí đã tiêu, KHÔNG kèm phán xét.
+
+    Trước đây hàm này trả về ok/warn/stop và dispatcher dùng nó để khoá việc
+    ghi. Bỏ ngày 2026-08-16 (admin quyết): con số là hệ tự cộng từ bảng giá
+    token, không phải hạn mức thật — `claude -p` không trả về hạn mức còn lại
+    và CLI không có lệnh `usage`. Ngưỡng đoán thì hoặc chặn oan, hoặc không
+    chặn đúng thứ cần chặn.
+
+    Con số vẫn hữu ích để BIẾT đang tiêu vào đâu, nên giữ lại và báo cáo.
+    Việc nói "hết hạn mức" thì để Anthropic nói — xem quota_hits().
+    """
     conn = store()
     w5 = spent_since(conn, utc_ago(hours=5))
     wk = spent_since(conn, week_start())
     conn.close()
-
-    def level(value, warn, stop):
-        if value >= stop:
-            return "stop"
-        return "warn" if value >= warn else "ok"
-
-    s5 = level(w5["total"], cfg.get("window5hWarn", 8.0), cfg.get("window5hStop", 12.0))
-    swk = level(wk["total"], cfg.get("weeklyWarn", 50.0), cfg.get("weeklyStop", 70.0))
-    worst = "stop" if "stop" in (s5, swk) else ("warn" if "warn" in (s5, swk) else "ok")
-
     return {
-        "state": worst,
-        "window5h": {**w5, "level": s5,
-                     "warnAt": cfg.get("window5hWarn", 8.0),
-                     "stopAt": cfg.get("window5hStop", 12.0)},
-        "week": {**wk, "level": swk,
-                 "warnAt": cfg.get("weeklyWarn", 50.0),
-                 "stopAt": cfg.get("weeklyStop", 70.0)},
+        "window5h": w5,
+        "week": wk,
+        "hits": quota_hits(),
     }
 
 
-def bar(value, ceiling, width=18) -> str:
-    filled = min(width, int(round(width * value / ceiling))) if ceiling else 0
-    return "█" * filled + "░" * (width - filled)
-
-
 def cmd_usage(args):
-    q = quota_state()
+    q = chi_phi_gan_day()
     if args.json:
         return q
     lines = []
     for label, key in (("5 tiếng qua", "window5h"), ("Tuần này", "week")):
         d = q[key]
-        mark = {"ok": "", "warn": "  ⚠ sắp chạm", "stop": "  ✖ ĐÃ CHẶN"}[d["level"]]
-        lines.append(f"{label:<12} {bar(d['total'], d['stopAt'])} "
-                     f"{d['total']:.2f}/{d['stopAt']:.0f}{mark}")
+        lines.append(f"{label:<12} ${d['total']:.2f}  "
+                     f"(CEO ${d['ceo']:.2f} · company ${d['company']:.2f})")
         if d["byCompany"]:
             top = sorted(d["byCompany"].items(), key=lambda kv: -kv[1])[:3]
             lines.append("             " + ", ".join(f"{k} {v}" for k, v in top))
     lines.append("")
-    lines.append("Ngưỡng chưa hiệu chuẩn — đây là cầu dao chống chạy hoang,")
-    lines.append("không phải thước đo trần thật của gói Pro.")
+    if q["hits"]:
+        h = q["hits"][0]
+        lines.append(f"CHẠM TRẦN gần nhất: hạn mức {h['loai']} lúc {h['createdAt'][:16]}"
+                     + (f", mở lại {h['resetLuc']}" if h["resetLuc"] else ""))
+        lines.append(f"({len(q['hits'])} lần trong 7 ngày qua)")
+    else:
+        lines.append("Chưa lần nào Anthropic báo hết hạn mức trong 7 ngày qua.")
+    lines.append("")
+    lines.append("Đây là CHI PHÍ ĐÃ TIÊU, không phải hạn mức còn lại — Anthropic")
+    lines.append("không công bố số đó. Hết hạn mức thì hệ báo ngay lúc gặp.")
     return "\n".join(lines)
 
 
@@ -225,7 +232,7 @@ def cmd_whitelist(args):
 
 
 def cmd_check(args):
-    return quota_state()
+    return chi_phi_gan_day()
 
 
 def main() -> int:
