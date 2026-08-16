@@ -211,9 +211,31 @@ def decide(approval_id: str, decision: str):
     return True, "Đã duyệt.", get(approval_id)
 
 
+# Cột duy nhất được phép đổi sau khi phiếu đã tạo. Danh sách trắng, không phải
+# danh sách đen: cột mới thêm vào bảng sẽ KHÔNG tự động sửa được, phải khai ở
+# đây một cách có chủ ý.
+COT_SUA_DUOC = {"status", "decidedAt", "tokenExpiresAt"}
+
+
 def _set(approval_id, **fields):
+    """Cập nhật phiếu duyệt.
+
+    Tên cột là thứ DUY NHẤT trong hệ phải ghép thẳng vào câu SQL — sqlite không
+    cho đặt tham số ở vị trí tên cột. Giá trị thì luôn đi qua `?`, nên dữ liệu
+    của admin không bao giờ chạm tới câu lệnh.
+    Hôm nay mọi lời gọi đều truyền tên cột viết cứng trong file này, nên không
+    có đường nào để dữ liệu ngoài vào được đây. Chốt lại bằng danh sách trắng
+    để câu đó còn đúng cả sau này, khi ai đó thêm một lời gọi mới.
+    """
+    la = set(fields) - COT_SUA_DUOC
+    if la:
+        raise ValueError(
+            f"approvals._set: cột không được phép sửa: {', '.join(sorted(la))}. "
+            f"Chỉ có: {', '.join(sorted(COT_SUA_DUOC))}")
     conn = store()
     cols = ", ".join(f"{k}=?" for k in fields)
+    # sql-an-toan: chỉ tên cột được ghép, và đã lọc qua COT_SUA_DUOC ngay trên.
+    # Mọi giá trị vẫn đi qua '?'.
     conn.execute(f"UPDATE approvalRequest SET {cols} WHERE approvalId=?",
                  (*fields.values(), approval_id))
     conn.commit()
