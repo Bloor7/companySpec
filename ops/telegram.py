@@ -12,6 +12,8 @@ import urllib.error
 import urllib.request
 
 MAX_LEN = 4096
+# Chừa chỗ để lùi điểm cắt về ranh giới đọc được mà vẫn không chạm trần API.
+AN_TOAN = 3800
 
 
 def _api(method: str) -> str:
@@ -44,22 +46,86 @@ def esc(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def _lui_khoi_entity(s: str) -> str:
+    """Không bao giờ cắt giữa một thực thể HTML.
+
+    Chuỗi vào đây đã thoát HTML rồi, nên `&` mở đầu `&amp;` `&lt;` `&gt;`. Cắt
+    đúng giữa nó thì Telegram từ chối cả tin vì parse_mode=HTML — và cách hỏng
+    đó phụ thuộc vào việc admin có gõ dấu `&` ở đúng khoảng ký tự thứ 3800 hay
+    không, tức là hỏng ngẫu nhiên, không ai tra ra được.
+    """
+    amp = s.rfind("&")
+    if amp != -1 and ";" not in s[amp:]:
+        return s[:amp]
+    return s
+
+
+def chia_doan(text: str, gioi_han: int = AN_TOAN) -> list:
+    """Chia câu trả lời dài thành nhiều tin, cắt ở chỗ đọc được.
+
+    VÌ SAO KHÔNG CẮT CỤT: bản trước làm `text[:MAX_LEN]` — câu trả lời dài hơn
+    4096 ký tự bị mất phần đuôi, LẶNG LẼ. Admin đọc hết tin nhắn mà không biết
+    còn phần nữa; hệ cũng không biết vì API vẫn trả về ok. Đo được hai lần
+    trong lịch sử chat.
+
+    Thứ tự ưu tiên khi tìm chỗ cắt: hết đoạn văn → hết dòng → hết từ. Cắt giữa
+    từ chỉ dùng khi không còn lựa chọn (một khối chữ dài không có khoảng trắng,
+    ví dụ một đường dẫn hoặc một chuỗi mã).
+    """
+    phan, con = [], text
+    while len(con) > gioi_han:
+        cua_so = con[:gioi_han]
+        cat = max(cua_so.rfind("\n\n"), cua_so.rfind("\n"))
+        if cat < gioi_han // 2:
+            cat = cua_so.rfind(" ")
+        if cat < gioi_han // 2:
+            cat = gioi_han
+        doan = _lui_khoi_entity(con[:cat])
+        # Không tiến được thì cắt cứng — thà xấu còn hơn lặp vô hạn. Vẫn thử
+        # lùi khỏi entity một lần nữa: nhánh này chỉ chạy khi cả đoạn là một
+        # khối liền không khoảng trắng, và ở đó vẫn có thể có `&amp;`.
+        if not doan.strip():
+            doan = _lui_khoi_entity(con[:gioi_han]) or con[:gioi_han]
+        phan.append(doan.rstrip())
+        con = con[len(doan):].lstrip("\n")
+    if con.strip():
+        phan.append(con)
+    return phan or [text[:gioi_han]]
+
+
 def send_message(chat_id, text: str, reply_markup_json: str | None = None,
                  already_escaped: bool = False) -> dict:
-    payload = {
-        "chat_id": chat_id,
-        "text": (text if already_escaped else esc(text))[:MAX_LEN],
-        "parse_mode": "HTML",
-        "disable_web_page_preview": True,
-    }
-    if reply_markup_json and reply_markup_json != '{"inline_keyboard": []}':
-        payload["reply_markup"] = reply_markup_json
+    """Gửi một câu trả lời, chia nhiều tin nếu dài.
 
-    res = call("sendMessage", payload)
-    if not res.get("ok"):
-        # Thường là HTML hỏng. Gửi lại dạng thô để admin vẫn đọc được nội dung.
-        payload.pop("parse_mode", None)
+    Bàn phím duyệt chỉ gắn vào tin CUỐI: nút phải nằm dưới chỗ admin đọc xong,
+    không phải giữa chừng.
+    """
+    noi_dung = text if already_escaped else esc(text)
+    cac_phan = chia_doan(noi_dung)
+
+    res = {"ok": False, "error": "không có nội dung để gửi"}
+    for i, phan in enumerate(cac_phan):
+        cuoi = i == len(cac_phan) - 1
+        payload = {
+            "chat_id": chat_id,
+            "text": phan[:MAX_LEN],
+            "parse_mode": "HTML",
+            "disable_web_page_preview": True,
+        }
+        if cuoi and reply_markup_json and reply_markup_json != '{"inline_keyboard": []}':
+            payload["reply_markup"] = reply_markup_json
+
         res = call("sendMessage", payload)
+        if not res.get("ok"):
+            # Thường là HTML hỏng. Gửi lại dạng thô để admin vẫn đọc được nội dung.
+            payload.pop("parse_mode", None)
+            res = call("sendMessage", payload)
+        # O10 — một phần gãy thì DỪNG và báo. Gửi nốt phần sau sẽ cho admin một
+        # câu trả lời thủng ở giữa mà trông vẫn liền mạch.
+        if not res.get("ok"):
+            print(f"[telegram] gãy ở phần {i + 1}/{len(cac_phan)} — dừng gửi.",
+                  file=sys.stderr)
+            return res
     return res
 
 
