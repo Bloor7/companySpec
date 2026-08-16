@@ -22,6 +22,23 @@ whitelist:
   defaultDays: 90                # G7 — quyền không bao giờ vĩnh viễn
   defaultMaxPerDay: 20           # G8 — có trần dùng mỗi ngày
 
+# ─────────────────── TIỀN THẬT ra ngoài (L8) ───────────────────
+#
+# Khác hẳn hạn mức gói Pro. Hạn mức Pro dùng hết thì thôi, tháng sau lại có —
+# nên hệ KHÔNG đoán và KHÔNG chặn theo nó (xem L7, viết lại 16/08). Còn đây là
+# tiền trừ thẳng vào thẻ, đo được chính xác từng lời gọi, và có hoá đơn.
+#
+# Admin chốt 2026-08-16 sau khi bị Google AI Studio trừ 144.000đ mà không thu
+# được sản phẩm ưng ý: trần 100.000đ mỗi tháng, và MỌI lời gọi tốn tiền đều
+# phải hỏi trước — không có đường whitelist.
+#
+# Chạm trần thì hệ chặn cứng. Muốn tiêu thêm thì sửa con số ở đây: một hành
+# động có chủ ý, không phải tai nạn của model.
+chiTieuNgoai:
+  tranThangVnd: 100000
+  # Cảnh báo sớm khi đã tiêu quá ngần này phần trăm của trần.
+  canhBaoTaiPhanTram: 70
+
 # NGƯỠNG HẠN MỨC ĐÃ BỎ ngày 2026-08-16 (admin quyết).
 #
 # Trước đây ở đây có bốn con số warn/stop cho cửa sổ 5 tiếng và tuần, và

@@ -14,7 +14,9 @@ chạy được thì không.
 """
 import argparse
 import ast
+import glob
 import os
+import re
 import sys
 
 import yaml
@@ -216,6 +218,62 @@ def soat_ten_truong(tep: dict) -> list:
     return pham
 
 
+# Tên secret cho biết company đang cầm chìa khoá một dịch vụ TÍNH TIỀN THẬT.
+# Danh sách này sẽ cũ đi — thêm nhà cung cấp mới vào đây khi gặp.
+API_TRA_TIEN = re.compile(
+    r"GEMINI|GOOGLE_AI|VERTEX|OPENAI|ANTHROPIC_API_KEY|REPLICATE|ELEVENLABS|"
+    r"RUNWAY|STABILITY|MIDJOURNEY|DEEPGRAM|ASSEMBLYAI|FAL_|TOGETHER_|GROQ|"
+    r"HEYGEN|SYNTHESIA|LEONARDO|CLOUDINARY|TWILIO|SENDGRID|STRIPE",
+    re.I)
+
+
+def soat_api_tra_tien() -> list:
+    """Company cầm chìa khoá dịch vụ tính tiền thì phải khai `paidApi`.
+
+    VÌ SAO CÓ LUẬT NÀY: admin bị Google AI Studio trừ 144.000đ mà không thu
+    được sản phẩm ưng ý (2026-08). Khoản đó tiêu ngoài hệ, nhưng nó cho thấy
+    đúng lỗ hổng sắp mở ra: company đầu tiên dùng Gemini/Veo mà quên khai thì
+    sẽ tiêu tiền thật của admin trong im lặng — không nút duyệt, không trần,
+    không dòng nào trong sổ.
+
+    Khai `paidApi` là thứ bật cả ba: dispatcher ép hỏi duyệt mỗi lần (không
+    whitelist), chặn khi quá trần tháng, và ghi vào sổ `chiTieuNgoai` để đối
+    chiếu hoá đơn. Quên khai thì cả ba đều không chạy, và không có gì kêu lên.
+
+    Chỉ soát ở mức company: có ít nhất một năng lực khai `paidApi` thì coi như
+    người viết đã ý thức được. Đòi từng năng lực phải khai sẽ báo bừa với những
+    năng lực chỉ đọc lại cache.
+    """
+    pham = []
+    for path in sorted(glob.glob(os.path.join(ROOT, "companies", "*", "companySpec.yaml"))):
+        try:
+            spec = yaml.safe_load(open(path, encoding="utf-8")) or {}
+        except Exception:
+            continue
+        cid = spec.get("companyId") or os.path.basename(os.path.dirname(path))
+        chia_khoa = [s for s in (spec.get("secrets") or []) + (spec.get("env") or [])
+                     if API_TRA_TIEN.search(str(s))]
+        caps = spec.get("capabilities") or []
+        co_khai = [c for c in caps if c.get("paidApi")]
+
+        if chia_khoa and not co_khai:
+            pham.append(
+                f"L8 · {cid}: cầm khoá dịch vụ tính tiền ({', '.join(chia_khoa)}) "
+                "nhưng không năng lực nào khai `paidApi` — sẽ tiêu tiền thật mà "
+                "không hỏi duyệt, không trần, không vào sổ.")
+
+        # Khai rồi thì phải khai ĐỦ: thiếu giá thì nút duyệt không nói được
+        # admin sắp trả bao nhiêu, mà giá chính là thứ họ cần biết để bấm.
+        for c in co_khai:
+            p = c["paidApi"]
+            if not isinstance(p, dict) or not p.get("nhaCungCap"):
+                pham.append(f"L8 · {cid}.{c['name']}: `paidApi` thiếu `nhaCungCap`.")
+            if not isinstance(p, dict) or not p.get("giaUocVnd"):
+                pham.append(f"L8 · {cid}.{c['name']}: `paidApi` thiếu `giaUocVnd` — "
+                            "nút duyệt sẽ không nói được admin sắp trả bao nhiêu.")
+    return pham
+
+
 def soat_sql(tep: dict) -> list:
     """Câu SQL không được ghép từ chuỗi động.
 
@@ -300,6 +358,7 @@ def soat(tep: dict, canh: dict) -> list:
                     pham.append(f"C2 · {rel} import thẳng vào company: {dong.strip()[:60]}")
     pham += soat_ten_truong(tep)
     pham += soat_sql(tep)
+    pham += soat_api_tra_tien()
     return pham
 
 

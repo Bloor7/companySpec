@@ -676,9 +676,43 @@ Thêm:
      1 giờ (2 lần giá vào), không phải 5 phút (1,25 lần).
 
   Model lạ không có trong bảng thì tính theo mức ĐẮT NHẤT và kêu tên nó ra —
-  cầu dao thà tưởng đã tiêu nhiều mà dừng sớm, còn hơn tưởng còn rảnh. Bản
-  trước lặng lẽ rơi vào nhánh mặc định, nên `claude-sonnet-5` bị tính bằng giá
+  thà tưởng đã tiêu nhiều mà dừng sớm, còn hơn tưởng còn rảnh. Bản trước lặng
+  lẽ rơi vào nhánh mặc định, nên `claude-sonnet-5` bị tính bằng giá
   `claude-sonnet-4-6` suốt mà không ai biết — may là hai model cùng giá.
+
+- **L8 — Tiền THẬT ra ngoài thì phải khai, phải hỏi, và có trần.** *(thêm
+  2026-08-16)* Năng lực nào gọi dịch vụ tính tiền bên ngoài phải khai khối
+  `paidApi` trong manifest, gồm `nhaCungCap` và `giaUocVnd`. Khai rồi thì
+  dispatcher tự động bật ba thứ:
+
+  1. **Hỏi duyệt MỌI lần**, kể cả khi `riskTier: read`. Đọc thì không đổi gì
+     của admin, nhưng vẫn trừ tiền — rủi ro ở đây nằm ở ví, không nằm ở dữ liệu.
+  2. **Không có đường whitelist.** "Luôn cho phép tiêu tiền" là câu không ai
+     thật sự muốn nói (cùng lẽ với G9).
+  3. **Trần theo tháng dương** ở `registry/gateway.yaml`, chạm thì chặn cứng.
+     Theo tháng dương vì hoá đơn nhà cung cấp cũng theo tháng — admin đối chiếu
+     được; cửa sổ trượt 30 ngày đẹp về kỹ thuật nhưng không khớp thứ họ nhìn
+     thấy khi mở bảng thanh toán.
+
+  Nút duyệt phải nói **GIÁ trước tiên** — đó là thứ phân biệt "đồng ý làm" với
+  "đồng ý trả tiền" (G5). Sổ `chiTieuNgoai` tách hẳn khỏi `taskLog.costUsd`:
+  hai loại tiền khác bản chất, gộp một chỗ thì lúc đối chiếu hoá đơn không tách
+  ra được. Ghi con số company **báo về thật**, không ghi giá ước trong manifest;
+  company không báo thì ghi theo ước và nói rõ trong `ghiChu` là ước.
+
+  **Vì sao có luật này:** admin bị Google AI Studio trừ 144.000đ mà không thu
+  được sản phẩm ưng ý (08/2026). Khoản đó tiêu ngoài hệ, nhưng nó chỉ đúng ra
+  cái lỗ sắp mở: company đầu tiên dùng Gemini/Veo mà quên khai sẽ tiêu tiền
+  thật trong im lặng — không nút duyệt, không trần, không dòng nào trong sổ.
+  Nên `codemap --check` soát luôn: company cầm chìa khoá một dịch vụ tính tiền
+  (`GEMINI_*`, `OPENAI_*`, `REPLICATE_*`…) mà không năng lực nào khai `paidApi`
+  thì phạm luật.
+
+  **Phân biệt rạch ròi với L7.** Hạn mức gói Pro dùng hết thì thôi, tháng sau
+  lại có, và Anthropic không phơi ra số còn lại — nên hệ **không** đoán và
+  **không** chặn theo nó. Tiền ở L8 thì trừ vào thẻ, đo được từng lời gọi, có
+  hoá đơn — nên ở đây chặn là đúng. Cùng là "chi phí" nhưng ngược nhau về cách
+  xử lý; lẫn hai thứ này chính là sai lầm của cầu dao cũ.
 
 ---
 
@@ -1184,6 +1218,7 @@ Nguyên văn cũ: *"dispatcher là điểm nghẽn cố ý — node n8n"*. Sai. 
 | 2026-08-14 | **Lấp nốt nhánh bị cắt ngang của L7.1**: `lib/skillRun.py` đổi từ `subprocess.run(--output-format json)` sang `Popen(--output-format stream-json --verbose)` + đọc từng dòng + hẹn giờ giết tiến trình; gom usage theo `message.id`; bảng giá `GIA` giải ngược từ `modelUsage`. `SkillError` thêm `qua_gio`/`uoc_luong`, hai company bỏ nhánh `except TimeoutExpired` và rẽ theo cờ | `--output-format json` không in gì cho tới lúc kết thúc, nên cắt ngang là mất cả kết quả lẫn chi phí. Đo được dòng `stream-json` tới dần (1,59s · 2,70s · 4,31s · 6,35s), không bị đệm — nên đọc dần thì số liệu nằm sẵn trong tiến trình cha. Cắt ở giây thứ 6 giờ thu về $0,0108 thay vì $0,00. Hai bẫy phải trả giá mới thấy: cộng dồn mù làm tính đôi khoản ghi cache (+82%), và `output_tokens` trên luồng là số tạm — nên con số này là ƯỚC, lệch đều −6% về phía đếm thiếu |
 | 2026-08-14 | **Sửa `deleteExpense`/`deleteIncome`/`deleteEntry`** — tàn dư đợt đổi tên 07/08 (`inp['amount']`, `inp['date']`, `inp['theme']` không còn tồn tại) và so ngày phải cắt `[:10]`. **Timeout HTTP Notion 20s → 8s** | Ba năng lực xoá hỏng hoàn toàn từ 07/08, không ai biết: câu báo lỗi gọi tên trường tiếng Anh cũ nên dựng câu là `KeyError` → `except Exception` → `failed` kèm câu vô nghĩa. Mà nhánh đó LUÔN chạy vì Notion trả `'2026-08-14T12:20:00.000+07:00'` (29 ký tự) còn schema ép `ngay` đúng 10 — so nguyên chuỗi thì không bao giờ khớp. Riêng timeout: 20s **bằng đúng** `maxDurationSec` của 33 năng lực, nên khi Notion ì thì dispatcher giết tiến trình trước lúc company kịp bắt `NotionError`; đo được 13/08 calendarCompany kẹt `running` 6 lần liên tiếp rồi tự khỏi. Timeout phải nhỏ hơn HẲN ngân sách, đừng bằng |
 | 2026-08-16 | **Bỏ cầu dao hạn mức đoán mò; viết lại L7 thành "hết hạn mức thì BÁO"**. Thêm `lib/quotaSignal.py` nhận tín hiệu thật (câu báo của Anthropic hoặc mã 429), gateway và `skillRun` cùng dùng; ghi bảng `quotaHit`; gỡ đoạn khoá `write` trong dispatcher; bỏ lịch `quotaWatch`; `backoffice usage` đổi từ thanh ngưỡng sang chi phí đã tiêu + lần chạm trần thật | Admin chỉ ra con số không bám thực tế. Đo 2026-08-16: `claude -p --output-format json` KHÔNG trả về hạn mức còn lại và CLI không có lệnh `usage` — nên mọi ngưỡng chỉ là quy đổi từ bảng giá token, hệ tự bịa. Tệ hơn, nó chặn NGƯỢC: chỉ khoá `write` (ghi chi tiêu, ví, việc vặt — tốn $0 LLM vì company là code cứng), trong khi thứ thật sự đốt hạn mức đều là `read` (`nghienCuu` $3,50 · `auditSite` $2,00) và không hề bị chặn. Vô dụng với thứ cần chặn, gây hại với thứ không cần. Hết hạn mức thì CEO tự dừng vì không gọi được model, nên không cần ai khoá hộ |
+| 2026-08-17 | **Thêm L8 — tiền THẬT ra ngoài phải khai `paidApi`, hỏi duyệt mỗi lần, có trần tháng**. Dispatcher ép duyệt kể cả `riskTier: read` và cấm whitelist; sổ `chiTieuNgoai` tách khỏi `taskLog.costUsd`; trần 100.000đ/tháng ở `registry/gateway.yaml`; `codemap --check` bắt company cầm khoá dịch vụ tính tiền mà quên khai. Kèm: `notionClient` thử lại 1 lần khi lỗi đường truyền (không thử lại với 4xx), và scheduler chỉ nhắn LẦN ĐẦU của một sự cố kéo dài rồi báo khi khỏi | Admin bị Google AI Studio trừ 144.000đ mà không thu được sản phẩm ưng ý. Khoản đó tiêu ngoài hệ, nhưng chỉ ra đúng lỗ sắp mở khi videoCompany vào repo: company dùng Gemini/Veo mà quên khai sẽ tiêu tiền thật trong im lặng. Đây mới là chỗ cầu dao có nghĩa — khác hạn mức Pro (dùng hết thì thôi, không đo được), tiền thật đo được từng lời gọi và có hoá đơn. Phần calendar: đo 3 ngày thấy 21 lần hỏng nằm gọn trong chùm 6 tiếng đêm 15/08, mỗi lần đúng 8.206ms tức chờ hết timeout — thử lại không cứu được chùm dài, nhưng cứu được lần chập lẻ; và 21 tin lỗi giống hệt nhau chỉ không tới tay admin vì Telegram đứt cùng lúc, tức là một lần đánh thức 21 lần lúc nửa đêm đang chờ sẵn |
 | 2026-08-11 | Bộ nghe đổi mặc định từ `base` sang **`medium`**; bức tranh thêm dòng **"Bây giờ: HH:MM thứ … dd/mm/yyyy"** | Admin gửi tin thoại hỏi "bây giờ là mấy giờ", CEO đi tự giới thiệu "Em là CEO…" — vì `base` nghe thành "Mày là mấy á". Đo trên hai tin thoại THẬT: base 2,5s sai hẳn · small 4,5s gần đúng · medium 12,7s **đúng nguyên câu**. Nghe nhầm một con số khi ghi tiền thì sai sổ, nên 10 giây chờ thêm rẻ hơn nhiều. **Đã thử `large-v3` (~3GB) và bỏ**: to hơn không đúng hơn — nó nghe "bò húc" thành "bò hút" trong khi medium đúng, và chậm hơn ~1,5 lần. Đừng nâng cỡ nữa nếu chưa đo lại bằng file thật. Và kể cả nghe đúng, CEO vẫn không trả lời được vì **model không có đồng hồ** — không biết giờ thì không hẹn lịch, không nói được "còn hai tiếng nữa", không phân biệt "hôm nay" với "hôm qua" |
 | 2026-08-10 | Đọc ảnh: đưa **đường dẫn TUYỆT ĐỐI** cho tiến trình xem ảnh, và viết lại `ceo/settings-media.json` bằng đường tuyệt đối | Bản cũ cố ý dùng đường tương đối cho khớp luật `Read(backOffice/media/**)`. Hỏng thật: `/home/tsix` cũng có `.claude/` và `CLAUDE.md`, nên model có lúc lấy chỗ đó làm gốc rồi đọc `/home/tsix/backOffice/media/…` — sai chỗ, bị chặn, admin nhận về "em không đọc được ảnh này". Đo được 20:17 ngày 10/08 khi admin gửi ảnh Payoneer; tái hiện được 100% bằng đường tuyệt đối đưa vào bản cũ. Sau khi sửa: đọc đúng 3/3 lần. **Đường tương đối là thứ mơ hồ khi có nhiều gốc dự án lồng nhau** |
 | 2026-08-10 | **Siết hộp cát `seoCompany`**: cấm đọc `~/panharmon/**`, `workspaces/**`, mọi company khác, mọi `.env`/`*.pem`/`*.key`, và 11 thư mục dự án anh em trong `~` | Đo được chuỗi tấn công HOÀN CHỈNH: seoCompany là company duy nhất đọc web tự do (cửa prompt injection), và nó **đọc được `~/panharmon/.env.local`** — file chứa `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `ANTHROPIC_API_KEY` — rồi **WebFetch tới tên miền bất kỳ** để gửi đi. Danh sách cấm cũ chỉ kể tên 3 company trong companySpec. Cũng đo được: luật cấm `Read(...)` CÓ lan sang lệnh `Bash` (`cat ops/.env` bị chặn), nhưng cấm rộng `Read(//home/tsix/**)` thì **đè cả phần allow**, nên buộc phải kể tên từng chỗ — và mỗi dự án/company mới PHẢI thêm vào |

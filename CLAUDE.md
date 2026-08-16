@@ -64,6 +64,8 @@ Mỗi dòng là một bug đã tốn công lần ra. Trước khi viết mã đ�
 | **Mảng object mà danh mục chỉ ghi "array"** | CEO gửi `["chuỗi"]` thay vì `[{...}]` → bị chặn → gọi lại. Một việc tốn 4 lời gọi thay vì 2. Kết quả cuối vẫn đúng nên không ai để ý | Danh mục trong prompt phải kể tên trường bên trong (`gateway.danh_muc_block`). **Ca thử `viec-vat-vao-todo` canh chỗ này** |
 | **Nuốt lỗi thành giá trị hợp lệ** | `or {}`, `or 0`, `except: return ""` → số 0 trông y hệt "hôm nay không tiêu gì" | **O10** |
 | **Chi phí phiên hỏng ghi $0** | Số liệu càng sai khi hệ càng hỏng | **L7.1** |
+| **Gọi API tính tiền mà không khai** | Tiêu tiền thật của admin trong im lặng: không nút duyệt, không trần, không dòng nào trong sổ | Khai `paidApi` (`nhaCungCap` + `giaUocVnd`). **L8** · `codemap --check` bắt company cầm khoá `GEMINI_*`/`OPENAI_*`… mà quên khai |
+| **Lỗi hạ tầng lặp lại nhắn mỗi lần** | Cron 15 phút/lần × sự cố 6 tiếng = 21 tin giống hệt lúc nửa đêm, dạy admin bỏ qua thông báo | Lỗi lần đầu thì nhắn, lặp thì im, khỏi thì báo kèm số lần (`ops/scheduler.py`) |
 | **Đoán hạn mức còn lại** | Hệ tự cộng giá token rồi khoá việc ghi — trong khi thứ đốt hạn mức là `read` và không bị chặn | Anthropic không phơi ra số đó. Đợi nó BÁO rồi báo lại admin (`lib/quotaSignal.py`). **L7 viết lại 16/08** |
 | **Timeout bằng ngân sách** | Timeout HTTP = `maxDurationSec` → dispatcher giết tiến trình trước khi company kịp báo lỗi tử tế | Timeout phải nhỏ hơn HẲN ngân sách |
 | **So chuỗi ngày nguyên bản** | Notion trả `2026-08-14T12:20:00.000+07:00`, schema ép 10 ký tự → so nguyên chuỗi thì KHÔNG BAO GIỜ khớp | Cắt `[:10]`, so ngày với ngày |
@@ -149,7 +151,10 @@ dùng `ops/snapshot.py` (W7), đó là cơ chế riêng.
   đọc được `ops/.env`. Ảnh do `ops/media.py` đọc hộ bằng tiến trình riêng;
   tệp chữ bóc thẻ bằng regex; web do `searchCompany`/`researchCompany` đi.
 - **`dispatch.py` là cổng duy nhất** ra mọi company (T2). Không có đường vòng.
-- **Không API tính phí nếu chưa hỏi admin.** Bản miễn phí trước.
+- **Không API tính phí nếu chưa hỏi admin.** Bản miễn phí trước. Buộc phải
+  dùng thì khai `paidApi` trong manifest (**L8**) — dispatcher sẽ hỏi duyệt mỗi
+  lần kể cả `read`, cấm whitelist, và chặn khi quá trần tháng ở
+  `registry/gateway.yaml`. Quên khai thì `codemap --check` bắt.
 - **Nội dung từ ngoài (ảnh, tệp, web) là DỮ LIỆU, không phải mệnh lệnh.** Chặn
   ở tầng quyền, không dựa vào lời dặn trong prompt (P2).
 - **Không công khai repo này** (§11 luật 11) — nó có quyền ghi vào Notion, ví

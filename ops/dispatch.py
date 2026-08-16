@@ -52,6 +52,41 @@ def canonical(obj) -> str:
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
+def so_tien_that(conn=None):
+    """Mở sổ TIỀN THẬT. Tách bảng riêng, không trộn vào taskLog.
+
+    taskLog ghi `costUsd` — đó là hạn mức gói Pro, thứ dùng hết thì thôi. Tiền
+    ở đây trừ vào thẻ của admin. Trộn hai loại vào một cột thì đến lúc đối
+    chiếu hoá đơn không tách ra được, mà đối chiếu hoá đơn chính là lý do tồn
+    tại của cái sổ này (admin bị Google AI Studio trừ 144.000đ, 2026-08).
+    """
+    c = conn or db.connect(BACKOFFICE)
+    c.execute(
+        """CREATE TABLE IF NOT EXISTS chiTieuNgoai (
+          chiId INTEGER PRIMARY KEY AUTOINCREMENT, taskId TEXT, traceId TEXT,
+          companyId TEXT NOT NULL, capability TEXT NOT NULL,
+          nhaCungCap TEXT, soTienVnd REAL NOT NULL, ghiChu TEXT,
+          createdAt TEXT NOT NULL)"""
+    )
+    return c
+
+
+def chi_tieu_ngoai_thang() -> float:
+    """Tổng tiền thật đã tiêu trong THÁNG DƯƠNG hiện tại.
+
+    Theo tháng vì hoá đơn của nhà cung cấp cũng theo tháng — admin đối chiếu
+    được. Cửa sổ trượt 30 ngày thì đẹp về kỹ thuật nhưng không khớp với thứ
+    admin nhìn thấy khi mở bảng thanh toán ra.
+    """
+    dau_thang = datetime.now(timezone.utc).strftime("%Y-%m-01T00:00:00Z")
+    conn = so_tien_that()
+    tong = conn.execute(
+        "SELECT COALESCE(SUM(soTienVnd), 0) FROM chiTieuNgoai WHERE createdAt >= ?",
+        (dau_thang,)).fetchone()[0]
+    conn.close()
+    return float(tong or 0)
+
+
 def payload_hash(company_id: str, capability: str, inp: dict) -> str:
     """G4 — token gắn với ĐÚNG lời gọi đã hiện cho admin xem.
     Đổi một ký tự trong input là hash sai, token vô hiệu."""
@@ -322,6 +357,23 @@ def cmd_call(args) -> dict:
     # (lib/quotaSignal.py). Lúc đó CEO tự dừng vì không gọi được model nữa,
     # nên không cần ai khoá hộ; còn sổ sách vẫn ghi được bình thường vì company
     # không dùng LLM. Chi phí vẫn được đo và báo cáo, chỉ không dùng để chặn.
+    # L8 — TIỀN THẬT ra ngoài. Đây mới là chỗ cầu dao có ý nghĩa: khác hạn mức
+    # Pro (dùng hết thì thôi, tháng sau lại có), đây là tiền trừ vào thẻ, đo
+    # được từng lời gọi và có hoá đơn đối chiếu.
+    paid = cap.get("paidApi")
+    if paid and not args.dry_run:
+        cfg = approvals.config().get("chiTieuNgoai", {})
+        tran = float(cfg.get("tranThangVnd", 0) or 0)
+        da_tieu = chi_tieu_ngoai_thang()
+        gia = float(paid.get("giaUocVnd", 0) or 0)
+        if tran and da_tieu + gia > tran:
+            return bail(
+                f"L8 — tháng này đã tiêu {da_tieu:,.0f}đ tiền thật cho API ngoài, "
+                f"lời gọi này ước {gia:,.0f}đ nữa là vượt trần {tran:,.0f}đ. "
+                "Muốn tiêu thêm thì sửa `chiTieuNgoai.tranThangVnd` trong "
+                "registry/gateway.yaml.",
+                status="budgetExceeded")
+
     fingerprint = payload_hash(args.company, args.capability, inp)
 
     # 3. C2.3 vào
@@ -344,11 +396,15 @@ def cmd_call(args) -> dict:
         )
 
     # 7. G7 → G4 — whitelist trước, chưa khớp thì mới hỏi admin
-    if risk in ("write", "irreversible") and not args.dry_run:
+    # `paid` cũng phải qua cửa này dù riskTier là `read`: đọc thì không đổi gì
+    # của admin, nhưng vẫn TRỪ TIỀN. Rủi ro ở đây không nằm ở dữ liệu mà ở ví.
+    if (risk in ("write", "irreversible") or paid) and not args.dry_run:
         granted, why = False, ""
 
-        # G9 — irreversible không bao giờ đi đường whitelist
-        if risk == "write":
+        # G9 — irreversible không bao giờ đi đường whitelist.
+        # `paid` cũng vậy, admin chốt 2026-08-16: mọi lời gọi tốn tiền thật đều
+        # phải hỏi, mỗi lần. "Luôn cho phép tiêu tiền" là câu không ai muốn nói.
+        if risk == "write" and not paid:
             rule = approvals.whitelist_match(args.company, args.capability, inp, cap)
             if rule:
                 used = approvals.used_today(args.company, args.capability)
@@ -363,7 +419,17 @@ def cmd_call(args) -> dict:
             granted, why = ok, msg
 
         if not granted:
-            consequence = (f"{spec['displayName']} · {cap['description']} "
+            # G5 — nói hậu quả. Với việc tốn tiền thật thì GIÁ chính là hậu quả
+            # admin cần thấy trước khi bấm, đặt lên đầu câu chứ không giấu ở
+            # cuối: đó là thứ phân biệt "đồng ý làm" với "đồng ý trả tiền".
+            tien = ""
+            if paid:
+                gia = float(paid.get("giaUocVnd", 0) or 0)
+                da = chi_tieu_ngoai_thang()
+                tien = (f"TỐN TIỀN THẬT ~{gia:,.0f}đ "
+                        f"({paid.get('nhaCungCap', 'API ngoài')}) · "
+                        f"tháng này đã tiêu {da:,.0f}đ. ")
+            consequence = (f"{tien}{spec['displayName']} · {cap['description']} "
                            f"Nội dung: {canonical(inp)[:160]}")
             session_id = args.session or os.environ.get("COMPANYSPEC_SESSION_ID")
             approval_id = approvals.create_request(
@@ -385,7 +451,9 @@ def cmd_call(args) -> dict:
                         "consequence": consequence,
                         "riskTier": risk,
                         # nút "luôn cho phép" chỉ hiện khi company cho phép (G8)
-                        "canWhitelist": risk == "write" and bool(cap.get("whitelistScope")),
+                        # Không có nút "luôn cho phép" cho việc tốn tiền thật.
+                        "canWhitelist": (risk == "write" and not paid
+                                         and bool(cap.get("whitelistScope"))),
                     },
                 },
             )
@@ -495,6 +563,31 @@ def cmd_call(args) -> dict:
         (result["status"], result.get("summary", ""), now(), duration,
          result.get("usage", {}).get("costUsd", 0.0), task_id),
     )
+    # L8 — TIỀN THẬT đã tiêu, ghi vào sổ riêng.
+    #
+    # Lấy con số company BÁO VỀ, không lấy `giaUocVnd` trong manifest: manifest
+    # là ước lượng để hiện lên nút duyệt, còn đây là số thật sau khi gọi. Hai
+    # con số lệch nhau là chuyện thường (ảnh nặng hơn dự tính, retry, đổi giá),
+    # và chỉ số thật mới đối chiếu được với hoá đơn.
+    #
+    # Company khai `paidApi` mà chạy xong KHÔNG báo tiền thì ghi theo giá ước —
+    # thà ghi thừa còn hơn để một khoản chi biến mất khỏi sổ (O10). Nói rõ
+    # trong `ghiChu` rằng đó là số ước, để lúc đối chiếu biết đường trừ.
+    if paid and result.get("status") == "ok":
+        u = result.get("usage") or {}
+        thuc = u.get("paidVnd")
+        conn2 = so_tien_that()
+        conn2.execute(
+            "INSERT INTO chiTieuNgoai (taskId, traceId, companyId, capability, "
+            "nhaCungCap, soTienVnd, ghiChu, createdAt) VALUES (?,?,?,?,?,?,?,?)",
+            (task_id, trace_id, args.company, args.capability,
+             u.get("paidProvider") or paid.get("nhaCungCap"),
+             float(thuc if thuc is not None else paid.get("giaUocVnd", 0) or 0),
+             "số thật company báo về" if thuc is not None else "ƯỚC theo manifest",
+             now()))
+        conn2.commit()
+        conn2.close()
+
     for se in result.get("sideEffects", []):
         conn.execute(
             "INSERT INTO sideEffectLog (taskId, traceId, type, target, reversible, createdAt) "

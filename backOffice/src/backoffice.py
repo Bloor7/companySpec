@@ -83,6 +83,29 @@ def quota_hits(gio: int = 168) -> list:
     return rows
 
 
+def tien_that_thang() -> dict:
+    """TIỀN THẬT ra ngoài trong tháng dương này (L8).
+
+    Tách hẳn khỏi chi phí gói Pro. Hai loại tiền khác nhau về bản chất: hạn mức
+    Pro dùng hết thì thôi và tháng sau lại có; còn đây trừ vào thẻ của admin và
+    có hoá đơn. Gộp một chỗ thì đến lúc đối chiếu hoá đơn không tách ra được.
+    """
+    dau_thang = datetime.now(timezone.utc).strftime("%Y-%m-01T00:00:00Z")
+    cfg = approvals.config().get("chiTieuNgoai", {})
+    conn = store()
+    try:
+        rows = [dict(r) for r in conn.execute(
+            "SELECT companyId, nhaCungCap, SUM(soTienVnd) t, COUNT(*) n "
+            "FROM chiTieuNgoai WHERE createdAt >= ? GROUP BY companyId, nhaCungCap "
+            "ORDER BY t DESC", (dau_thang,))]
+    except sqlite3.OperationalError:
+        rows = []          # chưa company nào tiêu tiền thật — trạng thái bình thường
+    conn.close()
+    tong = sum(r["t"] for r in rows)
+    return {"tong": tong, "tran": float(cfg.get("tranThangVnd", 0) or 0),
+            "canhBaoTaiPhanTram": cfg.get("canhBaoTaiPhanTram", 70), "theo": rows}
+
+
 def chi_phi_gan_day() -> dict:
     """Chi phí đã tiêu, KHÔNG kèm phán xét.
 
@@ -129,6 +152,20 @@ def cmd_usage(args):
     lines.append("")
     lines.append("Đây là CHI PHÍ ĐÃ TIÊU, không phải hạn mức còn lại — Anthropic")
     lines.append("không công bố số đó. Hết hạn mức thì hệ báo ngay lúc gặp.")
+
+    # TIỀN THẬT — để riêng, dưới một đường kẻ, vì nó khác loại với phần trên.
+    t = tien_that_thang()
+    lines.append("")
+    lines.append("─── TIỀN THẬT ra ngoài, tháng này ───")
+    if not t["theo"]:
+        lines.append(f"  0đ / trần {t['tran']:,.0f}đ — chưa company nào gọi API tính tiền.")
+    else:
+        pct = (t["tong"] / t["tran"] * 100) if t["tran"] else 0
+        canh = "  ⚠ sắp chạm trần" if pct >= t["canhBaoTaiPhanTram"] else ""
+        lines.append(f"  {t['tong']:,.0f}đ / trần {t['tran']:,.0f}đ ({pct:.0f}%){canh}")
+        for r in t["theo"]:
+            lines.append(f"    {r['companyId']} · {r['nhaCungCap']}: "
+                         f"{r['t']:,.0f}đ ({r['n']} lần)")
     return "\n".join(lines)
 
 

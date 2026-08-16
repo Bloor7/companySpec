@@ -79,6 +79,27 @@ def last_run(conn, schedule_id: str):
         .replace(tzinfo=timezone.utc)
 
 
+def trang_thai_truoc(conn, schedule_id: str):
+    """Kết cục lần chạy gần nhất. Bỏ qua 'skipped' — im vì không có gì để nói
+    thì không phải một kết cục, và nó không được xoá dấu vết lần hỏng trước đó."""
+    row = conn.execute(
+        "SELECT status FROM scheduleRun WHERE scheduleId=? AND status!='skipped' "
+        "ORDER BY runId DESC LIMIT 1", (schedule_id,)).fetchone()
+    return row["status"] if row else None
+
+
+def so_lan_hong_lien_tiep(conn, schedule_id: str) -> int:
+    """Đếm ngược từ lần gần nhất, dừng khi gặp một lần không hỏng."""
+    n = 0
+    for r in conn.execute(
+            "SELECT status FROM scheduleRun WHERE scheduleId=? AND status!='skipped' "
+            "ORDER BY runId DESC LIMIT 200", (schedule_id,)):
+        if r["status"] != "failed":
+            break
+        n += 1
+    return n
+
+
 def is_due(sched: dict, prev, now: datetime) -> bool:
     """Tới hạn chưa. Bộ chạy 15 phút/lần nên phải chịu được lệch vài phút."""
     if "everyHours" in sched:
@@ -131,6 +152,17 @@ def section_quota() -> tuple[str, bool]:
     w5, wk = q["window5h"], q["week"]
     body = (f"Đã tiêu 5 tiếng qua: ${w5['total']:.2f}\n"
             f"Tuần này: ${wk['total']:.2f}")
+
+    # TIỀN THẬT (L8) — chỉ nói khi có, nhưng nói TRƯỚC phần hạn mức Pro: đây là
+    # tiền trừ vào thẻ admin, còn phần kia là hạn mức dùng hết thì thôi.
+    t = bo.tien_that_thang()
+    if t["tong"]:
+        pct = (t["tong"] / t["tran"] * 100) if t["tran"] else 0
+        dong = f"Tiền thật tháng này: {t['tong']:,.0f}đ / {t['tran']:,.0f}đ ({pct:.0f}%)"
+        if pct >= t["canhBaoTaiPhanTram"]:
+            return (f"⚠ {dong} — sắp chạm trần, chạm là hệ ngừng gọi API tính tiền.\n"
+                    + body), True
+        body = dong + "\n" + body
     hits = [h for h in q["hits"]
             if h["createdAt"] >= (datetime.now(timezone.utc) - timedelta(days=1))
             .strftime("%Y-%m-%dT%H:%M:%SZ")]
@@ -466,7 +498,11 @@ def run_one(sched: dict, conn) -> tuple[str, str]:
         else:
             parts.append(f"Không chạy được {sched['companyId']}."
                          f"{sched['capability']}: {res.get('summary', '')[:150]}")
-            anything = True
+            # Trả 'failed' chứ không phải 'ok': cmd_run cần phân biệt được "lịch
+            # có tin cho admin" với "lịch hỏng", để không nhắn lại cùng một sự
+            # cố mỗi 15 phút. Trước đây cả hai đều là 'ok' nên trong sổ nhìn
+            # giống hệt nhau.
+            return (f"— {sched['displayName']} —\n\n" + "\n\n".join(parts)), "failed"
     else:
         return "", "failed"
 
@@ -499,8 +535,29 @@ def cmd_run(args):
         except Exception as exc:
             text, status = f"— {sched['displayName']} —\n\nLỗi: {exc}", "failed"
 
+        # S7 mở rộng — SỰ CỐ KÉO DÀI CHỈ NHẮN MỘT LẦN.
+        #
+        # calendarWatch chạy mỗi 15 phút. Đo 2026-08-16: đêm 15/08 mạng không
+        # bắt tay được với Notion suốt 6 tiếng, lịch dựng ra 21 tin lỗi giống
+        # hệt nhau. Đêm đó admin không nhận cái nào vì Telegram cũng đứt cùng
+        # lúc — nhưng nếu chỉ Notion hỏng thì đó là 21 lần đánh thức lúc nửa
+        # đêm cho MỘT sự cố. Tin thứ hai trở đi không thêm thông tin gì, chỉ
+        # dạy admin bỏ qua thông báo của hệ.
+        #
+        # Nên: lỗi lần đầu thì nhắn, lỗi lặp lại thì im và vẫn ghi sổ, khỏi rồi
+        # thì nhắn một câu báo đã chạy lại được. Im lặng ở giữa KHÔNG phải nuốt
+        # lỗi (O10): mọi lần đều nằm trong scheduleRun, `backoffice report` vẫn
+        # đếm đủ.
+        truoc = trang_thai_truoc(conn, sid)
+        im = status == "failed" and truoc == "failed"
+        if status == "ok" and truoc == "failed":
+            n = so_lan_hong_lien_tiep(conn, sid)
+            text = (f"— {sched['displayName']} —\n\nĐã chạy lại được"
+                    + (f" (hỏng {n} lần liên tiếp trước đó)." if n else ".")
+                    + ("\n\n" + text.split("\n\n", 1)[1] if "\n\n" in text else ""))
+
         sent = 0
-        if text:
+        if text and not im:
             res = telegram.send_message(admin, text)
             sent = 1 if res.get("ok") else 0
 

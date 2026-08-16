@@ -11,6 +11,7 @@ việc không commit môi trường chạy vào repo, không cấm thư viện n
 """
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 
@@ -38,7 +39,25 @@ class NotionError(RuntimeError):
 # Cần lâu hơn (quét cả sổ, ghi hàng loạt) thì TRUYỀN timeout riêng, đừng nâng
 # con số này lên: nâng ở đây là nâng cho cả 36 năng lực đang có ngân sách ≤ 20s.
 def _request(method: str, path: str, token: str, body: dict | None = None,
-             timeout: int = 8) -> dict:
+             timeout: int = 8, thu_lai: int = 1) -> dict:
+    """Gọi Notion, thử lại MỘT lần khi trục trặc là do đường truyền.
+
+    VÌ SAO THỬ LẠI, VÀ VÌ SAO CHỈ MỘT LẦN: đo 2026-08-16 trên 3 ngày —
+    calendarCompany.upcomingEvents chạy 215 lần trót lọt (trung bình 825ms) và
+    hỏng 21 lần, tất cả nằm gọn trong một chùm 6 tiếng đêm 15/08, mỗi lần đều
+    tốn đúng 8.206ms tức chờ hết timeout mà chưa bắt tay xong SSL. Chùm dài như
+    thế thì thử lại bao nhiêu cũng vô ích — nhưng những lần chập một hai giây
+    thì một lần thử lại là đủ, và đó là loại hay gặp hơn.
+
+    NGÂN SÁCH: 33 năng lực khai `maxDurationSec: 20`, nên tổng thời gian của
+    MỌI lần thử phải nằm dưới đó — nếu không dispatcher giết tiến trình trước
+    khi company kịp trả về một câu tử tế (đúng cái bẫy "timeout bằng ngân sách"
+    trong CLAUDE.md). Hai lần × 8s + 0,5s nghỉ = 16,5s, còn chừa 3,5s. Muốn
+    thử thêm lần nữa thì phải hạ `timeout`, đừng chỉ tăng `thu_lai`.
+
+    KHÔNG thử lại với lỗi 4xx: token sai, id sai, schema sai thì gọi lại vẫn
+    sai — chỉ tổ chờ lâu gấp đôi rồi báo cùng một lỗi. 5xx và lỗi mạng thì có.
+    """
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(
         f"{API}{path}", data=data, method=method,
@@ -48,18 +67,30 @@ def _request(method: str, path: str, token: str, body: dict | None = None,
             "Content-Type": "application/json",
         },
     )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return json.loads(resp.read())
-    except urllib.error.HTTPError as exc:
-        raw = exc.read().decode("utf-8", "replace")
+    for lan in range(thu_lai + 1):
+        con_thu = lan < thu_lai
         try:
-            msg = json.loads(raw).get("message", raw)
-        except json.JSONDecodeError:
-            msg = raw
-        raise NotionError(f"Notion {exc.code}: {msg[:300]}") from None
-    except Exception as exc:
-        raise NotionError(f"Không gọi được Notion: {type(exc).__name__}: {exc}") from None
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return json.loads(resp.read())
+        except urllib.error.HTTPError as exc:
+            raw = exc.read().decode("utf-8", "replace")
+            try:
+                msg = json.loads(raw).get("message", raw)
+            except json.JSONDecodeError:
+                msg = raw
+            if con_thu and exc.code >= 500:
+                time.sleep(0.5)
+                continue
+            raise NotionError(f"Notion {exc.code}: {msg[:300]}") from None
+        except Exception as exc:
+            if con_thu:
+                time.sleep(0.5)
+                continue
+            # Nói rõ ĐÃ THỬ LẠI, để lần sau đọc log không phải đoán xem con số
+            # thời gian gấp đôi là do mạng ì hay do có nhánh thử lại ở đây.
+            da_thu = f" (đã thử {thu_lai + 1} lần)" if thu_lai else ""
+            raise NotionError(
+                f"Không gọi được Notion{da_thu}: {type(exc).__name__}: {exc}") from None
 
 
 def token_from_env(var: str = "NOTION_TOKEN") -> str:
