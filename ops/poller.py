@@ -38,6 +38,10 @@ TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 ADMIN = os.environ.get("COMPANYSPEC_ADMIN_CHAT_ID", "")
 API = f"https://api.telegram.org/bot{TOKEN}"
 POLL_TIMEOUT = 30
+# Tin gửi trong ngần này phút trước lúc khởi động thì VẪN trả lời. Đủ rộng để
+# ôm trọn một lần khởi động lại (mất khoảng 15 giây), đủ hẹp để sau một đêm
+# poller chết thì không thức dậy trả lời hàng loạt tin từ hôm qua.
+NHAN_LAI_PHUT = 10
 
 
 def log(*parts):
@@ -166,17 +170,43 @@ def main() -> int:
     # Webhook và polling loại trừ nhau. Gỡ webhook cũ nếu có.
     call("deleteWebhook", {"drop_pending_updates": False}, timeout=15)
 
-    # Bỏ qua tin nhắn tồn đọng từ trước khi khởi động — tránh trả lời tin cũ.
-    init = call("getUpdates", {"limit": 1, "offset": -1, "timeout": 0}, timeout=20)
-    offset = 0
+    # Tin nhắn tồn đọng lúc khởi động: XỬ LÝ tin mới, bỏ qua tin cũ — và nếu có
+    # bỏ thì NÓI RA.
+    #
+    # Bản cũ nhảy thẳng tới tin cuối cùng, tức bỏ sạch mọi thứ gửi trước lúc
+    # khởi động, im lặng. Ý định đúng (đừng trả lời tin từ hôm kia), nhưng nó
+    # nuốt luôn tin vừa gửi cách đây mười giây — đúng khoảng admin nhắn trong
+    # lúc poller đang được khởi động lại. Xảy ra thật 2026-08-17: khởi động lại
+    # mất 15 giây, admin nhắn vào đúng lúc đó và không bao giờ nhận được trả
+    # lời, cũng không có gì báo là tin đã rơi.
+    #
+    # Nay: tin trong vòng NHAN_LAI_PHUT thì xử lý bình thường; cũ hơn thì bỏ
+    # nhưng đếm và nhắn admin một câu. O10 — không nuốt im lặng.
+    ton_dong, bo_qua_cu, offset = [], [], 0
+    init = call("getUpdates", {"offset": 0, "timeout": 0}, timeout=20)
     if init.get("ok") and init.get("result"):
-        offset = init["result"][-1]["update_id"] + 1
-    log("sẵn sàng, đang chờ tin nhắn…")
+        nguong = time.time() - NHAN_LAI_PHUT * 60
+        for upd in init["result"]:
+            offset = upd["update_id"] + 1
+            m = upd.get("message") or upd.get("callback_query", {}).get("message") or {}
+            (ton_dong if (m.get("date") or 0) >= nguong else bo_qua_cu).append(upd)
+
+    if bo_qua_cu:
+        log(f"bỏ qua {len(bo_qua_cu)} tin cũ hơn {NHAN_LAI_PHUT} phút")
+        telegram.send_message(
+            ADMIN, f"Em vừa khởi động lại. Có {len(bo_qua_cu)} tin nhắn cũ em "
+                   "không đọc nữa — đại ca nhắn lại giúp em nếu còn cần.")
+    log(f"sẵn sàng, đang chờ tin nhắn… ({len(ton_dong)} tin vừa gửi sẽ xử lý ngay)"
+        if ton_dong else "sẵn sàng, đang chờ tin nhắn…")
 
     backoff = 1
     while True:
-        res = call("getUpdates", {"offset": offset, "timeout": POLL_TIMEOUT},
-                   timeout=POLL_TIMEOUT + 15)
+        # Mẻ tồn đọng vừa gom ở trên được xử lý trước, đúng một lần.
+        if ton_dong:
+            res, ton_dong = {"ok": True, "result": ton_dong}, []
+        else:
+            res = call("getUpdates", {"offset": offset, "timeout": POLL_TIMEOUT},
+                       timeout=POLL_TIMEOUT + 15)
         if not res.get("ok"):
             time.sleep(backoff)
             backoff = min(backoff * 2, 60)
