@@ -510,6 +510,29 @@ def cmd_call(args) -> dict:
     return result
 
 
+def mo_ta_truong(v: dict):
+    """Mô tả một trường đầu vào, đủ để CEO gõ đúng ngay lần đầu.
+
+    MẢNG CÁC OBJECT phải nói rõ bên trong có gì. Trước đây chỗ này chỉ in
+    "array", và CEO không có cách nào biết phần tử là chuỗi hay là object —
+    nên nó đoán. Đo được 2026-08-16 bằng ca thử: cả `createPlan` lẫn `addTodos`
+    đều bị gửi mảng chuỗi trước, bị dispatcher chặn, rồi mới gọi lại cho đúng.
+    Một việc tốn 4 lời gọi thay vì 2. Lỗi im lặng về mặt kết quả (cuối cùng vẫn
+    đúng) nhưng tốn tiền và tốn thời gian chờ của admin mỗi lần.
+    """
+    if "enum" in v:
+        return {"enum": v["enum"]}
+    if v.get("type") == "array":
+        items = v.get("items") or {}
+        if items.get("type") == "object":
+            truong = {k: mo_ta_truong(s)
+                      for k, s in (items.get("properties") or {}).items()}
+            return {"array of object": truong,
+                    "required": items.get("required", [])}
+        return "array"
+    return v.get("type", "?")
+
+
 def cmd_list(_args) -> dict:
     """Danh mục năng lực — thứ duy nhất CEO cần biết về company (C1)."""
     out = []
@@ -529,7 +552,7 @@ def cmd_list(_args) -> dict:
                  # Kèm luôn giá trị hợp lệ: rẻ hơn để CEO đoán sai rồi bị chặn
                  # rồi gọi lại — mỗi vòng thừa là một lượt đi-về với model.
                  "input": {
-                     k: ({"enum": v["enum"]} if "enum" in v else v.get("type", "?"))
+                     k: mo_ta_truong(v)
                      for k, v in (c.get("inputSchema", {}).get("properties") or {}).items()
                  },
                  "required": c.get("inputSchema", {}).get("required", [])}

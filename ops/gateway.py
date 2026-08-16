@@ -700,6 +700,18 @@ def danh_muc_block() -> str:
                 e = (props.get(k) or {}).get("enum")
                 if e:
                     nang_luc.append(f"    {k}: {' | '.join(map(str, e))}")
+                # MẢNG CÁC OBJECT phải nói rõ bên trong có gì, nếu không CEO
+                # gửi mảng chuỗi. Đo được 2026-08-16 bằng ca thử: cả
+                # `createPlan` lẫn `addTodos` đều bị gửi ["chuỗi"] trước, bị
+                # dispatcher chặn, rồi mới gọi lại đúng — một việc tốn 4 lời
+                # gọi thay vì 2. Kết quả cuối vẫn đúng nên không ai để ý, chỉ
+                # có tiền và thời gian chờ của admin là mất thật.
+                its = (props.get(k) or {}).get("items") or {}
+                if its.get("type") == "object":
+                    con = its.get("properties") or {}
+                    bb = set(its.get("required") or [])
+                    ten_truong = ", ".join(f"{n}*" if n in bb else n for n in con)
+                    nang_luc.append(f"    {k}: MẢNG các object {{{ten_truong}}} (* = bắt buộc)")
         if nang_luc:
             dong.append(f"· {cid} — {spec.get('displayName','')}\n    "
                         + "\n    ".join(nang_luc))

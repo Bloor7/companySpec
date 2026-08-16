@@ -1,0 +1,180 @@
+# Company giữ VIỆC VẶT — việc rời rạc, làm xong là xong.
+#
+# C4 — ranh giới là CÔNG VIỆC, và ở đây công việc đó là "những thứ lặt vặt phải
+# nhớ làm". Ranh giới với ba company gần nhất, viết ra vì C5 cấm hai company
+# cùng trả lời một câu hỏi:
+#
+#   · goalCompany     — việc NHIỀU BƯỚC hướng tới một mục tiêu, mỗi kế hoạch một
+#                       bảng riêng. "Ra sách KDP" là kế hoạch. "Mua bóng đèn
+#                       phòng 203" thì không — nó không dẫn tới đâu cả, làm xong
+#                       là hết. Đó là chỗ của company này.
+#   · calendarCompany — việc có GIỜ HẸN, và nó tự nhắc trước 30 phút. Việc ở đây
+#                       KHÔNG có giờ, chỉ có "hôm nay/hạn chót". Cố ý không nhắc
+#                       giờ: hai chỗ cùng nhắc thì admin nhận hai tin cho một
+#                       việc, và không còn tin nào đáng đọc.
+#   · planCompany     — đóng cứng vào bảng 100 video, từ vựng riêng của dự án đó.
+#
+# LIÊN KẾT VỚI KẾ HOẠCH — đọc kỹ chỗ này trước khi sửa:
+#
+# Admin muốn việc từ kế hoạch tự chảy sang đây. Hai luật chặn đường làm thẳng:
+#   P3 — company không gọi company. planCompany KHÔNG đẩy sang đây được.
+#   S3 — việc định kỳ chỉ được ĐỌC. Cron cũng không tự ghi vào đây được.
+# Nên đường đi hợp lệ là: CEO đọc cả hai sổ (nó là chỗ DUY NHẤT được nhìn cả
+# hai — đúng hình sao P3), tự so, rồi gọi addTodos ghi phần còn thiếu. Admin
+# bấm duyệt một lần cho cả mẻ.
+#
+# Chống trùng KHÔNG dựa vào trí nhớ của CEO. Mỗi việc kéo từ nơi khác mang một
+# `khoaNguon` duy nhất; company giữ khoá đó trong sổ riêng và bỏ qua việc đã có.
+# Gọi lại mười lần cũng ra đúng một dòng trên Notion. Đây là chỗ áp dụng P1:
+# code cứng giữ khung, không đi dặn model "nhớ đừng thêm trùng nhé".
+
+companyId: todoCompany
+displayName: "Phòng việc vặt"
+version: 0.1.0
+
+runtime: code                     # RP1 — đọc/ghi bản ghi có cấu trúc, không cần LLM
+entrypoint: ./src/main.py
+runtimeReason: "Việc xác định trước: thêm/đọc/tick/xoá bản ghi. Việc NGHĨ RA nên làm gì là của CEO."
+
+dataStore: ./store.sqlite         # C3 — sổ riêng; ở đây còn giữ khoá chống trùng
+secrets: [NOTION_TOKEN]           # C2.4 — chỉ khai TÊN
+env:     [NOTION_TODO_DATABASE_ID]
+canBeCalledBy: [ceo]              # P3
+canCall: []                       # P3
+owner: admin
+
+capabilities:
+  - name: listTodos
+    description: >
+      Liệt kê việc cần làm. Mặc định chỉ lấy việc CHƯA XONG — đó là câu hỏi
+      admin hỏi hằng ngày. Trả kèm todoId để tick hoặc xoá sau đó.
+    riskTier: read
+    maxDurationSec: 20
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        trangThai:
+          enum: [chưa xong, đã xong, tất cả]
+        # Chỉ việc tới hạn trong ngần này ngày. Bỏ trống thì lấy tất cả.
+        trongNgay: { type: integer, minimum: 0, maximum: 365 }
+        gioiHan:   { type: integer, minimum: 1, maximum: 100 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [todos, count]
+      properties:
+        count:    { type: integer }
+        quaHan:   { type: integer }
+        todos:    { type: array }
+
+  - name: addTodos
+    description: >
+      Thêm một hoặc NHIỀU việc trong cùng một lời gọi. Luôn dùng cái này, kể cả
+      khi chỉ có một việc — admin bấm duyệt MỘT lần cho cả mẻ, thay vì mỗi việc
+      một nút. Việc nào mang khoaNguon đã có thì bị bỏ qua, không tạo trùng.
+    riskTier: write                # tạo được thì xoá được → hoàn tác được
+    maxDurationSec: 45             # nhiều việc thì nhiều lượt gọi Notion
+    # G8 — whitelist theo mức ưu tiên. "Luôn cho phép thêm việc thường" thì hợp
+    # lý; "luôn cho phép thêm bất cứ việc gì kể cả việc gấp" thì không.
+    whitelistScope: [uuTien]
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [cacViec]
+      properties:
+        cacViec:
+          type: array
+          minItems: 1
+          maxItems: 20            # quá số này thì admin không đọc nổi nút duyệt
+          items:
+            type: object
+            additionalProperties: false
+            required: [ten]
+            properties:
+              ten:     { type: string, minLength: 1, maxLength: 200 }
+              uuTien:  { enum: [cao, thường, thấp] }
+              han:     { type: string, minLength: 10, maxLength: 10 }  # YYYY-MM-DD
+              ghiChu:  { type: string, maxLength: 500 }
+              # Việc này từ đâu ra — "kế hoạch: 100 video · GD2". Để admin nhìn
+              # bảng là biết vì sao nó nằm đây.
+              nguon:   { type: string, maxLength: 100 }
+              # Khoá chống trùng. CEO đặt bằng thứ ĐỊNH DANH ĐƯỢC ở nguồn, ví dụ
+              # "plan:stt-42". Không có khoá thì việc luôn được thêm mới.
+              khoaNguon: { type: string, maxLength: 100 }
+        # Mức ưu tiên chung cho cả mẻ, dùng khi từng việc không tự khai. Tách ra
+        # đây để whitelistScope khoá được vào một giá trị duy nhất.
+        uuTien: { enum: [cao, thường, thấp] }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [themMoi, boQua, todos]
+      properties:
+        themMoi: { type: integer }
+        boQua:   { type: integer }   # số việc trùng khoaNguon, đã có sẵn
+        todos:   { type: array }
+        # O10 — thêm 5 việc mà việc thứ 4 hỏng thì KHÔNG được ném lỗi cả mẻ:
+        # ba việc đầu đã nằm trên Notion thật rồi. Báo đúng số tạo được, và
+        # kể tên việc hỏng ở đây.
+        loi:     { type: array }
+
+  - name: doneTodos
+    description: >
+      Đánh dấu một hoặc nhiều việc đã xong. PHẢI gọi listTodos trước để lấy
+      todoId — năng lực này không tự tìm hộ. Bỏ tick lại được nên hoàn tác dễ.
+    riskTier: write
+    maxDurationSec: 45
+    whitelistScope: [xong]
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [cacViec]
+      properties:
+        cacViec:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            type: object
+            additionalProperties: false
+            # `ten` bắt buộc KHÔNG phải để tìm kiếm mà để ĐỐI CHIẾU: admin duyệt
+            # dựa trên câu "đánh dấu xong việc mua bóng đèn"; nếu todoId lại trỏ
+            # sang việc khác thì company từ chối. CEO nhầm hay bịa đều bị chặn.
+            required: [todoId, ten]
+            properties:
+              todoId: { type: string, minLength: 32, maxLength: 40 }
+              ten:    { type: string, minLength: 1, maxLength: 200 }
+        # true = đánh dấu xong, false = bỏ tick trả về chưa xong.
+        xong: { type: boolean }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [daDoi, todos]
+      properties:
+        daDoi: { type: integer }
+        todos: { type: array }
+        loi:   { type: array }   # như addTodos — hỏng một phần thì nói rõ phần nào
+
+  - name: deleteTodo
+    description: >
+      Xoá hẳn một việc khỏi danh sách. Việc đã LÀM XONG thì dùng doneTodos, đừng
+      xoá — xoá đi thì mất dấu là đã từng làm. Notion giữ thùng rác 30 ngày.
+    riskTier: write                 # Notion giữ 30 ngày → hoàn tác được
+    maxDurationSec: 20
+    # CỐ Ý KHÔNG CÓ whitelistScope. "Luôn cho phép xoá việc" là câu không ai
+    # thật sự muốn nói — G12: capability không khai thì không whitelist được,
+    # và ở đây đó chính là điều ta muốn.
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [todoId, ten]
+      properties:
+        todoId: { type: string, minLength: 32, maxLength: 40 }
+        ten:    { type: string, minLength: 1, maxLength: 200 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [todoId, ten]
+      properties:
+        todoId: { type: string }
+        ten:    { type: string }

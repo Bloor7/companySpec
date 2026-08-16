@@ -177,6 +177,25 @@ BOOKS = [
         },
     },
     {
+        "company": "todoCompany",
+        "title": "Việc cần làm",
+        "env": "NOTION_TODO_DATABASE_ID",
+        # Xem tiện nhất bằng Board view theo "Ưu tiên", hoặc lọc "Xong" = chưa
+        # tick. Cột "Nguồn" cho biết việc từ đâu ra — tự thêm hay kéo từ kế hoạch.
+        "schema": {
+            "Việc":    {"title": {}},
+            "Xong":    {"checkbox": {}},
+            "Ưu tiên": {"select": {"options": [
+                {"name": "cao", "color": "red"},
+                {"name": "thường", "color": "blue"},
+                {"name": "thấp", "color": "gray"},
+            ]}},
+            "Hạn":     {"date": {}},
+            "Nguồn":   {"rich_text": {}},
+            "Ghi chú": {"rich_text": {}},
+        },
+    },
+    {
         "company": "planCompany",
         "title": "BẢNG TỔNG QUAN 100 VIDEO",
         "env": "NOTION_PLAN_DATABASE_ID",
