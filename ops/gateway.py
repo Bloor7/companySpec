@@ -234,21 +234,8 @@ def _dung_brief() -> str:
     """
     phan = []
 
-    # Bây giờ là mấy giờ. Nghe hiển nhiên nhưng model KHÔNG tự biết — nó không
-    # có đồng hồ, chỉ có ngày cắt dữ liệu huấn luyện.
-    #
-    # Đo được 2026-08-11 13:06: admin gửi tin thoại hỏi "bây giờ là mấy giờ".
-    # Kể cả sau khi sửa bộ nghe cho ra đúng chữ, CEO vẫn không có gì để trả lời.
-    # Một trợ lý cá nhân không biết mấy giờ thì không hẹn được lịch, không nói
-    # được "còn hai tiếng nữa", không phân biệt nổi "hôm nay" với "hôm qua".
-    #
-    # Đặt ở ĐẦU bức tranh, và bức tranh này cache 10 phút — nên giờ có thể lệch
-    # tới 10 phút. Nói rõ luôn để CEO không khẳng định chắc nịch tới từng phút.
-    bay_gio = datetime.now(TZ_VN)
-    thu = ["thứ Hai", "thứ Ba", "thứ Tư", "thứ Năm", "thứ Sáu", "thứ Bảy",
-           "Chủ nhật"][bay_gio.weekday()]
-    phan.append(f"Bây giờ: {bay_gio:%H:%M} {thu} {bay_gio:%d/%m/%Y} (giờ VN, "
-                f"có thể lệch vài phút — cần chính xác tới phút thì nói rõ là ước chừng)")
+    # GIỜ KHÔNG NẰM Ở ĐÂY NỮA — xem dong_gio(). Nó được ghép vào lúc đọc, mỗi
+    # lượt một lần, vì cache 10 phút biến nó thành số sai.
 
     kq = _goi_nhieu([
         ("walletCompany", "getBalance", {}),
@@ -312,6 +299,41 @@ def _dung_brief() -> str:
             + "\n\n".join(phan))
 
 
+def dong_gio() -> str:
+    """Giờ hiện tại, sinh MỚI ở mỗi lượt.
+
+    Model không có đồng hồ — nó chỉ có ngày cắt dữ liệu huấn luyện. Đo được
+    2026-08-11: admin hỏi bằng tin thoại "bây giờ là mấy giờ" và CEO không có
+    gì để trả lời. Một trợ lý cá nhân không biết mấy giờ thì không hẹn được
+    lịch, không nói được "còn hai tiếng nữa", không phân biệt nổi hôm nay với
+    hôm qua.
+
+    VÌ SAO TÁCH RA KHỎI BỨC TRANH: trước đây dòng này nằm trong `_dung_brief()`
+    nên bị cache chung 10 phút — và khi cache quá hạn, hệ còn trả bản cũ thêm
+    một lượt nữa trong lúc làm mới ở nền, nên độ lệch có thể vượt 10 phút.
+    Đo được 2026-08-17 00:25 và 00:29: cả hai lượt CEO đều khẳng định "đang
+    00:17". Bốn lời gọi company thì đáng cache vì tốn ~2,5 giây; đọc đồng hồ
+    thì không tốn gì, nên không có lý do gì để nó cũ.
+    """
+    bay_gio = datetime.now(TZ_VN)
+    thu = ["thứ Hai", "thứ Ba", "thứ Tư", "thứ Năm", "thứ Sáu", "thứ Bảy",
+           "Chủ nhật"][bay_gio.weekday()]
+    return (f"\n\n## Bây giờ\n\n{bay_gio:%H:%M} {thu} {bay_gio:%d/%m/%Y} "
+            f"(giờ VN, đúng tại thời điểm admin nhắn tin này)")
+
+
+def bo_dong_gio_cu(brief: str) -> str:
+    """Gỡ dòng giờ còn sót trong bức tranh đã cache từ bản cũ.
+
+    Cache nằm trong sqlite và sống qua lần nâng cấp này, nên bản đang lưu vẫn
+    còn dòng "Bây giờ: …" của kiến trúc cũ. Không gỡ thì prompt có hai cái
+    đồng hồ lệch nhau — tệ hơn hẳn một cái sai, vì model sẽ phải chọn.
+    Tự hết tác dụng sau khi cache làm mới, nhưng giữ lại thì vô hại.
+    """
+    return "\n".join(d for d in brief.splitlines()
+                     if not d.lstrip().startswith("Bây giờ:"))
+
+
 def bo_so_du(brief: str) -> str:
     """Xoá con số ví khỏi bức tranh ĐÃ QUÁ HẠN. Giữ lại mọi phần khác.
 
@@ -358,7 +380,7 @@ def brief_block(conn) -> str:
                 - datetime.strptime(row["taoLuc"], "%Y-%m-%dT%H:%M:%SZ")
                 .replace(tzinfo=timezone.utc)).total_seconds()
         if tuoi < BRIEF_TTL:
-            return row["noiDung"] or ""
+            return dong_gio() + bo_dong_gio_cu(row["noiDung"] or "")
         # QUÁ HẠN: vẫn trả bản cũ ngay, làm mới ở NỀN. Bức tranh cũ 10 phút vẫn
         # đúng gần hết; bắt admin chờ 6 giây để có số mới hơn vài phút là đổi
         # sai thứ. Chỉ lần đầu tiên đời (chưa có gì) mới phải chờ thật.
@@ -366,13 +388,13 @@ def brief_block(conn) -> str:
             [sys.executable, os.path.join(ROOT, "ops", "gateway.py"), "refresh-brief"],
             cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             start_new_session=True)
-        return bo_so_du(row["noiDung"] or "")
+        return dong_gio() + bo_so_du(bo_dong_gio_cu(row["noiDung"] or ""))
 
     noi_dung = _dung_brief()
     conn.execute("INSERT OR REPLACE INTO brief (id, noiDung, taoLuc) VALUES (1,?,?)",
                  (noi_dung, now()))
     conn.commit()
-    return noi_dung
+    return dong_gio() + noi_dung
 
 
 def cmd_refresh_brief():
