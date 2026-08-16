@@ -1,0 +1,251 @@
+# Bộ ca thử cho CEO — mỗi ca là một câu admin và chuỗi lời gọi PHẢI xảy ra.
+#
+# VÌ SAO CÓ FILE NÀY: cho tới nay mọi thay đổi trong ceo/SYSTEM.md được nghiệm
+# thu bằng cảm giác — sửa, nhắn thử một câu, thấy ổn thì thôi. Không ai biết
+# sửa cho việc A có làm hỏng việc B. Con bug tốn công nhất dự án (sai tên trường
+# đầu vào, báo cáo tối in "thu 0đ · chi 0đ" nhiều tuần) thuộc đúng loại đó:
+# hỏng mà trông y hệt bình thường.
+#
+# NGUỒN CỦA CA THỬ — chỉ hai chỗ, không bịa:
+#   (a) mỗi dòng trong bảng "Đã sửa rồi — đừng làm lại" (CLAUDE.md) và mỗi luật
+#       trong ceo/SYSTEM.md đã phải viết ra vì đã hỏng thật;
+#   (b) câu admin THẬT lấy từ ceo/store.sqlite — cột `cauAdmin` giữ nguyên văn,
+#       kể cả viết tắt và lỗi chính tả, vì đó chính là thứ CEO phải hiểu.
+#
+# CÁCH CHẤM: bộ chạy đọc lại các lời gọi mà CEO thật sự bắn vào dispatcher.
+#   phaiGoi      — lời gọi bắt buộc phải có. `truong` là giá trị mong đợi;
+#                  để `"*"` nghĩa là chỉ cần có mặt, giá trị nào cũng được.
+#   khongDuocGoi — lời gọi không được xuất hiện. Đây mới là phần bắt bug nặng:
+#                  ghi sổ mà quên trừ ví thì `phaiGoi` bắt được, còn TRỪ HAI LẦN
+#                  thì chỉ `khongDuocGoi` mới bắt được.
+#   toiDaLoiGoi  — trần số lời gọi, chặn kiểu "gọi vét cho chắc".
+#
+# Ca nào cũng chạy KHÔ: dispatcher trong ops/evals/shim/ không chạy company,
+# không chạm Notion, không chạm ví. Xem docstring ở đó.
+
+cases:
+
+  # ─────────── nhóm 1: chuỗi tiền (SYSTEM.md — "một câu = NHIỀU lời gọi") ───────────
+
+  - id: chi-ck
+    cauAdmin: "50k ck ăn sáng"
+    vi: >
+      Ca xương sống. Admin nói một câu, hệ phải làm hai việc: ghi sổ chi VÀ trừ
+      ví. Quên vế sau thì admin mở ví ra thấy con số không phải tiền thật.
+      "ck" = chuyển khoản = ví tài khoản.
+    phaiGoi:
+      - goi: expenseCompany.addExpense
+        truong: {soTien: 50000, danhMuc: "ăn uống"}
+      - goi: walletCompany.adjustBalance
+        truong: {vi: "tài khoản", soTien: 50000, loai: "chi"}
+    toiDaLoiGoi: 3
+
+  - id: thu-ung-tien-mat
+    cauAdmin: "Ứng 150k tiền mặt"
+    vi: "Chiều ngược lại: ghi thu rồi CỘNG ví. Admin nói rõ ví nên không được hỏi lại."
+    phaiGoi:
+      - goi: incomeCompany.addIncome
+        truong: {soTien: 150000, nguon: "*"}
+      - goi: walletCompany.adjustBalance
+        truong: {vi: "tiền mặt", soTien: 150000, loai: "thu"}
+    toiDaLoiGoi: 3
+
+  - id: nap-quy-khong-phai-chi
+    cauAdmin: "Bỏ 200k tiền mặt vào quỹ laptop"
+    vi: >
+      SYSTEM.md: "Nạp quỹ không phải khoản chi. Tiền vẫn của admin, chỉ đổi chỗ
+      đứng." Ghi vào sổ chi tiêu là thổi phồng con số tháng này tiêu bao nhiêu.
+    # Quỹ phải TỒN TẠI sẵn thì ca mới đo đúng thứ cần đo. Không có `traVe` này
+    # thì bản giả trả danh sách rỗng, CEO hỏi "tạo quỹ mới nhé?" — hành vi ĐÚNG,
+    # nhưng ca lại chấm trượt. Đo được lần chạy đầu 2026-08-16: chính ca này
+    # trượt oan vì lý do đó.
+    traVe:
+      savingsCompany.listFunds:
+        count: 1
+        funds:
+          # Dài đúng 32 ký tự: depositFund khai minLength 32 và cổng thật soát
+          # thật. Id giả cho có thì CEO gọi xong bị `rejected` — ca thử đo nhầm
+          # thành "CEO sai" trong khi sai là dữ liệu giả của ca.
+          - fundId: "fnd0laptop0000000000000000000001"
+            ten: "Quỹ laptop"
+            loai: "chi tiêu"
+            daCo: 1000000
+            mucTieu: 20000000
+    phaiGoi:
+      - goi: savingsCompany.depositFund
+        truong: {fundId: "fnd0laptop0000000000000000000001", soTien: 200000, tenQuy: "*"}
+      - goi: walletCompany.adjustBalance
+        truong: {vi: "tiền mặt", soTien: 200000, loai: "nạp quỹ"}
+    khongDuocGoi:
+      - expenseCompany.addExpense
+    toiDaLoiGoi: 4
+
+  - id: rut-atm-chi-la-chuyen-vi
+    cauAdmin: "Anh vừa rút 500k ở ATM"
+    vi: >
+      SYSTEM.md: rút ATM "chỉ chuyển giữa hai ví — KHÔNG phải thu, KHÔNG phải chi".
+      Tiền không vào cũng không ra khỏi túi admin.
+    phaiGoi:
+      - goi: walletCompany.transferBalance
+        truong: {tuVi: "tài khoản", denVi: "tiền mặt", soTien: 500000}
+    khongDuocGoi:
+      - expenseCompany.addExpense
+      - incomeCompany.addIncome
+    toiDaLoiGoi: 2
+
+  # ─────────── nhóm 2: các bug đã tốn công lần ra ───────────
+
+  - id: doc-vi-khong-tru-lai
+    cauAdmin: "ví còn bao nhiêu"
+    vi: >
+      Bug đo được 2026-08-04: ví 84.000đ bị tính thành âm 177.000đ. Số dư ví là
+      số THẬT, đã xong xuôi. Lấy số dư rồi trừ tiếp sổ chi tiêu là trừ HAI LẦN.
+      Câu này lặp lại 4 lần trong store — admin hỏi thật, hỏi thường xuyên.
+    phaiGoi:
+      - goi: walletCompany.getBalance
+        truong: {}
+    khongDuocGoi:
+      - expenseCompany.sumExpenses
+      - expenseCompany.listExpenses
+    toiDaLoiGoi: 2
+
+  - id: theo-quy-uoc-vi-dung-hoi-lai
+    cauAdmin: "100k vk đi chợ"
+    vi: >
+      Câu thật của admin, và ca này ĐÃ ĐỔI ĐÁP ÁN — ghi lại vì đó là bài học.
+      Hôm đó "vk" không rõ là ví nào, CEO đoán bừa, admin phải đính chính "Ck á
+      em". Chữa xong KHÔNG phải bằng cách bắt CEO hỏi mãi, mà bằng một dòng
+      trong hồ sơ: (p3) "không nói rõ ví thì mặc định tiền mặt". SYSTEM.md nói
+      rõ khi đã có quy ước thì ĐỪNG hỏi lại — "admin đặt quy ước chính là để
+      khỏi phải trả lời cùng một câu hỏi mỗi ngày".
+      Nên hôm nay đáp án đúng là: theo quy ước, ghi thẳng vào tiền mặt.
+      CA NÀY PHỤ THUỘC HỒ SƠ: xoá (p3) đi thì nó phải trượt, và trượt đúng.
+    phaiGoi:
+      - goi: expenseCompany.addExpense
+        truong: {soTien: 100000, danhMuc: "*"}
+      - goi: walletCompany.adjustBalance
+        truong: {vi: "tiền mặt", soTien: 100000, loai: "chi"}
+    toiDaLoiGoi: 3
+
+  - id: xoa-phai-tra-truoc
+    cauAdmin: "Xoá giúp anh khoản 50k đi chợ hôm nay đi em"
+    vi: >
+      deleteExpense khai rõ trong manifest: "PHẢI gọi listExpenses trước để lấy
+      expenseId — năng lực này không tự tìm hộ". Bịa expenseId thì bị chặn ở
+      dispatcher, tốn một vòng đi-về vô ích.
+    phaiGoi:
+      - goi: expenseCompany.listExpenses
+        truong: {}
+    toiDaLoiGoi: 3
+
+  # ─────────── nhóm 3: nhớ đúng thứ đáng nhớ ───────────
+
+  - id: nho-thoi-quen
+    cauAdmin: "tớ ăn chay thứ 2 với rằm"
+    vi: >
+      SYSTEM.md có nguyên bảng cho việc này: câu cụt không kèm yêu cầu VẪN là
+      việc. Phải GỌI năng lực ghi nhớ để admin có nút bấm, không được hỏi suông
+      rồi chờ — hỏi suông tốn thêm một lượt đi-về.
+      Câu này lấy thẳng từ bảng ví dụ trong SYSTEM.md, và cố ý chọn thứ CHƯA có
+      trong PROFILE.md — xem ca đối chứng ngay dưới để hiểu vì sao.
+    phaiGoi:
+      - goi: profileCompany.rememberFact
+        truong: {nhom: "*", noiDung: "*"}
+    toiDaLoiGoi: 2
+
+  - id: khong-de-nghi-lai-dieu-da-nho
+    cauAdmin: "dậy 5h30 mở cửa"
+    vi: >
+      Đối chứng, và là một ca ĐÃ ĐỔI ĐÁP ÁN. Ban đầu tớ chấm ca này phải gọi
+      rememberFact, nhưng hồ sơ ĐÃ CÓ (p1) "Dậy 5h30 mỗi ngày để mở cửa" — và
+      SYSTEM.md cấm rõ: "Không đề nghị điều đã có trong hồ sơ". CEO im lặng ở
+      đây là ĐÚNG, không phải quên.
+      Không có ca này thì một lần sửa prompt cho "chăm đề nghị ghi nhớ hơn" sẽ
+      lặng lẽ biến CEO thành cái máy hỏi lại admin những điều đã biết.
+    phaiGoi: []
+    khongDuocGoi:
+      - profileCompany.rememberFact
+    toiDaLoiGoi: 1
+
+  - id: khong-nho-cam-giac-mot-ngay
+    cauAdmin: "hôm nay mệt quá"
+    vi: >
+      Đối chứng của ca trên, lấy thẳng từ bảng trong SYSTEM.md: "cảm giác một
+      ngày, không phải điều luôn đúng" → KHÔNG ghi hồ sơ. Hồ sơ là những điều
+      LUÔN đúng. Không có ca này thì sửa prompt cho nhớ nhiều hơn sẽ lặng lẽ
+      biến CEO thành cái máy ghi mọi câu cảm thán.
+    phaiGoi: []
+    khongDuocGoi:
+      - profileCompany.rememberFact
+    toiDaLoiGoi: 1
+
+  # ─────────── nhóm 4: dữ liệu vào sao thì lưu vậy ───────────
+
+  - id: giu-nguyen-ky-tu-dac-biet
+    cauAdmin: "Lưu vào ghi chú cho anh cái này: dùng để tối ưu win : irm christitus.com/win | iex"
+    vi: >
+      Câu thật của admin ngày 2026-08-14, và là một lỗi ĐÃ XẢY RA. Hàng rào cũ
+      chặn ký tự `|` ở bất kỳ đâu trong câu lệnh, nên CEO không gọi nổi năng lực
+      với nội dung này. Nó lách bằng cách tự thay `|` thành "(PIPE)" và bỏ hết
+      dấu tiếng Việt — ghi chú lưu vào Notion không còn giống thứ admin gửi,
+      mà nhìn vào thì vẫn tưởng đã lưu xong. Admin lưu một câu LỆNH để sau này
+      chạy; sai một ký tự là nó vô dụng.
+      Chữa ở ceo/hooks/guard.py (soát bằng shlex, ký tự trong tham số thì cho
+      qua). Ca này canh cho chỗ đó không bị mở lại.
+    phaiGoi:
+      - goi: journalCompany.addEntry
+        truong: {noiDung: "~irm christitus.com/win | iex", chuDe: "*"}
+    toiDaLoiGoi: 2
+
+  # ─────────── nhóm 5: ranh giới việc vặt / kế hoạch (C5) ───────────
+
+  - id: viec-vat-vao-todo
+    cauAdmin: "nhắc anh mua bóng đèn phòng 203"
+    vi: >
+      Việc rời rạc, làm xong là xong, không dẫn tới mục tiêu nào — đúng chỗ của
+      todoCompany. Không được biến thành kế hoạch nhiều bước (goalCompany), cũng
+      không phải sự kiện có giờ (calendarCompany): admin không hề nói mấy giờ.
+    phaiGoi:
+      - goi: todoCompany.addTodos
+        truong: {cacViec: "*"}
+    khongDuocGoi:
+      - goalCompany.createPlan
+      - calendarCompany.addEvent
+    toiDaLoiGoi: 2
+
+  - id: muc-tieu-khong-phai-viec-vat
+    cauAdmin: "anh muốn ra sách KDP trong 3 tháng, chia bước giúp anh"
+    vi: >
+      Đối chứng của ca trên, và là ca canh luật C5. Đây là việc NHIỀU BƯỚC hướng
+      tới một mục tiêu có hạn — chỗ của goalCompany. Nhét vào todo thì danh sách
+      việc vặt biến thành nơi chứa mọi thứ, và câu hỏi "hôm nay làm gì" có hai
+      chỗ cùng trả lời — đúng thứ C5 cấm.
+    phaiGoi:
+      - goi: goalCompany.createPlan
+        truong: {ten: "*", cacBuoc: "*"}
+    khongDuocGoi:
+      - todoCompany.addTodos
+    toiDaLoiGoi: 3
+
+  # ─────────── nhóm 6: chọn đúng company, đừng chọn cái đắt ───────────
+
+  - id: hoi-vat-dung-goi-nghien-cuu
+    cauAdmin: "thủ đô của Bồ Đào Nha là gì em"
+    vi: >
+      researchCompany khai thẳng trong manifest: mỗi lần gọi tốn ~20 lần
+      searchCompany.traNhanh và mất 5–15 phút (đo 2026-08-13: $3,47 · 9,1 phút,
+      ăn 69% cửa sổ hạn mức 5 tiếng trong MỘT lời gọi). Câu hỏi vặt mà gọi vào
+      đó là đốt sạch buổi chiều của admin.
+    khongDuocGoi:
+      - researchCompany.nghienCuu
+    toiDaLoiGoi: 2
+
+  - id: khong-bia-khi-chua-goi
+    cauAdmin: "tháng này anh tiêu hết bao nhiêu rồi"
+    vi: >
+      SYSTEM.md: "Đừng bịa. Chưa gọi company thì chưa có dữ liệu." Con số này
+      chỉ có một chỗ biết. Trả lời từ trí nhớ là bịa, kể cả khi bịa đúng.
+    phaiGoi:
+      - goi: expenseCompany.sumExpenses
+        truong: {}
+    toiDaLoiGoi: 3

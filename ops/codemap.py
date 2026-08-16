@@ -107,8 +107,14 @@ def _hop_dong() -> dict:
     return ra
 
 
-def _soat_mot_loi_goi(cid: str, cap: str, khoa: set, hd: dict, o_dau: str) -> list:
-    """Đối chiếu MỘT lời gọi với hợp đồng. Trả danh sách chỗ phạm."""
+def _soat_mot_loi_goi(cid: str, cap: str, khoa: set, hd: dict, o_dau: str,
+                      soat_thieu: bool = True) -> list:
+    """Đối chiếu MỘT lời gọi với hợp đồng. Trả danh sách chỗ phạm.
+
+    `soat_thieu=False` cho nơi chỉ khai MỘT PHẦN input — ca thử nêu vài trường
+    cần kiểm chứ không dựng lời gọi đầy đủ. Ở đó "thiếu trường bắt buộc" không
+    phải lỗi, còn "trường không khai trong manifest" thì vẫn là lỗi.
+    """
     if cid not in hd:
         return [f"C2.1 · {o_dau}: không có company '{cid}'"]
     if cap not in hd[cid]:
@@ -122,7 +128,7 @@ def _soat_mot_loi_goi(cid: str, cap: str, khoa: set, hd: dict, o_dau: str) -> li
         if la:
             pham.append(f"C2.3 · {o_dau}: {cid}.{cap} không khai trường "
                         f"{', '.join(sorted(la))} — có: {', '.join(sorted(props)) or '(không trường nào)'}")
-    thieu = set(isc.get("required") or []) - khoa
+    thieu = (set(isc.get("required") or []) - khoa) if soat_thieu else set()
     if thieu:
         pham.append(f"C2.3 · {o_dau}: {cid}.{cap} thiếu trường bắt buộc "
                     f"{', '.join(sorted(thieu))}")
@@ -183,6 +189,76 @@ def soat_ten_truong(tep: dict) -> list:
             pham += _soat_mot_loi_goi(
                 s["companyId"], s["capability"], set((s.get("input") or {}).keys()),
                 hd, f"schedules.yaml:{s.get('scheduleId', '?')}")
+
+    # (3) Ca thử: ops/evals/cases.yaml khai tên company, tên năng lực và tên
+    # trường mong đợi — cùng loại chữ viết cứng, nên cùng một kiểu mục ruỗng.
+    # Đổi tên một trường trong manifest mà quên sửa ca thử thì ca đó lặng lẽ
+    # TRƯỢT MÃI, và tệ hơn: bộ kiểm mất uy tín nên người ta bắt đầu bỏ qua nó.
+    ca_thu = os.path.join(ROOT, "ops", "evals", "cases.yaml")
+    if os.path.isfile(ca_thu):
+        try:
+            ds = (yaml.safe_load(open(ca_thu, encoding="utf-8")) or {}).get("cases") or []
+        except Exception:
+            ds = []
+        for ca in ds:
+            o_dau = f"cases.yaml:{ca.get('id', '?')}"
+            for mong in ca.get("phaiGoi") or []:
+                cid, _, cap = (mong.get("goi") or "").partition(".")
+                if cid and cap:
+                    pham += _soat_mot_loi_goi(
+                        cid, cap, set((mong.get("truong") or {}).keys()), hd,
+                        o_dau, soat_thieu=False)
+            for cam in ca.get("khongDuocGoi") or []:
+                cid, _, cap = cam.partition(".")
+                if cid and cap:
+                    pham += _soat_mot_loi_goi(cid, cap, set(), hd, o_dau,
+                                              soat_thieu=False)
+    return pham
+
+
+def soat_sql(tep: dict) -> list:
+    """Câu SQL không được ghép từ chuỗi động.
+
+    VÌ SAO SOÁT: dữ liệu vào hệ này là chữ admin gõ trên Telegram — có dấu nháy,
+    dấu chấm phẩy, dấu gạch, đủ cả. Ghép thẳng vào câu SQL thì một ghi chú
+    chứa dấu nháy đủ làm hỏng truy vấn, và trong trường hợp xấu hơn là hỏng
+    bảng. Đo 2026-08-16: 136 lời gọi `execute` trong hệ, chỉ 2 chỗ dùng
+    f-string và cả hai đều là tên cột/hằng nội bộ — tức là hôm nay hệ SẠCH.
+    Luật này giữ cho câu đó còn đúng vào lần thêm mã tiếp theo.
+
+    Cho qua khi phần nội suy là HẰNG viết hoa (BUSY_TIMEOUT_MS…) vì hằng không
+    đến từ người dùng. Trường hợp buộc phải ghép động — tên cột, sqlite không
+    cho đặt tham số ở vị trí đó — thì đánh dấu `# sql-an-toan: <lý do>` ngay
+    trên dòng, và phải chặn bằng danh sách trắng ở nơi gọi.
+    """
+    pham = []
+    for rel, p in sorted(tep.items()):
+        try:
+            nguon = open(p, encoding="utf-8").read()
+            cay = ast.parse(nguon)
+        except (SyntaxError, OSError):
+            continue
+        dong_nguon = nguon.splitlines()
+        for n in ast.walk(cay):
+            if not (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                    and n.func.attr in ("execute", "executemany", "executescript")
+                    and n.args and isinstance(n.args[0], ast.JoinedStr)):
+                continue
+            # Nhìn lên vài dòng: chú thích giải thích lý do thường dài hơn một
+            # dòng, và bắt người ta viết cụt lại chỉ để lọt qua bộ soát là sai
+            # hướng — cái cần là lý do đọc hiểu được.
+            quanh = dong_nguon[max(0, n.lineno - 4):n.lineno]
+            if any("sql-an-toan" in d for d in quanh):
+                continue
+            dong_ = [x for x in n.args[0].values
+                     if isinstance(x, ast.FormattedValue)]
+            xau = [x for x in dong_
+                   if not (isinstance(x.value, ast.Name) and x.value.id.isupper())]
+            if xau:
+                pham.append(
+                    f"SQL · {rel}:{n.lineno}: câu SQL ghép bằng f-string. Giá trị "
+                    "phải đi qua tham số '?'; buộc phải ghép tên cột thì ghi "
+                    "'# sql-an-toan: <lý do>' ngay trên dòng.")
     return pham
 
 
@@ -223,6 +299,7 @@ def soat(tep: dict, canh: dict) -> list:
                 if dong.strip().startswith(("import ", "from ")) and "companies" in dong:
                     pham.append(f"C2 · {rel} import thẳng vào company: {dong.strip()[:60]}")
     pham += soat_ten_truong(tep)
+    pham += soat_sql(tep)
     return pham
 
 

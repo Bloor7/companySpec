@@ -2,6 +2,8 @@
 
 Trợ lý cá nhân dùng riêng cho một người (admin). Hiến pháp đầy đủ ở
 [PRINCIPLES.md](PRINCIPLES.md) — file này chỉ là **bản đồ và luật đi đường**.
+Đối chiếu với cách bên ngoài dựng harness, và các việc còn thiếu:
+[HARNESS.md](HARNESS.md) — tham khảo, không phải luật.
 
 Trả lời admin **bằng tiếng Việt**, xưng "tớ", gọi admin là "đại ca".
 
@@ -59,6 +61,7 @@ Mỗi dòng là một bug đã tốn công lần ra. Trước khi viết mã đ�
 | Bẫy | Biểu hiện | Luật |
 |---|---|---|
 | **Sai tên trường đầu vào** | Gọi company bằng tên trường không có trong `companySpec.yaml` → `rejected`. Báo cáo tối in "thu 0đ · chi 0đ" suốt nhiều tuần | Tên trường lấy từ manifest, KHÔNG suy từ company khác — chúng không thống nhất. **`codemap --check` bắt được** |
+| **Mảng object mà danh mục chỉ ghi "array"** | CEO gửi `["chuỗi"]` thay vì `[{...}]` → bị chặn → gọi lại. Một việc tốn 4 lời gọi thay vì 2. Kết quả cuối vẫn đúng nên không ai để ý | Danh mục trong prompt phải kể tên trường bên trong (`gateway.danh_muc_block`). **Ca thử `viec-vat-vao-todo` canh chỗ này** |
 | **Nuốt lỗi thành giá trị hợp lệ** | `or {}`, `or 0`, `except: return ""` → số 0 trông y hệt "hôm nay không tiêu gì" | **O10** |
 | **Chi phí phiên hỏng ghi $0** | Cầu dao càng mù khi hệ càng hỏng | **L7.1** |
 | **Timeout bằng ngân sách** | Timeout HTTP = `maxDurationSec` → dispatcher giết tiến trình trước khi company kịp báo lỗi tử tế | Timeout phải nhỏ hơn HẲN ngân sách |
@@ -80,6 +83,20 @@ python3 ops/dispatch.py list                    # danh mục company thật
 python3 backOffice/src/backoffice.py usage      # hạn mức còn bao nhiêu
 python3 backOffice/src/backoffice.py report --days 3   # lỗi gần đây, kèm lý do CEO chết
 ```
+
+**Sửa `ceo/SYSTEM.md` thì chạy ca thử**, đừng nghiệm thu bằng cảm giác:
+
+```bash
+python3 ops/evals/run.py --liet-ke      # xem có ca nào, không tốn gì
+python3 ops/evals/run.py --only chi-ck  # một ca ≈ $0,02–0,10
+python3 ops/evals/run.py                # cả bộ — tốn tiền thật, xem trước bằng --liet-ke
+```
+
+Nó đo **chuỗi lời gọi CEO bắn ra**, thứ không nhìn bằng mắt được — chứ không đo
+câu chữ. Company không hề chạy: dispatcher giả nằm ở `ops/evals/shim/`, bộ chạy
+chỉ đổi thư mục làm việc nên cổng thật không có thêm cờ nào để lỡ tay dùng nhầm.
+Model không tất định — một ca trượt một lần chưa phải bằng chứng, chạy lại vài
+lần rồi hãy sửa prompt.
 
 **Đo trước khi chốt.** Mọi quyết định kiến trúc lớn trong dự án này đều đến từ
 một phép đo, không từ suy luận trên bàn. Chưa đo thì nói rõ là chưa đo.
