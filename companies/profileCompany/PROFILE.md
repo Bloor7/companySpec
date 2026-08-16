@@ -11,3 +11,4 @@
 
 ## bối cảnh
 - (p2) Có web panharmon.com, hướng kinh doanh: SEO ngách giải mộng + quảng cáo, kết hợp làm content TikTok/Reels/YouTube Shorts để kiếm tiền view và affiliate
+- (p4) Quản lý khách sạn nhỏ ở Đà Lạt. Lương = 10% doanh thu khách sạn. Có thêm thu nhập từ bán mì, nước ngọt và cho thuê xe máy cá nhân giá 120.000đ/ngày.
