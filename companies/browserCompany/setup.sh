@@ -62,6 +62,12 @@ echo
 echo "Còn một việc NỮA: chọn model, khai vào ops/.env. Hai đường, chọn một."
 echo
 echo "  A· MODEL LOCAL — không tốn đồng nào, ưu tiên dùng:"
+echo "     ĐO THẬT 2026-08-17 trên GTX 1650 4GB:"
+echo "       qwen2.5:3b  ✓ CHẠY ĐƯỢC — việc đơn giản mất 139-230 giây"
+echo "       qwen3:4b    ✗ KHÔNG — sinh phần 'suy nghĩ' quá dài, browser-use"
+echo "                     bỏ cuộc sau 75 giây mỗi lần gọi model"
+echo "     Model chữ thuần thì runner tự TẮT ảnh chụp màn hình; không tắt thì"
+echo "     mỗi bước lỗi 400 multimodal và agent chạy vòng cho tới hết bước."
 echo "       BROWSER_LLM_BASE_URL=http://$(ip route show default 2>/dev/null | awk '{print $3}'):11434/v1"
 echo "       BROWSER_LLM_MODEL=qwen3:8b"
 echo "     Ollama/LM Studio chạy trên Windows phải cho WSL gọi vào được:"

@@ -128,8 +128,21 @@ async def chay(yc: dict) -> dict:
         "điền thông tin cá nhân, không tải tệp."
     )
 
+    # TẮT ẢNH CHỤP MÀN HÌNH KHI CHẠY MODEL LOCAL.
+    #
+    # browser-use mặc định gửi kèm screenshot mỗi bước để model "nhìn" trang.
+    # Model chữ thuần thì từ chối thẳng: đo được 2026-08-17 với qwen3:4b —
+    # mỗi bước trả `400 Multimodal data provided, but model does not support
+    # multimodal requests`, agent thử lại 6 lần rồi hết bước và trả về rỗng.
+    # Nhìn từ ngoài thì y hệt "model quá dốt", nên suýt kết luận sai về nó.
+    #
+    # Không có ảnh thì agent làm việc bằng cây DOM — đủ cho việc đọc dữ liệu,
+    # chỉ kém khi trang bắt phải nhìn mới hiểu (biểu đồ, canvas).
+    # Gemini có nhìn được ảnh nên giữ nguyên.
+    dung_anh = ton_tien   # hiện chỉ Gemini là loại nhìn được ảnh
     try:
-        agent = Agent(task=nhiem_vu, llm=llm, browser_profile=profile)
+        agent = Agent(task=nhiem_vu, llm=llm, browser_profile=profile,
+                      use_vision=dung_anh)
     except TypeError as exc:
         return {"loi": f"Agent không nhận tham số như mong đợi (thư viện đổi API?): {exc}"}
 

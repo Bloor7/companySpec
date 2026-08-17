@@ -173,9 +173,9 @@ def duyet_web(inp: dict):
     try:
         proc = subprocess.run(
             [VENV_PY, RUNNER], input=json.dumps(yeu_cau, ensure_ascii=False),
-            capture_output=True, text=True, env=env_con, timeout=280)
+            capture_output=True, text=True, env=env_con, timeout=560)
     except subprocess.TimeoutExpired:
-        raise TimeoutError("Quá 280 giây — cắt. Việc có thể đã làm được một phần.")
+        raise TimeoutError("Quá 560 giây — cắt. Việc có thể đã làm được một phần.")
 
     if proc.returncode != 0:
         raise RuntimeError(f"runner hỏng: {proc.stderr.strip()[:300] or 'không nói gì'}")

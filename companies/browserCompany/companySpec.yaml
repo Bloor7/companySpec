@@ -59,7 +59,11 @@ capabilities:
       Câu hỏi tra cứu thường thì gọi searchCompany.traNhanh — rẻ hơn nhiều lần
       và nhanh hơn hẳn. TỐN TIỀN THẬT mỗi lần chạy.
     riskTier: read                 # không đổi gì của admin; nhưng TỐN TIỀN (L8)
-    maxDurationSec: 300
+    # ĐO THẬT 2026-08-17 với model local qwen2.5:3b trên GTX 1650, việc đơn
+    # giản nhất (mở example.com, đọc h1): 139 giây và 230 giây cho hai lần chạy
+    # giống nhau. Nên 300 là quá sát; để 600 và cắt tiến trình con ở 560
+    # (main.py) — timeout phải nhỏ hơn HẲN ngân sách, không được bằng.
+    maxDurationSec: 600
     # L8 — tiền thật. Dispatcher sẽ hỏi duyệt MỌI lần (kể cả `read`), cấm
     # whitelist, và chặn khi quá trần tháng ở registry/gateway.yaml.
     paidApi:
