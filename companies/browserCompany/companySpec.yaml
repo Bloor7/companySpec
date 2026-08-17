@@ -104,3 +104,55 @@ capabilities:
         # `is_successful()`, và coi "không chắc" là CHƯA XONG.
         hetBuocGiuaChung: { type: boolean }
         coLoi: { type: boolean }
+
+  - name: kiemTraTrang
+    description: >
+      Mở một trang bằng trình duyệt thật và làm theo KỊCH BẢN ĐÃ ĐỊNH — điền ô,
+      bấm nút, tìm chữ, xem trang có gọi API không. KHÔNG dùng LLM nên nhanh
+      (~20 giây), MIỄN PHÍ, và cho kết quả GIỐNG NHAU mỗi lần chạy.
+      Dùng khi đã biết trước cần bấm gì: canh trang còn sống, kiểm form sau mỗi
+      lần deploy, theo dõi một con số cố định. Không biết trước phải làm gì thì
+      mới gọi duyetWeb (chậm hơn hai chục lần và tốn tiền).
+    riskTier: read
+    maxDurationSec: 90
+    # CỐ Ý KHÔNG CÓ paidApi: kịch bản cứng không gọi model nào, không tốn một
+    # đồng nào. Đây là lý do nó dùng được cho việc định kỳ (S3 — cron chỉ được
+    # đọc), còn duyetWeb thì không.
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [url]
+      properties:
+        url:      { type: string, minLength: 8, maxLength: 500 }
+        # Bộ chọn CSS của ô cần điền, ví dụ "textarea".
+        dienVao:  { type: string, maxLength: 200 }
+        noiDung:  { type: string, maxLength: 2000 }
+        # Bộ chọn CSS của nút, ví dụ "button.btn-primary".
+        bamNut:   { type: string, maxLength: 200 }
+        # Nút thứ mấy trong số các nút khớp. Trang thật hay có nút header TRÙNG
+        # TÊN với nút trong form; bấm nhầm thì không có gì xảy ra mà cũng không
+        # báo lỗi — đã cắn thật trên panharmon.com ngày 2026-08-17.
+        nutThu:   { type: integer, minimum: 0, maximum: 30 }
+        choMs:    { type: integer, minimum: 0, maximum: 30000 }
+        # Những chữ cần dò trên trang sau khi thao tác xong, ví dụ
+        # ["đăng nhập", "hết lượt"] để biết trang chặn ở đâu.
+        timChu:
+          type: array
+          maxItems: 10
+          items: { type: string, minLength: 1, maxLength: 100 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [maHttp, tieuDe, buocDaLam]
+      properties:
+        maHttp:      { type: integer }
+        tieuDe:      { type: string }
+        soNut:       { type: integer }
+        soOnhap:     { type: integer }
+        # Số ký tự trang tăng thêm sau khi bấm. 0 nghĩa là trang KHÔNG phản ứng
+        # — dấu hiệu bấm nhầm nút, hoặc nút hỏng.
+        chuThayDoi:  { type: integer }
+        timChu:      { type: object }
+        goiApi:      { type: array }
+        buocDaLam:   { type: array }
+        trichDoan:   { type: string }

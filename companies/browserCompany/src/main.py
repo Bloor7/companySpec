@@ -41,6 +41,7 @@ import db  # noqa: E402
 STORE = os.path.join(HERE, "..", "store.sqlite")
 VENV_PY = os.path.join(HERE, "..", ".venv", "bin", "python")
 RUNNER = os.path.join(HERE, "runner.py")
+KICHBAN = os.path.join(HERE, "kichban.py")
 
 # Trần cứng. Manifest cho khai tới 20, nhưng con số cuối cùng là min của hai.
 BUOC_TRAN = 20
@@ -211,7 +212,56 @@ def duyet_web(inp: dict):
     )
 
 
-HANDLERS = {"duyetWeb": duyet_web}
+def kiem_tra_trang(inp: dict):
+    """Kịch bản CỨNG — không LLM, không tốn tiền, kết quả lặp lại được.
+
+    Dùng chung hàng rào tên miền với duyetWeb: kịch bản do CEO dựng nên vẫn có
+    thể trỏ vào chỗ không nên trỏ.
+    """
+    chuan_hoa_mien({"urlBatDau": inp["url"]})   # ném ValueError nếu bị cấm
+
+    if not os.path.isfile(VENV_PY):
+        raise EnvironmentError(
+            "Chưa dựng môi trường cho browserCompany. "
+            "Dựng bằng: bash companies/browserCompany/setup.sh")
+
+    env_con = {
+        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        "HOME": os.environ.get("HOME", ""),
+        "LANG": os.environ.get("LANG", "C.UTF-8"),
+        "PYTHONIOENCODING": "utf-8",
+    }
+    try:
+        proc = subprocess.run(
+            [VENV_PY, KICHBAN], input=json.dumps(inp, ensure_ascii=False),
+            capture_output=True, text=True, env=env_con, timeout=80)
+    except subprocess.TimeoutExpired:
+        raise TimeoutError("Quá 80 giây — cắt. Trang có thể đang rất chậm.")
+
+    if proc.returncode != 0:
+        raise RuntimeError(f"kịch bản hỏng: {proc.stderr.strip()[:300] or 'không nói gì'}")
+    kq = json.loads(proc.stdout)
+    if kq.get("loi"):
+        raise RuntimeError(kq["loi"][:300])
+
+    tim = kq.get("timChu") or {}
+    thay = [t for t, co in tim.items() if co]
+    canh = f" · thấy chữ: {', '.join(thay)}" if thay else ""
+    # Trang không nhúc nhích sau khi bấm là dấu hiệu bấm nhầm nút — nói ra,
+    # đừng để CEO tưởng đã thao tác xong.
+    if inp.get("bamNut") and kq.get("chuThayDoi") == 0:
+        canh += " · TRANG KHÔNG PHẢN ỨNG sau khi bấm (bấm nhầm nút?)"
+    return (
+        kq,
+        f'HTTP {kq.get("maHttp")} · "{(kq.get("tieuDe") or "")[:50]}" · '
+        f'{kq.get("soNut")} nút, {kq.get("soOnhap")} ô nhập{canh}',
+        [{"type": "web.browse", "target": inp["url"],
+          "idempotencyKey": f'kiemtra|{inp["url"][:80]}', "reversible": True}],
+        {"paidVnd": 0, "paidProvider": "không dùng model"},
+    )
+
+
+HANDLERS = {"duyetWeb": duyet_web, "kiemTraTrang": kiem_tra_trang}
 
 
 def main() -> int:
