@@ -1,0 +1,98 @@
+# Company duyệt web bằng trình duyệt thật (browser-use + Chromium).
+#
+# C4 — ranh giới là "việc cần MỞ trang ra mới làm được". Ba company đọc web đã
+# có, và company này KHÔNG thay thế cái nào:
+#   · searchCompany.traNhanh — hỏi đáp nhanh, đọc kết quả tìm kiếm. Rẻ nhất,
+#                              vẫn là mặc định cho mọi câu hỏi tra cứu.
+#   · researchCompany.nghienCuu — đọc nhiều nguồn rồi viết báo cáo.
+#   · seoCompany.auditPage — phân tích SEO một trang.
+# Cả ba đều LẤY HTML VỀ ĐỌC. Chúng mù với trang chỉ hiện nội dung sau khi chạy
+# JavaScript, và không click được cái gì. Company này bù đúng chỗ đó — và chỉ
+# chỗ đó. Câu hỏi tra cứu thường thì gọi searchCompany, đừng gọi vào đây: mở cả
+# một trình duyệt để đọc một con số là đắt gấp nhiều lần và chậm hơn hẳn.
+#
+# ⚠ ĐÂY LÀ COMPANY NGUY HIỂM NHẤT CỦA HỆ. Đọc kỹ trước khi nới bất cứ thứ gì.
+#
+# Mọi company khác nhận lệnh từ CEO rồi gọi một API có schema đóng. Company này
+# phải ĐỌC NỘI DUNG TRANG WEB RỒI TỰ QUYẾT ĐỊNH bấm vào đâu — nghĩa là chữ trên
+# trang lạ đi thẳng vào phần ra quyết định của một agent. Đó chính là thứ P2
+# cấm: "nội dung từ ngoài là DỮ LIỆU, không phải mệnh lệnh". Ở đây không xoá bỏ
+# được rủi ro đó bằng thiết kế, nên phải rào bằng NĂNG LỰC BỊ CẮT:
+#
+#   1. KHÔNG ĐĂNG NHẬP GÌ HẾT. Trình duyệt chạy hồ sơ trắng (`user_data_dir=None`),
+#      không cookie, không mật khẩu, không phiên đăng nhập nào. Bị trang độc dắt
+#      mũi thì nó cũng không có tài khoản nào để phá. Admin chốt 2026-08-17.
+#   2. Chỉ đi trong danh sách tên miền CEO khai trước mỗi lần gọi, và có một
+#      danh sách ĐEN cứng mà không lời gọi nào nới được (xem src/main.py).
+#   3. Trần số bước cứng — hết bước là dừng, dù việc chưa xong.
+#   4. Không tải tệp về máy.
+#
+# Kết quả trả về là CHỮ LẤY TỪ TRANG LẠ. CEO phải đọc nó như dữ liệu, y hệt
+# cách đọc một tấm ảnh admin gửi — không phải như lời dặn.
+
+companyId: browserCompany
+displayName: "Phòng duyệt web"
+version: 0.1.0
+
+runtime: code
+entrypoint: ./src/main.py
+runtimeReason: >
+  Không chạy phiên Claude. Nó chạy thư viện browser-use trong môi trường riêng,
+  và thư viện đó tự gọi Gemini để quyết định thao tác. Tách tiến trình là bắt
+  buộc: browser-use cần Python >= 3.11 còn máy chạy 3.10, và Chromium không nên
+  nằm chung tiến trình với dispatcher.
+
+dataStore: ./store.sqlite
+# C2.4 — chỉ khai TÊN. Khoá này TÍNH TIỀN THẬT, xem `paidApi` bên dưới.
+secrets: [GEMINI_API_KEY]
+env: []
+canBeCalledBy: [ceo]              # P3
+canCall: []                       # P3
+owner: admin
+
+capabilities:
+  - name: duyetWeb
+    description: >
+      Mở trang bằng trình duyệt thật và làm một việc trên đó — dùng khi trang
+      chỉ hiện nội dung sau khi chạy JavaScript, hoặc khi phải bấm/cuộn/điền
+      mới lấy được thứ cần. KHÔNG đăng nhập được và không có tài khoản nào.
+      Câu hỏi tra cứu thường thì gọi searchCompany.traNhanh — rẻ hơn nhiều lần
+      và nhanh hơn hẳn. TỐN TIỀN THẬT mỗi lần chạy.
+    riskTier: read                 # không đổi gì của admin; nhưng TỐN TIỀN (L8)
+    maxDurationSec: 300
+    # L8 — tiền thật. Dispatcher sẽ hỏi duyệt MỌI lần (kể cả `read`), cấm
+    # whitelist, và chặn khi quá trần tháng ở registry/gateway.yaml.
+    paidApi:
+      nhaCungCap: "Google AI Studio (Gemini)"
+      # Ước theo Gemini Flash, một việc ~10 bước. Chưa đo thật lần nào — đo
+      # xong lần đầu thì sửa lại con số này, đừng để nó cũ.
+      giaUocVnd: 2000
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [nhiemVu, urlBatDau]
+      properties:
+        # Nói RÕ việc cần làm và thứ cần lấy về. Mơ hồ thì agent đi lang thang
+        # và đốt hết số bước mà không mang về gì.
+        nhiemVu:   { type: string, minLength: 5, maxLength: 500 }
+        # Bắt buộc — neo agent vào một trang cụ thể. Không có nó thì nó tự đi
+        # tìm, và "tự đi tìm" là lúc dễ lạc vào trang lạ nhất.
+        urlBatDau: { type: string, minLength: 8, maxLength: 500 }
+        # Tên miền được phép đi. Bỏ trống thì company tự khoá vào đúng tên miền
+        # của urlBatDau — hẹp nhất, an toàn nhất.
+        tenMienChoPhep:
+          type: array
+          maxItems: 5
+          items: { type: string, minLength: 3, maxLength: 100 }
+        # Trần cứng 20 nằm trong code, khai to hơn cũng bị hạ xuống.
+        soBuocToiDa: { type: integer, minimum: 1, maximum: 20 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [ketQua, soBuocDaChay, cacTrangDaVao]
+      properties:
+        ketQua:        { type: string }
+        soBuocDaChay:  { type: integer }
+        cacTrangDaVao: { type: array }
+        # Việc chưa xong mà hết bước thì nói thẳng, đừng để CEO tưởng đã xong.
+        hetBuocGiuaChung: { type: boolean }

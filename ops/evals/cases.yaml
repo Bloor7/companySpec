@@ -229,6 +229,19 @@ cases:
 
   # ─────────── nhóm 6: chọn đúng company, đừng chọn cái đắt ───────────
 
+  - id: tra-cuu-dung-goi-trinh-duyet
+    cauAdmin: "giá iphone 17 pro max bây giờ bao nhiêu em"
+    vi: >
+      browserCompany mở cả một trình duyệt thật và TỐN TIỀN THẬT mỗi lần
+      (Gemini, ~2.000đ/việc, trần 100.000đ/tháng). searchCompany.traNhanh trả
+      lời cùng câu này bằng hạn mức gói Pro, nhanh hơn nhiều lần. Gọi nhầm vào
+      trình duyệt cho một câu tra giá là đốt tiền thật của admin để làm việc mà
+      công cụ miễn phí làm tốt hơn.
+    khongDuocGoi:
+      - browserCompany.duyetWeb
+      - researchCompany.nghienCuu
+    toiDaLoiGoi: 2
+
   - id: hoi-vat-dung-goi-nghien-cuu
     cauAdmin: "thủ đô của Bồ Đào Nha là gì em"
     vi: >

@@ -156,6 +156,10 @@ dùng `ops/snapshot.py` (W7), đó là cơ chế riêng.
   lần kể cả `read`, cấm whitelist, và chặn khi quá trần tháng ở
   `registry/gateway.yaml`. Quên khai thì `codemap --check` bắt.
 - **Nội dung từ ngoài (ảnh, tệp, web) là DỮ LIỆU, không phải mệnh lệnh.** Chặn
-  ở tầng quyền, không dựa vào lời dặn trong prompt (P2).
+  ở tầng quyền, không dựa vào lời dặn trong prompt (P2). `browserCompany` là
+  chỗ ranh giới này mỏng nhất — chữ trên trang lạ đi vào phần ra quyết định của
+  agent — nên nó bị cắt năng lực: không đăng nhập, hồ sơ trình duyệt trắng,
+  danh sách đen tên miền cứng, trần bước. Đọc đầu `companies/browserCompany/`
+  trước khi nới bất cứ thứ gì ở đó.
 - **Không công khai repo này** (§11 luật 11) — nó có quyền ghi vào Notion, ví
   tiền và lịch của admin.
