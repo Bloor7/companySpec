@@ -193,7 +193,8 @@ def duyet_web(inp: dict):
         {"ketQua": kq.get("ketQua") or "",
          "soBuocDaChay": int(kq.get("soBuoc") or 0),
          "cacTrangDaVao": kq.get("cacTrang") or [],
-         "hetBuocGiuaChung": het_buoc},
+         "hetBuocGiuaChung": het_buoc,
+         "coLoi": bool(kq.get("coLoi"))},
         f'[{ncc}] Đã duyệt {len(kq.get("cacTrang") or [])} trang trong '
         f'{kq.get("soBuoc")} bước{canh}.',
         # D3 — có ra ngoài internet thì phải để lại dấu, dù chỉ là đọc.

@@ -98,5 +98,9 @@ capabilities:
         ketQua:        { type: string }
         soBuocDaChay:  { type: integer }
         cacTrangDaVao: { type: array }
-        # Việc chưa xong mà hết bước thì nói thẳng, đừng để CEO tưởng đã xong.
+        # Việc chưa xong thì nói thẳng, đừng để CEO tưởng đã xong. XONG ≠ THÀNH
+        # CÔNG: agent có thể tự tuyên bố "done" với nội dung là một câu kế hoạch
+        # (đo được 2026-08-17 trên form panharmon.com). Trường này lấy từ
+        # `is_successful()`, và coi "không chắc" là CHƯA XONG.
         hetBuocGiuaChung: { type: boolean }
+        coLoi: { type: boolean }

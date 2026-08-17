@@ -171,9 +171,19 @@ async def chay(yc: dict) -> dict:
         # thì sổ tiền thật thành số bịa, và trần tháng sẽ chặn oan.
         "nhaCungCap": nha_cung_cap,
         "tonTienThat": ton_tien,
-        # Hết bước mà chưa xong: nói ra. Im lặng ở đây thì CEO báo admin "xong
-        # rồi" cho một việc dở dang.
-        "hetBuocGiuaChung": not bool(goi_an_toan("is_done", False)),
+        # XONG ≠ THÀNH CÔNG. Đây là chỗ đã cắn thật.
+        #
+        # `is_done()` chỉ nói agent đã gọi hành động "done", không nói việc có
+        # ra kết quả hay không. Đo 2026-08-17 trên form của panharmon.com:
+        # qwen2.5:3b kẹt vòng lặp, không bấm nổi nút, rồi tự gọi "done" với nội
+        # dung là một câu KẾ HOẠCH — "Refresh the browser state and try locating
+        # and clicking the button". Company khi đó báo về "xong hẳn", và CEO sẽ
+        # nói với admin là đã gửi form. Chưa gửi gì cả.
+        #
+        # `is_successful()` trả None khi agent không tự khẳng định được — coi
+        # None là CHƯA XONG, vì nghi ngờ thì phải nghiêng về phía nói thật.
+        "hetBuocGiuaChung": goi_an_toan("is_successful", None) is not True,
+        "coLoi": bool(goi_an_toan("has_errors", False)),
     }
 
 
