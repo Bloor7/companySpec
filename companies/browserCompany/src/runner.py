@@ -85,6 +85,25 @@ def chon_llm():
                       "Sai tên model thì đổi BROWSER_GEMINI_MODEL trong ops/.env."), True
 
 
+def doc_usage(history) -> dict:
+    """Moi số token và chi phí ra khỏi history, nếu thư viện có báo.
+
+    Trả về dict rỗng khi không đọc được — main.py sẽ rơi về giá ước trong
+    manifest và ghi rõ trong sổ là ƯỚC. Thiếu con số thật thì kém chính xác,
+    còn ĐOÁN mà ghi như thật mới là thứ không được phép (L8).
+    """
+    u = getattr(history, "usage", None)
+    if u is None:
+        return {}
+    lay = lambda *ten: next(
+        (v for t in ten if isinstance(v := getattr(u, t, None), (int, float))), None)
+    return {k: v for k, v in {
+        "tokenVao": lay("total_prompt_tokens", "prompt_tokens", "input_tokens"),
+        "tokenRa": lay("total_completion_tokens", "completion_tokens", "output_tokens"),
+        "chiPhiUsd": lay("total_cost", "cost", "total_cost_usd"),
+    }.items() if v is not None}
+
+
 def loi(msg: str) -> int:
     json.dump({"loi": msg}, sys.stdout, ensure_ascii=False)
     print()
@@ -179,6 +198,10 @@ async def chay(yc: dict) -> dict:
         # thì sổ tiền thật thành số bịa, và trần tháng sẽ chặn oan.
         "nhaCungCap": nha_cung_cap,
         "tonTienThat": ton_tien,
+        # L8 — số liệu dùng model, để khai TIỀN THẬT thay vì ghi giá ước.
+        # `history.usage` có từ bản 0.13; đọc phòng thủ vì đây là chỗ thư viện
+        # hay đổi, và thiếu nó thì chỉ mất độ chính xác chứ không hỏng việc.
+        **doc_usage(history),
         # XONG ≠ THÀNH CÔNG. Đây là chỗ đã cắn thật.
         #
         # `is_done()` chỉ nói agent đã gọi hành động "done", không nói việc có

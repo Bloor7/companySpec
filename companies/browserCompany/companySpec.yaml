@@ -68,9 +68,12 @@ capabilities:
     # whitelist, và chặn khi quá trần tháng ở registry/gateway.yaml.
     paidApi:
       nhaCungCap: "Google AI Studio (Gemini)"
-      # Ước theo Gemini Flash, một việc ~10 bước. Chưa đo thật lần nào — đo
-      # xong lần đầu thì sửa lại con số này, đừng để nó cũ.
-      giaUocVnd: 2000
+      # ĐO THẬT 2026-08-17 với gemini-flash-latest, việc đơn giản 4 bước:
+      # 7.165 token vào + 1.008 token ra = 111đ. Việc nhiều bước hơn thì tăng
+      # gần như tuyến tính, nên để 300 làm mức ước cho một việc trung bình.
+      # Con số THẬT được company tính lại từ token sau mỗi lần chạy và ghi vào
+      # sổ chiTieuNgoai; giá ở đây chỉ dùng cho nút duyệt và cho việc soát trần.
+      giaUocVnd: 300
     inputSchema:
       type: object
       additionalProperties: false

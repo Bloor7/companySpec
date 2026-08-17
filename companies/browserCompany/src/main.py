@@ -135,6 +135,33 @@ def chuan_hoa_mien(inp: dict) -> list:
     return ra
 
 
+# Giá Gemini Flash, đô-la trên MỘT TRIỆU token, và tỷ giá quy ra đồng.
+#
+# ĐÂY LÀ QUY ĐỔI, KHÔNG PHẢI HOÁ ĐƠN. Thư viện không trả về chi phí cho Gemini
+# (đo 2026-08-17: `chiPhiUsd` luôn 0.0), nên phải tự nhân từ token. Hai điều
+# làm con số này chỉ là ước tính TRẦN:
+#   · Google AI Studio có hạn mức MIỄN PHÍ hằng ngày. Nằm trong đó thì thực tế
+#     mất 0đ, mà ở đây vẫn tính tiền — cố ý, vì thà ghi thừa còn hơn để một
+#     khoản chi biến mất khỏi sổ.
+#   · Bảng giá đổi được bất cứ lúc nào. Đối chiếu với hoá đơn thật của Google
+#     mỗi tháng; lệch nhiều thì sửa ở đây.
+GIA_VAO_USD_1M = 0.30
+GIA_RA_USD_1M = 2.50
+TY_GIA_VND = 26000
+
+
+def tien_tu_token(kq: dict):
+    """Đổi token đã dùng ra đồng. Không có số token thì trả None — để dispatcher
+    ghi theo giá ước trong manifest và nói rõ trong sổ rằng đó là ƯỚC."""
+    if not kq.get("tonTienThat"):
+        return 0                      # chạy model local: không tốn gì
+    vao, ra = kq.get("tokenVao"), kq.get("tokenRa")
+    if vao is None and ra is None:
+        return None
+    usd = ((vao or 0) * GIA_VAO_USD_1M + (ra or 0) * GIA_RA_USD_1M) / 1_000_000
+    return round(usd * TY_GIA_VND)
+
+
 def duyet_web(inp: dict):
     mien = chuan_hoa_mien(inp)
     so_buoc = min(int(inp.get("soBuocToiDa") or BUOC_MAC_DINH), BUOC_TRAN)
@@ -188,6 +215,7 @@ def duyet_web(inp: dict):
     if kq.get("loi"):
         raise RuntimeError(kq["loi"][:300])
 
+    tien_vnd = tien_tu_token(kq)
     het_buoc = bool(kq.get("hetBuocGiuaChung"))
     canh = " (HẾT BƯỚC giữa chừng — việc có thể chưa xong)" if het_buoc else ""
     ncc = kq.get("nhaCungCap") or "?"
@@ -208,8 +236,7 @@ def duyet_web(inp: dict):
         # vào output là bị chính cổng của mình từ chối (C2.3).
         # Chạy local thì paidVnd=0 — để trống thì dispatcher ghi theo giá ước
         # trong manifest, và sổ tiền thật sẽ đầy những khoản chưa từng tiêu.
-        {"paidVnd": 0 if not kq.get("tonTienThat") else None,
-         "paidProvider": ncc},
+        {"paidVnd": tien_vnd, "paidProvider": ncc},
     )
 
 
