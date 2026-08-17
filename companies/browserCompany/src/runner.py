@@ -70,11 +70,19 @@ def chon_llm():
         return None, ("Chưa cấu hình model nào. Hoặc cắm model local "
                       "(BROWSER_LLM_BASE_URL + BROWSER_LLM_MODEL trong ops/.env), "
                       "hoặc đặt GEMINI_API_KEY — API tính tiền thật."), False
+    # Key của Google AI Studio KHÔNG gắn với model nào — nó mở cả họ Gemini,
+    # và chọn model là việc của code. Nên để đổi được bằng cấu hình, đừng bắt
+    # sửa mã: giá và tốc độ giữa các bản chênh nhau nhiều lần.
+    #   gemini-flash-latest      rẻ và nhanh nhất, mặc định ở đây
+    #   gemini-2.5-flash         bản cố định, không đổi dưới chân
+    #   gemini-2.5-pro           khá hơn, đắt hơn nhiều
+    model = (os.environ.get("BROWSER_GEMINI_MODEL") or "gemini-flash-latest").strip()
     try:
         from browser_use import ChatGoogle
-        return ChatGoogle(model="gemini-flash-latest"), "Google AI Studio (Gemini)", True
+        return ChatGoogle(model=model), f"Google AI Studio ({model})", True
     except Exception as exc:
-        return None, f"không dựng được LLM Gemini (API thư viện đã đổi?): {exc}", True
+        return None, (f"không dựng được LLM Gemini với model '{model}': {exc}. "
+                      "Sai tên model thì đổi BROWSER_GEMINI_MODEL trong ops/.env."), True
 
 
 def loi(msg: str) -> int:

@@ -169,6 +169,7 @@ def duyet_web(inp: dict):
         "BROWSER_LLM_BASE_URL": base,
         "BROWSER_LLM_MODEL": os.environ.get("BROWSER_LLM_MODEL", ""),
         "BROWSER_LLM_API_KEY": os.environ.get("BROWSER_LLM_API_KEY", ""),
+        "BROWSER_GEMINI_MODEL": os.environ.get("BROWSER_GEMINI_MODEL", ""),
         "ANONYMIZED_TELEMETRY": "false",
     }
     try:
