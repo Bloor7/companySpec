@@ -34,6 +34,49 @@ def tim_chromium():
     return None
 
 
+def chon_llm():
+    """Chọn model. Trả về (llm, tên nhà cung cấp, có tốn tiền thật không).
+
+    ƯU TIÊN MODEL LOCAL. Máy admin có sẵn Qwen; chạy được thì việc duyệt web
+    không tốn một đồng nào và không phải hỏi ai. Chỉ khi không cấu hình local
+    mới rơi về Gemini — và lúc đó là TIỀN THẬT (L8).
+
+    Local cắm bằng biến môi trường, khai trong ops/.env:
+        BROWSER_LLM_BASE_URL=http://172.28.208.1:11434/v1   (Ollama trên Windows)
+        BROWSER_LLM_MODEL=qwen3:8b
+    Endpoint nào nói được giao thức OpenAI đều dùng được: Ollama, LM Studio,
+    llama.cpp server.
+
+    Hỏng thì trả câu lỗi ĐỌC HIỂU ĐƯỢC ở vị trí thứ hai — không được ném
+    AttributeError trần trụi ra cho admin (O10).
+    """
+    base = (os.environ.get("BROWSER_LLM_BASE_URL") or "").strip()
+    if base:
+        model = (os.environ.get("BROWSER_LLM_MODEL") or "").strip()
+        if not model:
+            return None, ("Có BROWSER_LLM_BASE_URL nhưng thiếu BROWSER_LLM_MODEL — "
+                          "phải nói rõ tên model, ví dụ qwen3:8b."), False
+        try:
+            from browser_use import ChatOpenAI
+            # Endpoint local thường không kiểm khoá, nhưng thư viện vẫn đòi có
+            # một chuỗi nào đó. "local" là giá trị vô hại, không phải khoá thật.
+            return (ChatOpenAI(model=model, base_url=base,
+                               api_key=os.environ.get("BROWSER_LLM_API_KEY") or "local"),
+                    f"local: {model}", False)
+        except Exception as exc:
+            return None, f"không cắm được model local ({base}): {exc}", False
+
+    if not os.environ.get("GEMINI_API_KEY") and not os.environ.get("GOOGLE_API_KEY"):
+        return None, ("Chưa cấu hình model nào. Hoặc cắm model local "
+                      "(BROWSER_LLM_BASE_URL + BROWSER_LLM_MODEL trong ops/.env), "
+                      "hoặc đặt GEMINI_API_KEY — API tính tiền thật."), False
+    try:
+        from browser_use import ChatGoogle
+        return ChatGoogle(model="gemini-flash-latest"), "Google AI Studio (Gemini)", True
+    except Exception as exc:
+        return None, f"không dựng được LLM Gemini (API thư viện đã đổi?): {exc}", True
+
+
 def loi(msg: str) -> int:
     json.dump({"loi": msg}, sys.stdout, ensure_ascii=False)
     print()
@@ -46,18 +89,9 @@ async def chay(yc: dict) -> dict:
     except ImportError as exc:
         return {"loi": f"chưa cài browser-use trong .venv: {exc}"}
 
-    # Chọn lớp LLM cho Gemini. Tên lớp từng đổi giữa các bản, nên thử lần lượt
-    # và nói rõ nếu không tìm được — đừng để nó chết bằng AttributeError khó hiểu.
-    llm = None
-    try:
-        from browser_use import ChatGoogle
-        llm = ChatGoogle(model="gemini-flash-latest")
-    except Exception:
-        try:
-            from browser_use.llm import ChatGoogle as CG2
-            llm = CG2(model="gemini-flash-latest")
-        except Exception as exc:
-            return {"loi": f"không dựng được LLM Gemini (API thư viện đã đổi?): {exc}"}
+    llm, nha_cung_cap, ton_tien = chon_llm()
+    if llm is None:
+        return {"loi": nha_cung_cap}   # lúc này là câu lỗi
 
     chrome = tim_chromium()
     if not chrome:
@@ -119,6 +153,11 @@ async def chay(yc: dict) -> dict:
         "ketQua": goi_an_toan("final_result", "") or "",
         "soBuoc": int(so_buoc or 0),
         "cacTrang": [str(u) for u in trang][:20],
+        # Ai đã làm việc này, và có tốn tiền thật không. main.py dùng hai trường
+        # này để khai đúng vào sổ chiTieuNgoai — chạy local mà vẫn ghi 2.000đ
+        # thì sổ tiền thật thành số bịa, và trần tháng sẽ chặn oan.
+        "nhaCungCap": nha_cung_cap,
+        "tonTienThat": ton_tien,
         # Hết bước mà chưa xong: nói ra. Im lặng ở đây thì CEO báo admin "xong
         # rồi" cho một việc dở dang.
         "hetBuocGiuaChung": not bool(goi_an_toan("is_done", False)),

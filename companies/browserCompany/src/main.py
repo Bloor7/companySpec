@@ -144,11 +144,15 @@ def duyet_web(inp: dict):
             ">= 3.11 mà máy đang chạy 3.10, nên nó dùng .venv riêng. "
             "Dựng bằng: bash companies/browserCompany/setup.sh")
 
+    # Model local (nếu admin đã cắm) hoặc Gemini. Ưu tiên local: không tốn
+    # đồng nào. Việc chọn nằm ở runner.chon_llm(); ở đây chỉ chuyển biến qua.
+    base = os.environ.get("BROWSER_LLM_BASE_URL", "")
     khoa = os.environ.get("GEMINI_API_KEY", "")
-    if not khoa:
+    if not base and not khoa:
         raise EnvironmentError(
-            "Thiếu GEMINI_API_KEY trong ops/.env — company này gọi Gemini và "
-            "đó là API TÍNH TIỀN THẬT (L8).")
+            "Chưa cấu hình model nào cho browserCompany. Hoặc cắm model local "
+            "(BROWSER_LLM_BASE_URL + BROWSER_LLM_MODEL trong ops/.env — không "
+            "tốn tiền), hoặc đặt GEMINI_API_KEY (TÍNH TIỀN THẬT, L8).")
 
     yeu_cau = {"nhiemVu": inp["nhiemVu"], "urlBatDau": inp["urlBatDau"],
                "tenMien": mien, "soBuoc": so_buoc}
@@ -161,6 +165,9 @@ def duyet_web(inp: dict):
         "PYTHONIOENCODING": "utf-8",
         "GEMINI_API_KEY": khoa,
         "GOOGLE_API_KEY": khoa,      # browser-use đọc tên này
+        "BROWSER_LLM_BASE_URL": base,
+        "BROWSER_LLM_MODEL": os.environ.get("BROWSER_LLM_MODEL", ""),
+        "BROWSER_LLM_API_KEY": os.environ.get("BROWSER_LLM_API_KEY", ""),
         "ANONYMIZED_TELEMETRY": "false",
     }
     try:
@@ -181,17 +188,25 @@ def duyet_web(inp: dict):
 
     het_buoc = bool(kq.get("hetBuocGiuaChung"))
     canh = " (HẾT BƯỚC giữa chừng — việc có thể chưa xong)" if het_buoc else ""
+    ncc = kq.get("nhaCungCap") or "?"
     return (
         {"ketQua": kq.get("ketQua") or "",
          "soBuocDaChay": int(kq.get("soBuoc") or 0),
          "cacTrangDaVao": kq.get("cacTrang") or [],
          "hetBuocGiuaChung": het_buoc},
-        f'Đã duyệt {len(kq.get("cacTrang") or [])} trang trong '
+        f'[{ncc}] Đã duyệt {len(kq.get("cacTrang") or [])} trang trong '
         f'{kq.get("soBuoc")} bước{canh}.',
         # D3 — có ra ngoài internet thì phải để lại dấu, dù chỉ là đọc.
         [{"type": "web.browse", "target": inp["urlBatDau"],
           "idempotencyKey": f'browse|{inp["urlBatDau"][:80]}',
           "reversible": True}],
+        # L8 — phần khai TIỀN THẬT, đi vào `usage` chứ KHÔNG vào `output`:
+        # outputSchema khai `additionalProperties: false` nên nhét trường lạ
+        # vào output là bị chính cổng của mình từ chối (C2.3).
+        # Chạy local thì paidVnd=0 — để trống thì dispatcher ghi theo giá ước
+        # trong manifest, và sổ tiền thật sẽ đầy những khoản chưa từng tiêu.
+        {"paidVnd": 0 if not kq.get("tonTienThat") else None,
+         "paidProvider": ncc},
     )
 
 
@@ -207,6 +222,7 @@ def main() -> int:
 
     result = {"taskId": task_id, "traceId": trace_id, "status": "failed",
               "output": None, "summary": "", "sideEffects": [], "error": None}
+    tien_khai = {}      # phần khai TIỀN THẬT, gắn vào `usage` ở cuối (L8)
 
     conn = connect()
     conn.execute(
@@ -226,12 +242,13 @@ def main() -> int:
             result.update(status="ok", output=None,
                           summary=f"[dryRun] Sẽ chạy {cap} với {preview}")
         else:
-            output, summary, side_effects = handler(inp)
+            output, summary, side_effects, tien = handler(inp)
             result.update(status="ok", output=output, summary=summary,
                           sideEffects=side_effects)
-            # L8 — khai TIỀN THẬT đã tiêu. Chưa đo được số thật từ browser-use
-            # nên để dispatcher ghi theo giá ước trong manifest; sửa chỗ này
-            # ngay khi lấy được con số thật từ thư viện.
+            # L8 — khai TIỀN THẬT. `paidVnd=0` khi chạy model local; `None` khi
+            # chạy Gemini, để dispatcher ghi theo giá ước trong manifest (chưa
+            # moi được số thật từ thư viện — đo xong lần đầu thì sửa lại đây).
+            tien_khai.update({k: v for k, v in tien.items() if v is not None})
 
     except ValueError as exc:
         result.update(status="needsInput", error=str(exc), summary=str(exc))
@@ -242,7 +259,8 @@ def main() -> int:
                       summary=f"browserCompany hỏng khi chạy {cap}.")
 
     duration = int((time.time() - started) * 1000)
-    result["usage"] = {"steps": 1, "durationMs": duration, "costUsd": 0.0}
+    result["usage"] = {"steps": 1, "durationMs": duration, "costUsd": 0.0,
+                       **tien_khai}
     conn.execute(
         "UPDATE taskLog SET status=?, summary=?, finishedAt=?, durationMs=? "
         "WHERE taskId=?",
