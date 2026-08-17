@@ -59,7 +59,16 @@ else
 fi
 
 echo
-echo "Còn một việc NỮA phải làm bằng tay: thêm khoá vào ops/.env"
-echo "  GEMINI_API_KEY=..."
-echo "Lấy ở https://aistudio.google.com/apikey — API này TÍNH TIỀN THẬT (L8),"
-echo "trần tháng đặt ở registry/gateway.yaml (đang là 100.000đ)."
+echo "Còn một việc NỮA: chọn model, khai vào ops/.env. Hai đường, chọn một."
+echo
+echo "  A· MODEL LOCAL — không tốn đồng nào, ưu tiên dùng:"
+echo "       BROWSER_LLM_BASE_URL=http://$(ip route show default 2>/dev/null | awk '{print $3}'):11434/v1"
+echo "       BROWSER_LLM_MODEL=qwen3:8b"
+echo "     Ollama/LM Studio chạy trên Windows phải cho WSL gọi vào được:"
+echo "       Ollama    → đặt biến OLLAMA_HOST=0.0.0.0 rồi khởi động lại Ollama"
+echo "       LM Studio → bật 'Serve on Local Network' trong tab Developer"
+echo
+echo "  B· GEMINI — TÍNH TIỀN THẬT (L8), chỉ dùng khi không có A:"
+echo "       GEMINI_API_KEY=..."
+echo "     Lấy ở https://aistudio.google.com/apikey · trần tháng ở"
+echo "     registry/gateway.yaml (đang là 100.000đ), mỗi lần gọi đều hỏi duyệt."
