@@ -15,7 +15,23 @@ như "trang không có gì" (O10).
 """
 import asyncio
 import json
+import os
 import sys
+
+
+def tim_chromium():
+    """Chromium riêng do setup.sh tải về, KHÔNG dùng trình duyệt của admin.
+
+    Số hiệu bản dựng đổi theo mỗi lần playwright cập nhật nên phải dò, không
+    viết cứng. Lấy bản mới nhất; `chrome-linux64` là tên thư mục của bản hiện
+    tại, `chrome-linux` là tên cũ — nhận cả hai để lần nâng cấp sau không gãy.
+    """
+    import glob
+    mau = os.path.expanduser("~/.cache/ms-playwright/chromium-*/chrome-linux*/chrome")
+    for p in sorted(glob.glob(mau), reverse=True):
+        if os.access(p, os.X_OK):
+            return p
+    return None
 
 
 def loi(msg: str) -> int:
@@ -43,6 +59,11 @@ async def chay(yc: dict) -> dict:
         except Exception as exc:
             return {"loi": f"không dựng được LLM Gemini (API thư viện đã đổi?): {exc}"}
 
+    chrome = tim_chromium()
+    if not chrome:
+        return {"loi": "không tìm thấy Chromium riêng của company. "
+                       "Chạy: bash companies/browserCompany/setup.sh"}
+
     profile = BrowserProfile(
         headless=True,
         # Hồ sơ TRẮNG: không cookie, không phiên đăng nhập nào. Đây là hàng rào
@@ -50,6 +71,14 @@ async def chay(yc: dict) -> dict:
         user_data_dir=None,
         allowed_domains=yc["tenMien"],
         downloads_path=None,          # không tải tệp về máy
+        # CHROMIUM RIÊNG, KHÔNG PHẢI TRÌNH DUYỆT CỦA ADMIN.
+        #
+        # browser-use 0.13 đổi mô hình: mặc định nó tìm Chrome/Edge ĐANG CHẠY
+        # rồi nối vào qua CDP. Tiện cho người dùng thường, nhưng ở đây là hỏng
+        # thẳng cam kết "không đăng nhập gì": trình duyệt admin đang mở có đủ
+        # cookie Notion, Gmail, ngân hàng. Trỏ hẳn sang bản Chromium tải riêng
+        # để agent chạy trong một cái máy trắng.
+        executable_path=chrome,
     )
 
     # Nhiệm vụ được bọc bằng một câu dặn cứng. Đây KHÔNG phải hàng rào an toàn

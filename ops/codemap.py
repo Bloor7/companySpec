@@ -22,7 +22,17 @@ import sys
 import yaml
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BO_QUA = (".venv-stt", "__pycache__", "plugin", ".git")
+# Thư mục KHÔNG phải mã của dự án. Bỏ qua trước khi đọc, vì hai lẽ:
+#
+#   · Báo bừa: mã thư viện người khác không tuân luật kiến trúc của dự án này,
+#     và cũng không cần tuân.
+#   · Tệ hơn — LÀM HỎNG CẢ BỘ SOÁT. Tập "module nội bộ" được suy ra từ tên file
+#     .py có trong cây thư mục; site-packages chứa hàng loạt file trùng tên
+#     thư viện chuẩn, nên `json`/`os` bỗng bị coi là module nội bộ và luật P3
+#     bắt nhầm cả company viết đúng. Đo được 2026-08-17 khi dựng .venv cho
+#     browserCompany: 810KB báo lỗi giả, trong đó có seoCompany hoàn toàn sạch.
+BO_QUA = (".venv", ".venv-stt", "venv", "node_modules", "site-packages",
+          "__pycache__", "plugin", ".git")
 
 
 def cac_tep_py() -> dict:

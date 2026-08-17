@@ -10,10 +10,18 @@
 # F4 — repo là ĐẶC TẢ, không phải môi trường: .venv và Chromium KHÔNG nằm trong
 # git (.gitignore đã chặn). Mất máy thì chạy lại script này là có lại.
 #
-# Tốn khoảng 500MB: Python riêng (~50MB) + thư viện + Chromium (~150MB).
+# VÌ SAO CÀI PLAYWRIGHT DÙ browser-use KHÔNG DÙNG NÓ NỮA: bản 0.13 điều khiển
+# trình duyệt bằng CDP (`cdp-use`) và MẶC ĐỊNH nối vào Chrome/Edge ĐANG CHẠY
+# của người dùng. Ở đây không được phép làm vậy — trình duyệt admin đang mở có
+# đủ cookie Notion, Gmail, ngân hàng, mà company này đã chốt là KHÔNG đăng nhập
+# gì hết. Nên ta chỉ mượn playwright đúng một việc: tải về một bản Chromium
+# riêng, sạch, để agent chạy trong đó (`executable_path` trong runner.py).
+#
+# Tốn khoảng 900MB: Python riêng + thư viện + Chromium.
 set -euo pipefail
 
 CTY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PY="$CTY/.venv/bin/python"
 
 echo "── 1/4 · uv (trình quản môi trường, tự tải Python riêng)"
 if ! command -v uv >/dev/null 2>&1; then
@@ -27,16 +35,29 @@ echo "   uv: $(uv --version)"
 echo "── 2/4 · .venv với Python 3.12"
 uv venv --python 3.12 "$CTY/.venv"
 
-echo "── 3/4 · browser-use"
-VIRTUAL_ENV="$CTY/.venv" uv pip install --python "$CTY/.venv/bin/python" browser-use
+echo "── 3/4 · browser-use + playwright (playwright chỉ để lấy Chromium)"
+uv pip install --python "$PY" browser-use playwright
 
-echo "── 4/4 · Chromium cho Playwright"
-"$CTY/.venv/bin/python" -m playwright install chromium --with-deps 2>/dev/null \
-  || "$CTY/.venv/bin/python" -m playwright install chromium
+echo "── 4/4 · Chromium riêng"
+"$PY" -m playwright install chromium
 
+# Chromium cần vài thư viện đồ hoạ mà WSL bản gọn không có sẵn. Kiểm THẬT bằng
+# cách chạy thử, đừng đoán theo tên bản phân phối.
+CHROME="$(ls -d "$HOME"/.cache/ms-playwright/chromium-*/chrome-linux*/chrome 2>/dev/null | sort -r | head -1 || true)"
 echo
-echo "Xong. Kiểm bằng:"
-echo "  companies/browserCompany/.venv/bin/python -c 'import browser_use; print(browser_use.__version__)'"
+if [ -n "$CHROME" ] && "$CHROME" --version >/dev/null 2>&1; then
+  echo "Chromium chạy được: $("$CHROME" --version)"
+else
+  echo "⚠ Chromium tải xong nhưng THIẾU THƯ VIỆN HỆ THỐNG, chưa chạy được."
+  echo "  Thiếu: $(ldd "$CHROME" 2>/dev/null | grep 'not found' | awk '{print $1}' | sort -u | tr '\n' ' ')"
+  echo
+  echo "  Cài bằng (cần sudo, chạy MỘT lần):"
+  echo "    sudo $PY -m playwright install-deps chromium"
+  echo
+  echo "  Hoặc gọn hơn:"
+  echo "    sudo apt install -y libatk1.0-0 libatk-bridge2.0-0 libxcomposite1 libxdamage1 libatspi2.0-0"
+fi
+
 echo
 echo "Còn một việc NỮA phải làm bằng tay: thêm khoá vào ops/.env"
 echo "  GEMINI_API_KEY=..."
