@@ -129,8 +129,27 @@ python3 ops/snapshot.py save expense   # budget|calendar|expense|income|journal|
 
 ## Phiên bản và cách quay về
 
-Admin tự đẩy lên GitHub (kho **private**) — token nằm trong tay admin, không
-nằm trong hệ. Việc của phía này là **đặt mốc** để còn quay về được.
+Đẩy lên GitHub được: có khoá SSH sẵn ở `~/.ssh/id_ed25519_github`, tài khoản
+`Bloor7`. Nhưng khoá đó mở **mọi kho** của tài khoản, nên phải tự giới hạn:
+
+> **Chỉ đẩy `companySpec`, và chỉ khi admin bảo đẩy.** Không đụng kho nào khác
+> của `Bloor7` — nhất là `handoff_panharmon`, nơi `panharmonCompany` làm việc
+> và nơi R2 nói nhánh `main` chỉ admin được ghi. Một khoá dùng chung không phải
+> là một quyền dùng chung; ranh giới ở đây do luật này giữ, không do khoá giữ.
+
+**Soát trước mỗi lần đẩy** — ba thứ, đều rẻ, đều không rút lại được nếu sai:
+
+```bash
+git remote -v                     # đúng kho chưa
+curl -s -o /dev/null -w '%{http_code}\n' https://api.github.com/repos/Bloor7/companySpec
+                                  # 404 = private (đúng §11 luật 11) · 200 = PUBLIC, DỪNG
+git ls-files | grep -iE '\.env|secret|token'    # secret có lọt vào git không
+```
+
+Kho **phải private**: nó có quyền ghi vào Notion, ví tiền và lịch của admin.
+Thấy `200` thì dừng lại và báo admin, đừng đẩy.
+
+Việc quan trọng hơn cả đẩy là **đặt mốc** để còn quay về được.
 
 ```bash
 git tag -n1                    # xem các mốc đã đặt và trạng thái lúc đó
