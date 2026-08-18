@@ -45,16 +45,16 @@ Cột "bằng chứng" là chỗ đọc được trên máy, không phải suy �
 | # | Nguyên thể | Hệ này | Bằng chứng |
 |---|---|---|---|
 | 1 | **Vòng lặp agent** | Có, thuê ngoài. CEO là một phiên Claude Code, vòng lặp do CLI lo. Có cắt phiên theo thời gian và số lượt | `registry/gateway.yaml` — `windowMinutes: 30`, `maxTurnsPerSession: 25` |
-| 2 | **Lập kế hoạch** | **Thiếu cho chính CEO.** `planCompany` lập kế hoạch cho *đời admin*, không phải cho *công việc của CEO*. CEO phản ứng theo từng lượt, không có kế hoạch nhiều bước, không có checkpoint để làm tiếp | `ceo/SYSTEM.md` không có mục nào về kế hoạch nhiều lượt |
-| 3 | **Nạp và nén ngữ cảnh** | Nạp thì **hơn chuẩn**: "Bức tranh hiện tại" tra sẵn mỗi lượt bằng code cứng, nên CEO luôn biết ví/lịch/hạn mức mà không tốn lượt hỏi. Nén thì **chưa có**: hết 30 phút hoặc 25 lượt là cắt, chỉ nạp lại vài tin gần nhất | `ops/gateway.py` — `brief_block()`, `nho_lai()` |
+| 2 | **Lập kế hoạch** | **Một phần (18/08).** Sổ tay `viec-nhieu-buoc` dạy CEO nói kế hoạch trước khi làm, dừng giữa chừng thì nói rõ đã tới đâu, và đọc khối "Phiên trước" làm checkpoint. Vẫn chưa có kế hoạch dạng dữ liệu mà CEO tự sửa được | `ceo/playbooks/viec-nhieu-buoc.md` |
+| 3 | **Nạp và nén ngữ cảnh** | Nạp **hơn chuẩn**: "Bức tranh hiện tại" tra sẵn mỗi lượt bằng code cứng. Nén **có bản bị động (18/08)**: đóng phiên thì ghi tóm tắt (giờ, việc đã chạy xong lấy từ `taskLog`), phiên sau nạp lại. Nén CHỦ ĐỘNG trước khi chạm trần thì vẫn chưa | `gateway.dong_phien()`, `nho_lai()` |
 | 4 | **Thiết kế tool** | **Hơn chuẩn rõ rệt.** Mỗi năng lực có JSON Schema đóng (`additionalProperties: false`), có `riskTier`, có `maxDurationSec`, có lý do chọn runtime. Cộng đồng gọi đây là "typed schemas at every boundary" và phần lớn repo không làm nổi | `companies/*/companySpec.yaml` |
-| 5 | **Skills / MCP** | **Không có.** Không có `.claude/skills`, không có progressive disclosure. Mọi quy trình lặp lại nằm cứng trong một prompt duy nhất, nạp toàn bộ ở **mỗi lượt** | `ceo/SYSTEM.md` — 184 dòng, không tách lớp |
+| 5 | **Skills / MCP** | **Có, bản có ranh giới (18/08).** Ba sổ tay nạp theo việc; router bằng code cứng nằm NGOÀI model, nên CEO vẫn không có tool `Skill`. Không dùng MCP — cố ý | `ceo/playbooks/`, `gateway.chon_so_tay()` |
 | 6 | **Quyền hạn** | **Hơn chuẩn rõ rệt.** Deny list ghim ở CEO, hook `PreToolUse` chặn bằng code, phê duyệt có TTL, whitelist học dần có hạn 90 ngày và trần mỗi ngày | `ceo/settings.json`, `ceo/hooks/guard.py`, `ops/approvals.py` |
 | 7 | **Bộ nhớ và trạng thái** | Có, một lớp. `profileCompany` giữ điều luôn đúng về admin, nhét cuối prompt. Không có bộ nhớ phân tầng, không có nén chủ động. Bản lưu hội thoại bị cắt còn 800 ký tự, nạp lại còn 400 | `ops/gateway.py:1045`, `nho_lai()` |
 | 8 | **Điều phối** | Hình sao có chủ đích (**P3**), một tầng, không fan-out. Ngoại lệ duy nhất là `researchCompany` chạy nhiều luồng đọc bên trong phiên nhốt kín của nó. Không có chuyên môn hoá vai (planner / reviewer / critic) | `ops/dispatch.py`, `companies/researchCompany/` |
-| 9 | **Kiểm chứng và eval** | **Không có eval.** Có `codemap.py --check` soát luật kiến trúc tĩnh — thứ này hiếm và tốt — nhưng nó soát *mã*, không soát *hành vi CEO*. Không có bộ ca thử, không có chấm điểm quỹ đạo | `ops/codemap.py --check` |
+| 9 | **Kiểm chứng và eval** | **Có (16/08, mở rộng 18/08).** 19 ca chạy khô: chuỗi lời gọi, hành vi nhiều lượt, và vài luật câu chữ tra được. Cộng `codemap --check` soát luật kiến trúc tĩnh | `ops/evals/`, `ops/codemap.py --check` |
 | 10 | **Quan sát** | Tốt. Chi phí, hạn mức, lỗi, lý do CEO chết đều tra được bằng lệnh | `backOffice/src/backoffice.py report` |
-| 11 | **Gỡ lỗi** | Vừa đủ. Có ảnh chụp dữ liệu Notion trước khi phá. Không có phát lại quỹ đạo phiên | `ops/snapshot.py` |
+| 11 | **Gỡ lỗi** | **Tốt (18/08).** Phát lại được quỹ đạo một phiên: admin nói gì, CEO gọi gì, đổi gì ngoài đời, sổ tay nào đã nạp — gộp bốn nguồn theo trục thời gian. Cộng ảnh chụp Notion trước khi phá | `backoffice.py trace`, `ops/snapshot.py` |
 | 12 | **Người trong vòng lặp** | **Hơn chuẩn rõ rệt.** Duyệt trước hành động phá huỷ, nút bấm ngay trong Telegram, mã dùng một lần, đối chiếu payload để CEO không đổi nội dung sau khi admin đã đọc | `ops/approvals.py`, `PRINCIPLES.md` §5 |
 
 **Đọc bảng theo cột dọc:** hệ này mạnh ở nhóm *an toàn và ranh giới* (4, 6, 10,
@@ -67,6 +67,28 @@ một người thật có ví tiền thật. Yếu ở nhóm *tiết kiệm ng�
 ## 3. Ba khoảng trống, xếp theo giá trị
 
 ### Khoảng trống 1 — Skills: mọi thứ nạp mỗi lượt
+
+> **Đã lấp, 2026-08-18.** `ceo/playbooks/` — ba sổ tay (`tien`,
+> `ghi-nguyen-van`, `viec-nhieu-buoc`); `SYSTEM.md` từ 14.143 xuống 9.270 ký tự.
+> Router `gateway.chon_so_tay()` chọn sổ theo từ khoá, **bằng code cứng, phía
+> ngoài model** — nên KHÔNG phải mở tool `Skill` cho CEO, deny list giữ nguyên.
+>
+> Ba tính chất khiến việc này không đánh đổi an toàn lấy gọn gàng:
+>
+> · **Mỗi khối rời đi để lại một câu NEO trong lõi.** Router trượt thì CEO mất
+>   bảng chi tiết, không mất luật gốc — hỏng nhẹ một bậc, không hỏng câm.
+> · **Sổ tay nối vào tin nhắn**, nên trong phiên đang nối nó còn lại ở các lượt
+>   sau. Router chỉ cần đúng ở lượt ĐẦU của một câu chuyện. Đo được: lượt "em
+>   ghi chưa đấy" không nạp sổ tiền mà CEO vẫn xử lý đúng chuỗi.
+> · **Đo trên dữ liệu thật**, không trên ví dụ tự nghĩ: 143 câu admin trong
+>   `ceo/store.sqlite` → 0 lần trượt sổ "tiền", 21% lượt không nạp sổ nào (toàn
+>   chuyện phiếm, hỏi giờ, gửi ảnh). Bốn từ khoá phải thêm sau khi đo, trong đó
+>   `xoa`/`sua` (xoá khoản chi cũng là việc phải hoàn ví) và `bao nhieu` ("Anh
+>   còn bn riền" — hỏi số dư mà gõ sai chữ "tiền").
+>
+> Câu hỏi cũ ("prompt có dài quá không") đổi thành câu hỏi mới ("router có bỏ
+> sót không"), nên câu hỏi mới phải tra được: `python3 ops/gateway.py
+> soat-so-tay --thieu` liệt kê những lượt không nạp sổ nào.
 
 `ceo/SYSTEM.md` dài 184 dòng và **được nạp nguyên vẹn ở mọi lượt**, kể cả lượt
 admin chỉ hỏi "mấy giờ rồi". Trong đó có nguyên một bảng dài về chuỗi thu/chi
@@ -90,7 +112,21 @@ vào; phải làm phiên bản có ranh giới (xem prompt 1).
 
 > **Đã lấp một phần, 2026-08-16.** `ops/evals/` — 12 ca thử chạy khô, chấm bằng
 > chuỗi lời gọi CEO bắn ra. Xem mục "Cách kiểm, thay vì tin" trong CLAUDE.md.
-> Vẫn còn trống: hành vi nhiều lượt, và chất lượng câu chữ CEO nói với admin.
+>
+> **Lấp nốt hai nửa còn lại, 2026-08-18** — 19 ca:
+>
+> · **Nhiều lượt.** Ca có khoá `luot:` chạy nối nhau trong CÙNG một phiên
+>   (`--resume`), chấm từng lượt. Ba ca mới: không ghi lại lần hai (ghi trùng
+>   thì sổ Notion thành sổ đôi mà không có dòng lỗi nào), xoá thì tra trước rồi
+>   mới xoá, hỏi đủ dữ kiện rồi mới ghi.
+> · **Câu chữ.** `phaiNoi` / `khongDuocNoi`, cộng một phép soát Markdown chạy
+>   TỰ ĐỘNG cho mọi ca. Nó bắt bug ngay lần chạy đầu: CEO vi phạm luật "không
+>   Markdown" — đối chiếu hội thoại thật ngày 16/08 thì đúng là vi phạm suốt.
+>   Luật cũ nằm cuối prompt, viết trừu tượng, và bản thân nó viết bằng Markdown.
+>   Đã viết lại bằng ví dụ ĐỪNG/HÃY cụ thể; chạy lại ca đó thì đạt.
+>
+> Vẫn còn trống, nói thẳng: chất lượng SUY NGHĨ của CEO thì không đo được bằng
+> code, và ở đây không định đo.
 
 Đây là khoảng trống tớ thấy đáng lo nhất, vì nó **im lặng**.
 
@@ -105,6 +141,22 @@ lại — CEO dựng lời gọi động, chọn sai company, quên nửa sau c�
 vẫn đang trống.
 
 ### Khoảng trống 3 — Phiên đứt là mất trí nhớ
+
+> **Đã lấp, 2026-08-18.** `ops/gateway.py` — `dong_phien()` ghi một đoạn tóm tắt
+> đúng lúc phiên đóng, `nho_lai()` nạp lại đoạn đó. Tóm tắt dựng bằng **code
+> cứng, không gọi model nào**: giờ giấc + lý do đóng lấy từ bảng `thread`, việc
+> đã làm lấy từ `taskLog` theo traceId (T4), câu chữ vẫn do sổ tin nhắn lo.
+> Thêm bảng `threadSummary`, sống 7 ngày, chỉ nạp nếu chưa quá 24 tiếng.
+>
+> **Vì sao không nhờ model tóm tắt** — ba lẽ, xếp theo sức nặng: (1) lúc hết hạn
+> mức là lúc phiên hay đứt nhất, và cũng đúng là lúc lời gọi tóm tắt sẽ hỏng —
+> trí nhớ phải còn khi mọi thứ khác hỏng, không phải mất theo; (2) phiên đóng
+> lúc admin không ngồi đó, model tóm sai thì cái sai đi thẳng vào phiên sau mà
+> không ai soát; (3) phiên đóng nhiều lần mỗi ngày, mỗi lần một lời gọi nữa là
+> trả tiền cho thứ code làm được (P1).
+>
+> Vẫn còn trống: **nén chủ động** đúng nghĩa — tóm tắt *trước khi* chạm trần
+> bằng chính phiên đang sống. Cái đó buộc phải có model, nên để lại.
 
 Hết 30 phút hoặc 25 lượt thì phiên đứt, CEO chỉ được nạp lại vài tin gần nhất,
 mỗi tin cắt còn 400 ký tự. Cộng đồng chữa bằng **nén chủ động**: agent tự tóm

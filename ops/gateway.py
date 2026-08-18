@@ -19,6 +19,7 @@ import re
 import sqlite3
 import subprocess
 import sys
+import unicodedata
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -117,6 +118,21 @@ def ceo_store():
           id INTEGER PRIMARY KEY AUTOINCREMENT, threadId INTEGER,
           rule TEXT NOT NULL, message TEXT, createdAt TEXT NOT NULL
         );
+        -- Tóm tắt một phiên, ghi ĐÚNG LÚC phiên đóng (xem `dong_phien`).
+        -- Phải ghi lúc đó chứ không dựng lại sau: tin nhắn tự dọn sau 7 ngày và
+        -- sổ taskLog cũng xoay vòng, nên "dựng lại khi cần" là dựng trên dữ
+        -- liệu có thể đã biến mất.
+        -- Lượt nào nạp sổ tay nào. Có bảng này thì việc "router có bỏ sót
+        -- không" trở thành câu hỏi TRA ĐƯỢC, thay vì phải tin. Xem
+        -- `python3 ops/gateway.py soat-so-tay`.
+        CREATE TABLE IF NOT EXISTS playbookLog (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, threadId INTEGER,
+          soTay TEXT NOT NULL, cauAdmin TEXT, createdAt TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS threadSummary (
+          threadId INTEGER PRIMARY KEY, lyDo TEXT,
+          tomTat TEXT NOT NULL, createdAt TEXT NOT NULL
+        );
         """
     )
     # Thêm dần, không phá bảng cũ.
@@ -130,6 +146,10 @@ def ceo_store():
 
 GIU_NGAY = 7          # tin cũ hơn thì xoá — nhớ lâu quá cũng là một kiểu rủi ro
 NHO_LAI = 10          # số tin nạp lại khi mở phiên mới
+TOM_TAT_GIO = 24      # tóm tắt phiên trước cũ hơn ngần này giờ thì thôi, đừng nạp
+TOM_TAT_VIEC = 8      # số việc đã làm kể lại; nhiều hơn thì thành danh sách, không phải trí nhớ
+CAT_ADMIN = 600       # chữ ADMIN gõ — giữ gần như nguyên, đây là thứ đáng nhớ nhất
+CAT_BOT = 320         # câu BOT trả lời — cắt mạnh, chỉ cần nhớ đại ý
 
 
 def luu_tin(conn, thread_id, vai_tro: str, noi_dung: str):
@@ -140,6 +160,151 @@ def luu_tin(conn, thread_id, vai_tro: str, noi_dung: str):
         .strftime("%Y-%m-%dT%H:%M:%SZ")
     conn.execute("DELETE FROM message WHERE createdAt < ?", (cutoff,))
     conn.commit()
+
+
+def cat_gon(s: str, n: int) -> str:
+    """Cắt ở ranh giới chữ, và NÓI RÕ là đã cắt.
+
+    Bản cũ cắt cứng giữa từ (`[:400]`). Hai cái hại, cái sau nặng hơn: câu cuối
+    cụt lủn, và CEO KHÔNG CÓ CÁCH NÀO BIẾT phần sau còn gì — nó đọc nửa câu y
+    như đọc cả câu. Dấu […cắt] không lấy lại được chữ đã mất, nhưng nó ngăn
+    CEO tưởng mình đã đọc hết. Cùng một luật với O10: cái hỏng không được phép
+    trông giống cái lành.
+    """
+    s = (s or "").strip()
+    if len(s) <= n:
+        return s
+    cat = s[:n]
+    kho = max(cat.rfind(" "), cat.rfind("\n"))
+    if kho > n * 0.6:            # có chỗ ngắt tử tế thì dùng, đừng cắt giữa từ
+        cat = cat[:kho]
+    return cat.rstrip(" ,.;:—-") + " […cắt]"
+
+
+def viec_da_lam(session_id: str):
+    """Những lời gọi ĐÃ CHẠY XONG của một phiên, đọc từ sổ backOffice.
+
+    Đây là phần trí nhớ đắt nhất và cũng dễ mất nhất. Câu chữ thì admin nhắc
+    lại được ("nãy anh nói rồi đấy"); còn VIỆC ĐÃ LÀM thì không — CEO không nhớ
+    đã ghi khoản chi hay chưa sẽ ghi lần thứ hai, và sổ Notion thành sổ đôi mà
+    không ai báo lỗi. Sổ taskLog biết chính xác điều đó (một phiên một trace,
+    T4) nên lấy từ đó, không hỏi lại model và không tốn một đồng nào.
+
+    Trả `None` nếu KHÔNG ĐỌC ĐƯỢC sổ — khác hẳn `[]` nghĩa là "đọc được, và
+    phiên đó thật sự chưa làm gì". Gộp hai thứ đó lại đúng là con bug O10 cấm:
+    một danh sách rỗng vì lỗi trông y hệt một danh sách rỗng vì không có việc.
+    """
+    try:
+        conn = db.connect(os.path.join(ROOT, "backOffice", "store.sqlite"))
+        rows = list(conn.execute(
+            "SELECT companyId, capability, riskTier, summary FROM taskLog "
+            "WHERE traceId=? AND status='ok' ORDER BY startedAt",
+            (trace_of(session_id),)))
+        conn.close()
+    except sqlite3.Error:
+        return None
+    return rows
+
+
+def dung_tom_tat(conn, thread_id: int, session_id: str, ly_do: str) -> str:
+    """Dựng đoạn tóm tắt một phiên — bằng CODE CỨNG, không gọi model nào.
+
+    VÌ SAO KHÔNG NHỜ MODEL TÓM TẮT: cách cộng đồng hay dùng là bảo chính agent
+    tự tóm tắt trước khi chạm trần. Ở đây thì không, vì ba lẽ đo được:
+
+      · Phiên đóng rất nhiều lần mỗi ngày (quá 30 phút là đóng). Mỗi lần một
+        lời gọi `claude -p` nữa là trả tiền cho một thứ code làm được.
+      · Phiên đóng lúc admin KHÔNG ngồi đó, nên không ai soát được câu tóm tắt.
+        Model tóm sai thì cái sai đó đi thẳng vào phiên sau.
+      · Lúc hết hạn mức là lúc phiên hay đứt nhất — và cũng đúng là lúc lời gọi
+        tóm tắt sẽ hỏng. Trí nhớ phải còn khi mọi thứ khác hỏng, không phải mất
+        theo.
+
+    Nên P1: code cứng giữ khung. Ba thứ dựng nên đoạn này đều là SỰ KIỆN tra
+    được, không phải diễn giải — giờ giấc, việc đã chạy xong, câu admin đã gõ.
+    """
+    t = conn.execute("SELECT * FROM thread WHERE threadId=?", (thread_id,)).fetchone()
+    if t is None:
+        return ""
+
+    try:
+        mo = approvals.parse(t["openedAt"]).astimezone(TZ_VN)
+        dong = approvals.parse(t["lastAt"]).astimezone(TZ_VN)
+        khi = f"{mo:%H:%M %d/%m} → {dong:%H:%M %d/%m}"
+    except (ValueError, TypeError):
+        khi = "không rõ giờ"
+
+    dong_ra = [f"### Phiên trước ({khi} · {t['turns']} lượt · đóng vì: {ly_do})"]
+
+    rows = viec_da_lam(session_id)
+    if rows is None:
+        # O10 — nói thẳng là KHÔNG BIẾT. Im lặng ở đây sẽ được CEO đọc thành
+        # "phiên trước không làm gì", và đó là lúc nó ghi trùng khoản chi.
+        dong_ra.append("\nKHÔNG đọc được sổ việc của phiên đó — đừng suy ra là "
+                       "chưa làm gì. Cần chắc thì tra lại bằng năng lực đọc.")
+    else:
+        da_ghi = [r for r in rows if r["riskTier"] in ("write", "irreversible")]
+        so_doc = len(rows) - len(da_ghi)
+        if da_ghi:
+            dong_ra.append("\nĐÃ LÀM XONG rồi — đừng làm lại:")
+            for r in da_ghi[:TOM_TAT_VIEC]:
+                mo_ta = cat_gon(r["summary"] or "", 110)
+                dong_ra.append(f"· {r['companyId']}.{r['capability']}"
+                               + (f" — {mo_ta}" if mo_ta else ""))
+            if len(da_ghi) > TOM_TAT_VIEC:
+                dong_ra.append(f"· … và {len(da_ghi) - TOM_TAT_VIEC} việc nữa")
+        else:
+            dong_ra.append("\nPhiên đó KHÔNG ghi gì (không có lời gọi write nào chạy xong).")
+        if so_doc:
+            dong_ra.append(f"Ngoài ra có {so_doc} lần tra cứu, không đổi gì.")
+
+    # CỐ Ý KHÔNG kể lại câu admin ở đây. `nho_lai` đã nạp tin nhắn thô ngay bên
+    # dưới, đủ cả hai chiều và cắt rộng hơn — chép thêm lần nữa là in trùng.
+    # Đo được lúc thử 2026-08-18: cùng một câu của admin hiện hai lần trong
+    # prompt, tốn chỗ mà không thêm chữ nào. Chia vai cho dứt khoát: đoạn này
+    # trả lời "đã LÀM gì", sổ tin nhắn trả lời "đã NÓI gì".
+    return "\n".join(dong_ra)
+
+
+def dong_phien(conn, thread_id: int, session_id: str, ly_do: str) -> None:
+    """Đóng một phiên VÀ ghi lại nó nhớ được gì.
+
+    Trước đây ba chỗ trong `decide_session` chỉ chạy `UPDATE ... closed=1` rồi
+    thôi — phiên biến mất không để lại gì, và phiên sau chỉ còn vài tin thô cắt
+    cụt ở 400 ký tự. Gộp hai việc vào một hàm để không còn đường đóng phiên nào
+    quên ghi.
+    """
+    conn.execute("UPDATE thread SET closed=1 WHERE threadId=?", (thread_id,))
+    try:
+        tom = dung_tom_tat(conn, thread_id, session_id, ly_do)
+    except sqlite3.Error:
+        tom = ""          # đóng phiên là việc chính; tóm tắt hỏng không được chặn nó
+    if tom:
+        conn.execute(
+            "INSERT OR REPLACE INTO threadSummary (threadId, lyDo, tomTat, createdAt) "
+            "VALUES (?,?,?,?)", (thread_id, ly_do, tom, now()))
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=GIU_NGAY)) \
+        .strftime("%Y-%m-%dT%H:%M:%SZ")
+    conn.execute("DELETE FROM threadSummary WHERE createdAt < ?", (cutoff,))
+    conn.commit()
+
+
+def tom_tat_phien_truoc(conn) -> str:
+    """Đoạn tóm tắt của phiên vừa đóng, nếu còn đủ mới để có nghĩa."""
+    row = conn.execute(
+        "SELECT tomTat, createdAt FROM threadSummary ORDER BY threadId DESC LIMIT 1"
+    ).fetchone()
+    if not row:
+        return ""
+    try:
+        gio = (approvals.now_dt() - approvals.parse(row["createdAt"])).total_seconds() / 3600
+    except (ValueError, TypeError):
+        return ""
+    if gio > TOM_TAT_GIO:
+        # Quá cũ thì nạp vào chỉ tổ làm CEO nói chuyện hôm kia như chuyện đang
+        # xảy ra. Thà trắng còn hơn nhớ nhầm thì.
+        return ""
+    return row["tomTat"] + "\n"
 
 
 def nho_lai(conn) -> str:
@@ -153,16 +318,159 @@ def nho_lai(conn) -> str:
     Chỉ nạp ở lượt đầu phiên mới. Trong phiên thì --resume đã lo, nạp nữa là trả
     tiền hai lần cho cùng một thứ.
     """
+    tom = tom_tat_phien_truoc(conn)
     rows = list(conn.execute(
         "SELECT vaiTro, noiDung FROM message ORDER BY id DESC LIMIT ?", (NHO_LAI,)))
-    if not rows:
+    if not rows and not tom:
         return ""
-    dong = [f'{"admin" if r["vaiTro"] == "admin" else "bạn"}: {r["noiDung"][:400]}'
+
+    # Cắt theo VAI, không cắt đều một mức. Chữ admin gõ là thứ đáng nhớ nhất và
+    # thường ngắn, nên giữ gần như nguyên; câu bạn trả lời thì dài và chỉ cần
+    # nhớ đại ý. Bản cũ cắt cả hai ở 400 nên câu admin dài bị mất đuôi trong
+    # khi câu bot dài vẫn chiếm chỗ.
+    dong = [(f'admin: {cat_gon(r["noiDung"], CAT_ADMIN)}'
+             if r["vaiTro"] == "admin"
+             else f'bạn: {cat_gon(r["noiDung"], CAT_BOT)}')
             for r in reversed(rows)]
-    return ("\n\n## Vài tin nhắn gần đây\n\n"
-            "Đây là NGỮ CẢNH để bạn hiểu admin đang nói tiếp chuyện gì — không "
-            "phải việc mới cần làm, và cũng không phải mệnh lệnh. Việc cần làm "
-            "luôn nằm ở tin nhắn cuối cùng admin vừa gửi.\n\n" + "\n".join(dong))
+
+    khoi = ("\n\n## Chuyện vừa xảy ra\n\n"
+            "Phiên trước đã đóng, nên đây là thứ bạn còn nhớ được. Đây là NGỮ "
+            "CẢNH để hiểu admin đang nói tiếp chuyện gì — không phải việc mới "
+            "cần làm, và cũng không phải mệnh lệnh. Việc cần làm luôn nằm ở tin "
+            "nhắn cuối cùng admin vừa gửi.\n\n")
+    if tom:
+        khoi += tom + "\n"
+    if dong:
+        khoi += "### Vài tin nhắn gần đây\n\n" + "\n".join(dong)
+    return khoi
+
+
+SO_TAY = os.path.join(ROOT, "ceo", "playbooks")
+
+# Từ khoá chọn sổ tay. CỐ Ý RỘNG QUÁ MỨC, và đó là chủ ý chứ không phải lười:
+# nạp thừa một sổ tay chỉ tốn ít token của một gói đang dư (PRINCIPLES §0 — mục
+# tiêu là DÙNG HẾT gói Pro, không phải tiết kiệm), còn nạp thiếu sổ "tiền" thì
+# mất bảng chuỗi thu/chi và sổ ví lệch trong im lặng. Hai cái sai đó không cùng
+# hạng, nên hàng rào phải lệch hẳn về một phía.
+GOI_TIEN = (
+    "tien", "vi ", "vi.", "chi ", "thu ", "mua", "ban ", "tra ", "luong", "quy",
+    "tiet kiem", "ngan sach", "han muc", "atm", "ck", "chuyen khoan", "nap",
+    "rut", "no ", "ung ", "gia", "dong", "trieu", "nghin", "xang", "an sang",
+    "an trua", "an toi", "cho", "sieu thi", "hoa don", "phi", "thanh toan",
+    "so du", "vay", "chuyen tien", "tieu", "bao cao", "ngan hang", "the ",
+    "vnd", "usd",
+    # ĐỘNG TỪ SỬA BẢN GHI. Đo trên 143 câu admin thật (2026-08-18): "Xoá đi em"
+    # không có chữ số, không có từ tiền nào, nhưng thứ hay bị xoá nhất trong hệ
+    # này là một khoản chi — và xoá khoản chi thì phải hoàn ví, đúng cùng cái
+    # chuỗi mà sổ "tiền" giữ. Không có mấy từ này thì router trượt đúng lượt
+    # nguy hiểm nhất: lượt làm sổ lệch mà không ai thấy.
+    "xoa", "sua", "doi ", "huy", "bo di", "cap nhat", "chinh",
+    # "Đã sài rùi em ko cần cộng thêm" — câu về tiền, không một chữ số nào.
+    # "sai" đụng luôn với "sai" (không đúng); cứ để đụng, nạp thừa rẻ hơn trượt.
+    "cong", "tru", "xai", "sai", "todo", "viec",
+    # "Anh còn bn riền" — hỏi số dư, gõ sai chữ "tiền" nên mọi từ khoá về tiền
+    # đều trượt. Không đuổi theo lỗi chính tả được, nhưng ĐUỔI THEO CÂU HỎI thì
+    # được: "còn bao nhiêu" gần như luôn là hỏi tiền trong hệ này.
+    "bao nhieu", "bn ", " bn", "con bao",
+)
+GOI_NGUYEN_VAN = (
+    "luu", "ghi chu", "note", "nhac", "nhat ky", "chep", "ghi lai", "lenh",
+    "command", "script", "http", "www",
+)
+GOI_NHIEU_BUOC = (
+    "ke hoach", "chia buoc", "lap ", "theo doi", "muc tieu", "danh sach",
+    "ca tuan", "moi ngay", "moi tuan", "loat", "nhieu ", "tung buoc", "lo trinh",
+    "sap xep", "to chuc", "quan ly", "du an",
+    # Câu NỐI TIẾP việc đang dở. "oke xong phần đó rồi, giờ làm gì tiếp với kdp"
+    # là câu điển hình mở đầu một phiên MỚI sau khi phiên cũ đứt — đúng lúc cần
+    # sổ này nhất, vì nó dạy cách đọc khối "Phiên trước".
+    "xong", "tiep", "con lai", "gio lam gi", "buoc", "den dau", "toi dau",
+)
+KY_TU_KHO = ("'", "`", "$", "|", ";", ">", "<", "&", "\n", "\\")
+
+
+def bo_dau(s: str) -> str:
+    """Bỏ dấu tiếng Việt để so từ khoá.
+
+    Admin gõ nhanh trên điện thoại nên "tiền" và "tien", "ví" và "vi" đều xuất
+    hiện thật trong sổ tin nhắn. So có dấu thì router trượt đúng những lượt gõ
+    vội — mà gõ vội lại hay là lúc ghi tiền.
+    """
+    s = unicodedata.normalize("NFD", (s or "").lower())
+    s = "".join(c for c in s if unicodedata.category(c) != "Mn")
+    return s.replace("đ", "d")
+
+
+def chon_so_tay(text: str, co_tom_tat: bool = False) -> list:
+    """Chọn sổ tay cho một câu của admin — bằng CODE CỨNG, không hỏi model.
+
+    VÌ SAO KHÔNG ĐỂ MODEL TỰ CHỌN: cộng đồng làm progressive disclosure bằng
+    cách đưa agent một tool `Skill` rồi để nó tự lấy thứ nó cần. Hệ này CỐ Ý
+    không cho CEO tool đó (deny list ở ceo/settings.json) — mở ra là mở một bề
+    mặt mới cho một tiến trình đang giữ hồ sơ cá nhân của admin. Nên việc chọn
+    nằm ở đây, phía ngoài model, trong code mà model không nói vòng qua được.
+    Đúng P1: code cứng giữ khung, LLM giữ nội dung.
+
+    VÌ SAO KHÔNG SỢ TRƯỢT — hai lớp đỡ, đo được cả hai:
+
+      1. Mỗi khối rời khỏi SYSTEM.md đều để lại một câu NEO trong lõi. Router
+         trượt thì CEO mất bảng chi tiết, KHÔNG mất luật gốc — hỏng nhẹ đi một
+         bậc thay vì hỏng câm.
+      2. Sổ tay nối vào TIN NHẮN, nên trong một phiên đang nối (`--resume`) nó
+         nằm lại trong ngữ cảnh của các lượt sau. Router chỉ cần đúng ở lượt
+         ĐẦU của một câu chuyện, không phải đúng mọi lượt. Đo được 2026-08-18
+         (ca `khong-ghi-lai-lan-hai`): lượt 2 "em ghi chưa đấy" không nạp sổ
+         "tiền", CEO vẫn xử lý đúng chuỗi tiền vì lượt 1 đã nạp.
+
+    Suy ra chỗ thật sự đáng lo không phải lượt giữa phiên, mà là lượt ĐẦU của
+    một phiên MỚI. Đó đúng là lúc `nho_lai()` bơm khối "Phiên trước" vào, và
+    lúc đó `co_tom_tat` bật sổ "việc nhiều bước" lên — hai cái vá đúng chỗ hở.
+
+    Từ khoá khớp theo CHUỖI CON nên có va nhau: "ghi chưa" trúng "ghi chu",
+    "thủ đô" trúng "thu ". Cứ để va — nạp thừa một sổ rẻ hơn nhiều so với trượt
+    một sổ.
+
+    ĐÃ THỬ KHỚP THEO RANH GIỚI TỪ (`\b`) VÀ ĐO RA LÀ TỆ HƠN — đừng thử lại.
+    Trên 147 câu admin thật, 2026-08-18: chuỗi con nạp sổ tiền 76% và trượt 0
+    lần; ranh giới từ nạp 74% và trượt 1 lần ("...anh nghèo quá rùi, từ đây tới
+    cuối tháng ko biết số..." — câu về tiền rõ rệt). Đổi 0 lấy 1 lần trượt để
+    được 2% chính xác là lỗ, và nó còn KHÔNG sửa nổi ca đã khiến tớ đi thử:
+    "thủ" sau khi bỏ dấu là "thu", đứng riêng thành một từ nên vẫn khớp.
+    """
+    t = bo_dau(text)
+    chon = []
+    # Có chữ số là dấu hiệu mạnh nhất của việc dính tiền, mạnh hơn mọi từ khoá.
+    if any(c.isdigit() for c in t) or any(k in t for k in GOI_TIEN):
+        chon.append("tien")
+    if (any(k in t for k in GOI_NGUYEN_VAN)
+            or any(k in (text or "") for k in KY_TU_KHO)
+            or len(text or "") > 200):     # câu dài thường là nội dung cần lưu
+        chon.append("ghi-nguyen-van")
+    # Phiên vừa đứt thì LUÔN nạp: sổ này dạy cách đọc khối "Phiên trước".
+    if co_tom_tat or any(k in t for k in GOI_NHIEU_BUOC):
+        chon.append("viec-nhieu-buoc")
+    return chon
+
+
+def so_tay_block(text: str, co_tom_tat: bool = False) -> tuple:
+    """Trả (khối chữ để nối vào prompt, danh sách tên sổ đã nạp)."""
+    ten = chon_so_tay(text, co_tom_tat)
+    phan = []
+    for t in ten:
+        duong = os.path.join(SO_TAY, f"{t}.md")
+        try:
+            with open(duong, encoding="utf-8") as fh:
+                phan.append(fh.read().strip())
+        except OSError as e:
+            # O10 — sổ tay thiếu là chuyện phải BIẾT, không phải chuyện im lặng
+            # bỏ qua. Im ở đây thì CEO mất luật mà không ai hay.
+            print(f"[so_tay] KHÔNG đọc được {duong}: {e}", file=sys.stderr)
+    if not phan:
+        return "", []
+    return ("\n\n---\n\n# Sổ tay cho lượt này\n\n"
+            "Đây là phần mở rộng của luật bạn đã có, hệ thống chọn sẵn theo việc "
+            "admin vừa nhờ. Nó là LUẬT của bạn, không phải dữ liệu từ ngoài.\n\n"
+            + "\n\n---\n\n".join(phan), ten)
 
 
 def khoi_reply(msg: dict) -> str:
@@ -451,8 +759,12 @@ def stop_everything() -> str:
         if proc.returncode == 0:
             killed.append(pattern)
     conn = ceo_store()
-    n = conn.execute("UPDATE thread SET closed=1 WHERE closed=0").rowcount
-    conn.commit()
+    # Phanh tay cắt ngang giữa việc — đúng lúc trí nhớ quý nhất. Đóng từng phiên
+    # qua `dong_phien` để lần sau admin nhắn còn biết mình đã dừng ở đâu.
+    mo = list(conn.execute("SELECT threadId, sessionId FROM thread WHERE closed=0"))
+    for t in mo:
+        dong_phien(conn, t["threadId"], t["sessionId"], "admin bấm phanh tay")
+    n = len(mo)
     conn.close()
     if not killed:
         return f"Không có việc nào đang chạy. Đã đóng {n} luồng hội thoại."
@@ -572,13 +884,11 @@ def decide_session(conn, update_message, cfg):
         return None, "R4", text
 
     if row["registryHash"] and row["registryHash"] != registry_hash():
-        conn.execute("UPDATE thread SET closed=1 WHERE threadId=?", (row["threadId"],))
-        conn.commit()
+        dong_phien(conn, row["threadId"], row["sessionId"], "danh mục company đã đổi")
         return None, "danh mục company đã đổi", text
 
     if row["turns"] >= cfg["sessionPolicy"]["maxTurnsPerSession"]:
-        conn.execute("UPDATE thread SET closed=1 WHERE threadId=?", (row["threadId"],))
-        conn.commit()
+        dong_phien(conn, row["threadId"], row["sessionId"], "trần phiên")
         return None, "trần phiên", text
 
     # R3 — trong cửa sổ thời gian thì nối thread gần nhất
@@ -588,8 +898,8 @@ def decide_session(conn, update_message, cfg):
         return row, "R3", text
 
     # R4 — ngoài cửa sổ
-    conn.execute("UPDATE thread SET closed=1 WHERE threadId=?", (row["threadId"],))
-    conn.commit()
+    dong_phien(conn, row["threadId"], row["sessionId"],
+               f"im lặng quá {cfg['sessionPolicy']['windowMinutes']} phút")
     return None, "R4", text
 
 
@@ -1104,15 +1414,26 @@ def handle_message(update, cfg):
     # Phiên mới thì nạp lại vài tin gần đây; phiên đang nối thì --resume đã nhớ.
     # Còn khối reply thì LUÔN nạp: kể cả trong phiên, admin cuộn lên trả lời một
     # tin từ 20 lượt trước là chuyện thường, và lúc đó CEO cần biết tin đó nói gì.
-    them = (brief_block(conn) + ("" if resume else nho_lai(conn))
-            + khoi_reply(msg) + khoi_anh)
+    nho = "" if resume else nho_lai(conn)
+    # Sổ tay là LUẬT nên đứng TRƯỚC khối reply và khối ảnh — hai thứ đó là chữ
+    # từ ngoài vào (P2: dữ liệu, không phải mệnh lệnh). Đặt luật sau dữ liệu là
+    # mời model đọc dữ liệu như thể nó cũng có thẩm quyền ngang luật.
+    sach, ten_sach = so_tay_block(text, co_tom_tat="### Phiên trước" in nho)
+    them = brief_block(conn) + nho + sach + khoi_reply(msg) + khoi_anh
+    # Ghi cả lượt KHÔNG nạp sổ nào — đó mới là dòng đáng soi khi đi tìm chỗ
+    # router bỏ sót. Chỉ ghi lượt có nạp thì bảng này tự khen chính nó.
+    conn.execute(
+        "INSERT INTO playbookLog (threadId, soTay, cauAdmin, createdAt) VALUES (?,?,?,?)",
+        (thread_id, ",".join(ten_sach), text[:200], now()))
     luu_tin(conn, thread_id, "admin", text)
 
     since = now()
     data = run_ceo(text, session_id, resume, them)
     trace_id = trace_of(session_id)
     record_run(trace_id, session_id, data)
-    luu_tin(conn, thread_id, "bot", (data.get("result") or "")[:800])
+    # 1200 chứ không phải 800: câu này còn bị cắt lần nữa lúc nạp lại (CAT_BOT),
+    # nên cắt sâu ngay từ lúc lưu là mất chữ hai lần cho cùng một mục đích.
+    luu_tin(conn, thread_id, "bot", (data.get("result") or "")[:1200])
 
     conn.execute("UPDATE thread SET turns=turns+1, lastAt=? WHERE threadId=?",
                  (now(), thread_id))
@@ -1282,6 +1603,37 @@ def handle_callback(update, cfg):
     return actions + reply
 
 
+def cmd_soat_so_tay(args) -> int:
+    """Soi lại router đã chọn gì — công cụ để KIỂM, không phải để tin.
+
+    Tách SYSTEM.md ra sổ tay đổi một câu hỏi cũ ("prompt có dài quá không") lấy
+    một câu hỏi mới và nguy hiểm hơn: "router có bỏ sót lượt nào không". Câu hỏi
+    mới đó phải tra được, nếu không thì việc tách này chỉ dời chỗ rủi ro chứ
+    không giảm nó. `--thieu` là cột đáng soi: lượt không nạp sổ nào mà lại đang
+    nói chuyện tiền thì đó là một lần trượt, đi sửa từ khoá ngay.
+    """
+    conn = ceo_store()
+    rows = list(conn.execute(
+        "SELECT soTay, cauAdmin, createdAt FROM playbookLog ORDER BY id DESC LIMIT ?",
+        (args.so,)))
+    conn.close()
+    if not rows:
+        print("Chưa có lượt nào đi qua router.")
+        return 0
+    dem = {}
+    for r in rows:
+        for t in (r["soTay"] or "(không nạp gì)").split(","):
+            dem[t] = dem.get(t, 0) + 1
+    for r in reversed(rows):
+        if args.thieu and r["soTay"]:
+            continue
+        print(f"  {r['soTay'] or '(không nạp gì)':40} {r['cauAdmin'][:60]!r}")
+    print(f"\n{len(rows)} lượt gần nhất:")
+    for t, n in sorted(dem.items(), key=lambda x: -x[1]):
+        print(f"  {t:24} {n}")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="adminGateway — xử lý Telegram Update")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1289,6 +1641,11 @@ def main() -> int:
     h.add_argument("--update", help="JSON; bỏ trống thì đọc stdin")
     sub.add_parser("check", help="kiểm tra cấu hình đã đủ chưa")
     sub.add_parser("refresh-brief", help="dựng lại bức tranh (chạy nền)")
+    st = sub.add_parser("soat-so-tay",
+                        help="router đã nạp sổ tay nào cho từng lượt (không tốn gì)")
+    st.add_argument("--thieu", action="store_true",
+                    help="chỉ hiện lượt KHÔNG nạp sổ nào — chỗ dễ bỏ sót nhất")
+    st.add_argument("--so", type=int, default=40)
     args = ap.parse_args()
 
     # Trước MỌI việc: môi trường phải là môi trường mới nhất trong file, không
@@ -1298,6 +1655,9 @@ def main() -> int:
     if args.cmd == "refresh-brief":
         cmd_refresh_brief()
         return 0
+
+    if args.cmd == "soat-so-tay":
+        return cmd_soat_so_tay(args)
 
     cfg = approvals.config()
 

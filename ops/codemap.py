@@ -214,13 +214,25 @@ def soat_ten_truong(tep: dict) -> list:
             ds = []
         for ca in ds:
             o_dau = f"cases.yaml:{ca.get('id', '?')}"
-            for mong in ca.get("phaiGoi") or []:
+            # Ca nhiều lượt (thêm 18/08) để `phaiGoi` BÊN TRONG từng lượt. Bản
+            # soát cũ chỉ đọc tầng gốc nên ca nhiều lượt lọt ra ngoài vùng phủ
+            # mà không ai hay — và lọt ngay lần đầu dùng: ca
+            # `thieu-gio-thi-hoi-roi-moi-dat` viết `tenSuKien` trong khi
+            # manifest khai `ten`, đúng con bug mà hàng rào này sinh ra để bắt.
+            # Mở rộng một định dạng thì phải kéo hàng rào theo, nếu không thì
+            # định dạng mới lặng lẽ thành vùng không ai kiểm.
+            mong_ca = list(ca.get("phaiGoi") or [])
+            cam_ca = list(ca.get("khongDuocGoi") or [])
+            for lu in ca.get("luot") or []:
+                mong_ca += list(lu.get("phaiGoi") or [])
+                cam_ca += list(lu.get("khongDuocGoi") or [])
+            for mong in mong_ca:
                 cid, _, cap = (mong.get("goi") or "").partition(".")
                 if cid and cap:
                     pham += _soat_mot_loi_goi(
                         cid, cap, set((mong.get("truong") or {}).keys()), hd,
                         o_dau, soat_thieu=False)
-            for cam in ca.get("khongDuocGoi") or []:
+            for cam in cam_ca:
                 cid, _, cap = cam.partition(".")
                 if cid and cap:
                     pham += _soat_mot_loi_goi(cid, cap, set(), hd, o_dau,

@@ -152,6 +152,10 @@ def section_quota() -> tuple[str, bool]:
     w5, wk = q["window5h"], q["week"]
     body = (f"Đã tiêu 5 tiếng qua: ${w5['total']:.2f}\n"
             f"Tuần này: ${wk['total']:.2f}")
+    # Nói rõ phần ca thử khi có. Không nói thì một đêm chạy eval trông y hệt
+    # một đêm admin dùng nhiều, và admin sẽ đi tìm nguyên nhân không tồn tại.
+    if wk.get("caThu"):
+        body += f" (trong đó ca thử ${wk['caThu']:.2f})"
 
     # TIỀN THẬT (L8) — chỉ nói khi có, nhưng nói TRƯỚC phần hạn mức Pro: đây là
     # tiền trừ vào thẻ admin, còn phần kia là hạn mức dùng hết thì thôi.

@@ -38,6 +38,7 @@ Con số nào cần nói thì đếm lại bằng lệnh trên.
 | `companies/<x>/src/` | Nghiệp vụ một lĩnh vực. Mỗi company là hộp kín, có sổ riêng | **chỉ `lib/`** |
 | `ops/` | Điều phối: gateway, dispatcher, scheduler, poller | `lib/`, `backOffice/` |
 | `backOffice/src/` | Theo dõi, báo cáo, cầu dao hạn mức. Hạ tầng, KHÔNG phải company | `lib/`, `ops/approvals` |
+| `ceo/playbooks/` | Sổ tay của CEO — luật nạp theo việc, không nạp mỗi lượt. Router `gateway.chon_so_tay()` chọn bằng từ khoá, code cứng nằm NGOÀI model | (chữ, không phải mã) |
 
 **Ba câu hỏi trước khi viết một hàm mới:**
 
@@ -73,6 +74,9 @@ Mỗi dòng là một bug đã tốn công lần ra. Trước khi viết mã đ�
 | **So chuỗi ngày nguyên bản** | Notion trả `2026-08-14T12:20:00.000+07:00`, schema ép 10 ký tự → so nguyên chuỗi thì KHÔNG BAO GIỜ khớp | Cắt `[:10]`, so ngày với ngày |
 | **Đổi tên trường mà quên câu báo lỗi** | `inp['amount']` còn sót sau khi schema đổi sang `soTien` → `KeyError` đúng lúc cần báo lỗi tử tế | Đổi tên thì grep cả chuỗi f-string |
 | **Chỉ đọc `text`, quên `caption`** | Admin gửi tệp kèm câu hỏi → câu hỏi bị vứt, hệ đáp "cậu nói việc cần làm nhé" | `caption` cũng là chữ admin gõ |
+| **Bộ đo tự đứng ngoài phép đo** | Bộ ca thử gọi thẳng `claude -p` nên chi phí không đi qua `record_run`, không vào `ceoRunLog`. Sổ ghi $0,95 trong khi ca thử tiêu $2,64 — và docstring lại khẳng định ngược lại rằng nó "ăn vào đúng cầu dao L7 đang đếm" | Thứ nào tiêu hạn mức thì phải ghi sổ, kể cả công cụ của chính mình. Ghi chung một bảng, tách bằng nhãn (`evl_`) — hai bảng thì sớm muộn có người cộng một bảng rồi tưởng đã cộng hết |
+| **Mở rộng một định dạng mà quên kéo hàng rào theo** | Ca thử nhiều lượt để `phaiGoi` bên trong `luot:`; `codemap --check` chỉ đọc tầng gốc nên ca mới lọt ra ngoài vùng phủ. Lọt ngay lần đầu dùng: viết `tenSuKien` trong khi manifest khai `ten` | Thêm một hình dữ liệu thì mở bộ soát ra theo, cùng một lần sửa. Định dạng mới không được lặng lẽ thành vùng không ai kiểm |
+| **Luật chỉ viết một chiều** | Bảng chuỗi tiền có "ghi chi → trừ ví" nhưng không có "xoá khoản chi → hoàn ví". Chạy hai lần thì một lần CEO suy ra được, một lần quên — để lại ví sai, không dòng lỗi nào | Thứ phải SUY RA thì có lần suy được có lần không. Luật nào có chiều ngược thì viết cả chiều ngược ra (`ceo/playbooks/tien.md`) |
 | **Đường dẫn tương đối cho tiến trình con** | Có nhiều gốc dự án lồng nhau, model chọn nhầm gốc | Luôn dùng đường tuyệt đối |
 
 Sửa xong một bug **thuộc loại đã có ở đây** thì thêm một dòng. Bug mới hoàn
@@ -87,7 +91,14 @@ python3 ops/codemap.py --check                  # luật kiến trúc
 python3 ops/dispatch.py list                    # danh mục company thật
 python3 backOffice/src/backoffice.py usage      # đã tiêu bao nhiêu, có lần nào chạm trần chưa
 python3 backOffice/src/backoffice.py report --days 3   # lỗi gần đây, kèm lý do CEO chết
+python3 backOffice/src/backoffice.py trace            # liệt kê phiên gần đây
+python3 backOffice/src/backoffice.py trace 102        # phát lại MỘT phiên: nói gì, gọi gì, đổi gì
+python3 ops/gateway.py soat-so-tay --thieu            # lượt nào router KHÔNG nạp sổ tay nào
 ```
+
+Hai lệnh cuối là để trả lời hai câu hỏi mà trước đây phải đoán: *"lượt đó rốt
+cuộc đã xảy ra chuyện gì"* và *"bộ chọn sổ tay có bỏ sót không"*. Cả hai chỉ
+đọc, không tốn gì.
 
 **Sửa `ceo/SYSTEM.md` thì chạy ca thử**, đừng nghiệm thu bằng cảm giác:
 
@@ -97,8 +108,10 @@ python3 ops/evals/run.py --only chi-ck  # một ca ≈ $0,02–0,10
 python3 ops/evals/run.py                # cả bộ — tốn tiền thật, xem trước bằng --liet-ke
 ```
 
-Nó đo **chuỗi lời gọi CEO bắn ra**, thứ không nhìn bằng mắt được — chứ không đo
-câu chữ. Company không hề chạy: dispatcher giả nằm ở `ops/evals/shim/`, bộ chạy
+Nó đo **chuỗi lời gọi CEO bắn ra**, thứ không nhìn bằng mắt được. Từ 18/08 đo
+thêm **hành vi nhiều lượt** (ca có khoá `luot:` chạy nối trong cùng một phiên)
+và vài **luật câu chữ** tra được — trong đó luật "không Markdown" soát tự động
+cho mọi ca. Prompt dựng y hệt bản thật, gồm cả sổ tay mà router chọn. Company không hề chạy: dispatcher giả nằm ở `ops/evals/shim/`, bộ chạy
 chỉ đổi thư mục làm việc nên cổng thật không có thêm cờ nào để lỡ tay dùng nhầm.
 Model không tất định — một ca trượt một lần chưa phải bằng chứng, chạy lại vài
 lần rồi hãy sửa prompt.

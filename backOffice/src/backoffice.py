@@ -45,13 +45,25 @@ def week_start() -> str:
 
 
 def spent_since(conn, since: str) -> dict:
-    """Hạn mức đã dùng = CEO + mọi company tự chạy LLM (hiện chỉ seoCompany).
+    """Hạn mức đã dùng = CEO + company tự chạy LLM + ca thử. Cùng một gói Pro.
 
-    Cộng cả hai vì chúng là hai tiến trình claude riêng biệt, cùng trừ vào một
-    gói Pro. Bỏ sót vế nào là báo cáo thiếu.
+    Cộng cả ba vì chúng là những tiến trình claude riêng biệt, cùng trừ vào một
+    gói. Bỏ sót vế nào là báo cáo thiếu.
+
+    CA THỬ ĐẾM RIÊNG, nhưng vẫn nằm trong `total`. Nó là hạn mức thật đã tiêu,
+    che đi thì con số trấn an một cách sai sự thật (đo 2026-08-18: sổ ghi $0,95
+    trong khi ca thử tiêu $2,64 — bản trước không ghi gì). Nhưng trộn chung với
+    CEO thì cũng sai theo chiều kia: một đêm chạy eval sẽ trông y hệt một đêm
+    admin dùng nhiều, và hai thứ đó cần xử lý khác nhau. Nên: cộng vào tổng,
+    hiện thành một dòng riêng.
     """
     ceo = conn.execute(
-        "SELECT COALESCE(SUM(costUsd),0) FROM ceoRunLog WHERE createdAt >= ?",
+        "SELECT COALESCE(SUM(costUsd),0) FROM ceoRunLog "
+        "WHERE createdAt >= ? AND traceId NOT LIKE 'evl_%'",
+        (since,)).fetchone()[0]
+    eval_ = conn.execute(
+        "SELECT COALESCE(SUM(costUsd),0) FROM ceoRunLog "
+        "WHERE createdAt >= ? AND traceId LIKE 'evl_%'",
         (since,)).fetchone()[0]
     comp = conn.execute(
         "SELECT COALESCE(SUM(costUsd),0) FROM taskLog WHERE startedAt >= ?",
@@ -60,7 +72,8 @@ def spent_since(conn, since: str) -> dict:
         "SELECT companyId, SUM(costUsd) t FROM taskLog "
         "WHERE startedAt >= ? AND costUsd > 0 GROUP BY 1", (since,))}
     return {"ceo": round(ceo, 3), "company": round(comp, 3),
-            "total": round(ceo + comp, 3), "byCompany": by_company}
+            "caThu": round(eval_, 3),
+            "total": round(ceo + comp + eval_, 3), "byCompany": by_company}
 
 
 # ───────────────────────── L7 — cầu dao hạn mức ─────────────────────────
@@ -136,8 +149,11 @@ def cmd_usage(args):
     lines = []
     for label, key in (("5 tiếng qua", "window5h"), ("Tuần này", "week")):
         d = q[key]
-        lines.append(f"{label:<12} ${d['total']:.2f}  "
-                     f"(CEO ${d['ceo']:.2f} · company ${d['company']:.2f})")
+        phan = f"CEO ${d['ceo']:.2f} · company ${d['company']:.2f}"
+        # Chỉ hiện khi có, để dòng báo cáo hằng ngày không dài thêm vì một số 0.
+        if d.get("caThu"):
+            phan += f" · ca thử ${d['caThu']:.2f}"
+        lines.append(f"{label:<12} ${d['total']:.2f}  ({phan})")
         if d["byCompany"]:
             top = sorted(d["byCompany"].items(), key=lambda kv: -kv[1])[:3]
             lines.append("             " + ", ".join(f"{k} {v}" for k, v in top))
@@ -268,6 +284,84 @@ def cmd_whitelist(args):
     return "\n".join(out)
 
 
+def cmd_trace(args):
+    """Phát lại một phiên: admin nói gì, CEO gọi gì, đổi gì ngoài đời.
+
+    NGUYÊN THỂ #11 — HARNESS.md xếp "phát lại quỹ đạo phiên" vào phần còn
+    thiếu. Nó thiếu theo kiểu âm ỉ: khi CEO cư xử lạ, cách gỡ duy nhất từ trước
+    tới nay là đọc chéo ba sổ ở ba chỗ (`ceo/store.sqlite` giữ tin nhắn,
+    `backOffice/store.sqlite` giữ lời gọi và chi phí) rồi tự ghép theo giờ
+    trong đầu. Ghép tay thì lần nào cũng bỏ sót đúng cái mình đang tìm.
+
+    Không tốn gì và không đụng gì: chỉ đọc, gộp bốn nguồn theo trục thời gian.
+    """
+    ceo = db.connect(os.path.join(ROOT, "ceo", "store.sqlite"))
+    conn = store()
+
+    if not args.phien:
+        print("Phiên gần đây (lấy id ở cột đầu rồi chạy lại kèm id đó):\n")
+        for r in ceo.execute(
+                "SELECT threadId, sessionId, turns, openedAt, lastAt, closed "
+                "FROM thread ORDER BY threadId DESC LIMIT ?", (args.so,)):
+            print(f"  #{r['threadId']:<4} {r['sessionId'][:8]}  {r['turns']:>2} lượt  "
+                  f"{r['openedAt'][:16].replace('T',' ')}  "
+                  f"{'đã đóng' if r['closed'] else 'đang mở'}")
+        return
+
+    row = ceo.execute(
+        "SELECT * FROM thread WHERE threadId=? OR sessionId LIKE ?",
+        (args.phien if args.phien.isdigit() else -1, args.phien + "%")).fetchone()
+    if row is None:
+        # O10 — gõ nhầm id thì nói ra. In một quỹ đạo rỗng trông y hệt một phiên
+        # thật sự không làm gì, và người đi gỡ lỗi sẽ tin vào cái rỗng đó.
+        print(f"Không có phiên nào khớp {args.phien!r}. Chạy không kèm id để xem danh sách.")
+        return
+    trace_id = "trc_" + row["sessionId"].replace("-", "")[:20]
+
+    print(f"── Phiên #{row['threadId']} · {row['sessionId']}")
+    print(f"   {row['openedAt'][:19].replace('T',' ')} → {row['lastAt'][:19].replace('T',' ')} "
+          f"· {row['turns']} lượt · {'đã đóng' if row['closed'] else 'đang mở'}")
+
+    sach = list(ceo.execute(
+        "SELECT soTay, cauAdmin, createdAt FROM playbookLog WHERE threadId=? ORDER BY id",
+        (row["threadId"],)))
+    moc = []
+    for r in ceo.execute("SELECT vaiTro, noiDung, createdAt FROM message "
+                         "WHERE threadId=? ORDER BY id", (row["threadId"],)):
+        moc.append((r["createdAt"], "admin" if r["vaiTro"] == "admin" else "CEO",
+                    r["noiDung"][:220]))
+    for r in conn.execute(
+            "SELECT companyId, capability, riskTier, status, summary, costUsd, startedAt "
+            "FROM taskLog WHERE traceId=? ORDER BY startedAt", (trace_id,)):
+        moc.append((r["startedAt"], f"gọi[{r['status']}]",
+                    f"{r['companyId']}.{r['capability']} ({r['riskTier']}) "
+                    f"{(r['summary'] or '')[:120]}"))
+    for r in conn.execute("SELECT type, target, createdAt FROM sideEffectLog "
+                          "WHERE traceId=? ORDER BY createdAt", (trace_id,)):
+        moc.append((r["createdAt"], "ĐỔI THẬT", f"{r['type']} {r['target'] or ''}"))
+
+    if sach:
+        print("\n   Sổ tay router đã nạp:")
+        for r in sach:
+            print(f"     {r['soTay'] or '(không nạp gì)':38} {r['cauAdmin'][:44]!r}")
+
+    print("\n   Quỹ đạo:")
+    for khi, vai, noi in sorted(moc, key=lambda x: x[0] or ""):
+        print(f"     {(khi or '')[11:19]}  {vai:<14} {noi}")
+
+    chay = list(conn.execute(
+        "SELECT numTurns, durationMs, costUsd, isError, loi FROM ceoRunLog "
+        "WHERE traceId=? ORDER BY runId", (trace_id,)))
+    if chay:
+        tien = sum(r["costUsd"] or 0 for r in chay)
+        hong = [r for r in chay if r["isError"]]
+        print(f"\n   {len(chay)} lượt CEO · ${tien:.4f} · {len(hong)} lượt hỏng")
+        for r in hong:
+            print(f"     HỎNG: {(r['loi'] or '')[:160]}")
+    ceo.close()
+    conn.close()
+
+
 def cmd_check(args):
     return chi_phi_gan_day()
 
@@ -281,6 +375,11 @@ def main() -> int:
     r.add_argument("--days", type=int, default=7)
     r.set_defaults(fn=cmd_report)
     sub.add_parser("whitelist").set_defaults(fn=cmd_whitelist)
+    t = sub.add_parser("trace", help="phát lại một phiên: nói gì, gọi gì, đổi gì")
+    t.add_argument("phien", nargs="?", help="threadId hoặc đầu sessionId; "
+                                            "bỏ trống thì liệt kê phiên gần đây")
+    t.add_argument("--so", type=int, default=15)
+    t.set_defaults(fn=cmd_trace)
     sub.add_parser("check").set_defaults(fn=cmd_check)
 
     args = ap.parse_args()
@@ -289,6 +388,8 @@ def main() -> int:
     result = args.fn(args)
     if isinstance(result, str):
         print(result)
+    elif result is None:
+        pass          # lệnh tự in lấy (trace) — đừng phun thêm một chữ "null"
     else:
         json.dump(result, sys.stdout, ensure_ascii=False, indent=2)
         print()

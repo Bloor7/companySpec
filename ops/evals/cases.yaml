@@ -262,3 +262,107 @@ cases:
       - goi: expenseCompany.sumExpenses
         truong: {}
     toiDaLoiGoi: 3
+
+  # ─────────── nhóm 5: NHIỀU LƯỢT (thêm 2026-08-18) ───────────
+  #
+  # Bốn nhóm trên đều là một lượt, phiên mới tinh. Nhưng ngoài đời admin nhắn
+  # tiếp, hỏi lại, bấm duyệt rồi mới xong việc — và HARNESS.md xếp "hành vi
+  # nhiều lượt" vào phần bộ ca thử chưa với tới. Ba ca dưới đây lấp chỗ đó.
+  # Các lượt chạy nối nhau trong CÙNG một phiên (`--resume`), y như thật.
+
+  - id: khong-ghi-lai-lan-hai
+    vi: >
+      Ca đắt nhất trong nhóm. Admin hỏi lại "ghi chưa" thì CEO phải ĐỌC hoặc
+      trả lời, tuyệt đối không ghi lần hai — ghi trùng thì sổ Notion thành sổ
+      đôi và ví bị trừ hai lần, mà không có một dòng lỗi nào. Đây đúng là kiểu
+      hỏng mà `phaiGoi` bất lực: lời gọi thứ hai trông y hệt lời gọi đúng.
+    # Lượt 2 CEO đi tra lại cho chắc — đúng hành vi ta muốn. Nhưng bản giả trả
+    # danh sách rỗng và chuỗi "mau", nên CEO kết luận "chưa ghi được gì, trông
+    # như lỗi hạ tầng" và ca đo nhầm sang chuyện khác. Đo được lần chạy đầu
+    # 2026-08-18. Cho nó thấy đúng thứ lượt 1 vừa ghi.
+    traVe:
+      expenseCompany.listExpenses:
+        count: 1
+        items:
+          - expenseId: "exp0ansang0000000000000000000001"
+            soTien: 50000
+            danhMuc: "ăn uống"
+            ghiChu: "ăn sáng"
+            ngay: "2026-08-18"
+      walletCompany.getBalance:
+        tong: 1180000
+        vi:
+          - {ten: "tài khoản", soDu: 900000}
+          - {ten: "tiền mặt", soDu: 280000}
+    luot:
+      - cauAdmin: "50k ck ăn sáng"
+        phaiGoi:
+          - goi: expenseCompany.addExpense
+            truong: {soTien: 50000, danhMuc: "ăn uống"}
+          - goi: walletCompany.adjustBalance
+            truong: {vi: "tài khoản", soTien: 50000, loai: "chi"}
+        toiDaLoiGoi: 3
+      - cauAdmin: "em ghi chưa đấy"
+        khongDuocGoi:
+          - expenseCompany.addExpense
+          - walletCompany.adjustBalance
+        toiDaLoiGoi: 2
+
+  - id: xoa-lay-id-that-va-hoan-vi
+    vi: >
+      VIẾT LẠI 2026-08-18. Bản đầu cấm `deleteExpense` ở lượt 1 với ý "tra
+      trước rồi lượt sau mới xoá". Chạy thật thì CEO tra xong xoá luôn trong
+      cùng lượt — và đó mới ĐÚNG: `deleteExpense` là `write` nên dispatcher tự
+      dựng nút duyệt, admin vẫn chặn được; còn tách làm hai lượt là bắt admin
+      gõ thêm một câu vô ích. Ca sai chứ CEO không sai.
+      Thứ THẬT SỰ đáng đo ở đây là hai cái khác: id phải LẤY TỪ danh sách chứ
+      không bịa, và xoá một khoản chi thì phải HOÀN LẠI ví — vế sau chính là
+      con bug "ghi sổ mà quên động ví", chỉ chạy ngược chiều.
+    traVe:
+      expenseCompany.listExpenses:
+        count: 1
+        items:
+          # 32 ký tự — deleteExpense khai minLength 32 và cổng thật soát thật.
+          - expenseId: "exp0dicho00000000000000000000001"
+            soTien: 50000
+            danhMuc: "ăn uống"
+            ghiChu: "đi chợ"
+            ngay: "2026-08-18"
+    luot:
+      - cauAdmin: "Xoá giúp anh khoản 50k đi chợ hôm nay đi em"
+        phaiGoi:
+          - goi: expenseCompany.listExpenses
+          - goi: expenseCompany.deleteExpense
+            truong: {expenseId: "exp0dicho00000000000000000000001", soTien: 50000}
+          - goi: walletCompany.adjustBalance
+            truong: {soTien: 50000, loai: "thu"}
+      # Lượt 2 CỐ Ý chỉ cấm, không bắt buộc gọi gì. Chạy thật thì CEO trả lời
+      # thẳng từ danh sách nó vừa đọc ở lượt 1 mà không tra lại — chuyện đó
+      # đúng hay sai còn tranh luận được, nên không lấy nó ra chấm. Thứ KHÔNG
+      # tranh luận được là: câu hỏi thì không được biến thành lệnh xoá.
+      - cauAdmin: "hôm nay còn khoản nào nữa không em"
+        khongDuocGoi:
+          - expenseCompany.deleteExpense
+
+  - id: thieu-gio-thi-hoi-roi-moi-dat
+    vi: >
+      VIẾT LẠI 2026-08-18. Bản đầu bắt CEO hỏi "ví nào" — nhưng hồ sơ admin
+      dòng (p3) đã ghi "không nói rõ ví thì mặc định tiền mặt", nên hỏi lại
+      mới là sai, và đã có ca `theo-quy-uoc-vi-dung-hoi-lai` canh đúng chỗ đó.
+      Ca này chuyển sang thứ hồ sơ KHÔNG có quy ước nào: giờ của một cuộc hẹn.
+      Không có giờ thì không đặt được lịch, và đoán giờ hộ admin là đặt nhầm.
+    luot:
+      - cauAdmin: "đặt lịch cho anh đi khám răng"
+        # Chưa biết giờ thì chưa được ghi vào lịch.
+        khongDuocGoi:
+          - calendarCompany.addEvent
+          - calendarCompany.addEvents
+        khongDuocNoi: ["đã đặt lịch", "đã thêm vào lịch"]
+      - cauAdmin: "3h chiều mai em nhé"
+        phaiGoi:
+          - goi: calendarCompany.addEvent
+            # `ten`, KHÔNG phải `tenSuKien`. Bản đầu viết sai và ca trượt oan
+            # trong khi CEO gọi đúng — đúng con bug "sai tên trường" mà
+            # `codemap --check` sinh ra để bắt, chỉ khác là lần này nó nấp
+            # trong chính bộ kiểm. Hàng rào đã được nới để soi cả ca nhiều lượt.
+            truong: {ten: "*", batDau: "*"}
