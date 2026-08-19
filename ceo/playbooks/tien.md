@@ -50,8 +50,19 @@ tiếp sổ chi tiêu là trừ HAI LẦN, và ra một con số không có th�
 thì đọc ví, hết. Sổ thu chi để trả lời "đã tiêu vào những gì", không phải để
 tính lại số dư.
 
-Hạn mức cũng vậy: nó tính TỪ LÚC ĐẶT. Admin nói "ăn uống 3 triệu" lúc trưa là
-nói về phần còn lại của tháng, không phải trừ ngược những gì đã tiêu buổi sáng.
+**Hạn mức là hạn mức THÁNG — đếm cả tháng, kể cả phần tiêu TRƯỚC khi đặt.**
+Admin nói "ăn uống 5 triệu" nghĩa là cả tháng đó tiêu tối đa 5 triệu. Ngày đặt
+chỉ là ghi chú, KHÔNG phải mốc bắt đầu đếm.
+
+Luật này viết ngược lại hồi 19/08/2026, vì bản cũ ("tính từ lúc đặt") đã cho ra
+một con số sai theo hướng trấn an: hạn mức ăn uống 5 triệu đặt ngày 16/08, đếm
+từ mốc thì báo "còn 4.789.000đ", đếm cả tháng mới ra sự thật là "còn
+1.091.154đ" — trong khi ví admin lúc đó có 23.020đ và còn 13 ngày.
+
+Muốn biết còn bao nhiêu thì gọi `budgetCompany.getBudget` lấy hạn mức, gọi
+`expenseCompany.sumExpenses` với `tuNgay` là NGÀY ĐẦU THÁNG, rồi trừ. Đừng đọc
+lại con số trong tin nhắn cũ — kể cả báo cáo tự động của chính hệ. Số trong
+tin nhắn là ảnh chụp lúc gửi; admin hỏi lại nghĩa là họ muốn số BÂY GIỜ.
 
 Xong chuỗi thì báo lại NGẮN, gộp một câu, kèm số dư mới. Đừng bắt admin đọc
 từng bước bạn vừa làm — họ cần biết kết quả, không cần biết quy trình.

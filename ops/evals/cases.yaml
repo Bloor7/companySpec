@@ -366,3 +366,32 @@ cases:
             # `codemap --check` sinh ra để bắt, chỉ khác là lần này nó nấp
             # trong chính bộ kiểm. Hàng rào đã được nới để soi cả ca nhiều lượt.
             truong: {ten: "*", batDau: "*"}
+
+  - id: han-muc-dem-ca-thang
+    vi: >
+      Hạn mức là hạn mức THÁNG: phải đếm chi tiêu từ NGÀY ĐẦU THÁNG, không đếm
+      từ lúc đặt hạn mức. Bản cũ đếm từ lúc đặt và báo "còn 4.789.000đ" trong
+      khi sự thật là "còn 1.091.154đ" — sai theo hướng trấn an, đúng lúc ví
+      admin có 23.020đ. Đo được 18–19/08/2026.
+      Ca này canh HÌNH LỜI GỌI, vì bug nằm đúng ở đó: `tuNgay` phải là đầu
+      tháng chứ không phải mốc `datLuc` mà getBudget trả về.
+    traVe:
+      budgetCompany.getBudget:
+        thang: "2026-08"
+        tong: 5000000
+        count: 1
+        hanMuc: {"ăn uống": 5000000}
+        # Đặt giữa tháng — đây chính là cái bẫy. Nó là GHI CHÚ, không phải
+        # mốc bắt đầu đếm.
+        datLuc: {"ăn uống": "2026-08-16T20:16:00.000+07:00"}
+      expenseCompany.sumExpenses:
+        total: 3900000
+        byCategory: {"ăn uống": 3900000}
+    cauAdmin: "hạn mức ăn uống còn bao nhiêu em"
+    phaiGoi:
+      - goi: budgetCompany.getBudget
+      - goi: expenseCompany.sumExpenses
+        # "~-01" = chuỗi phải CHỨA "-01", tức ngày mùng 1. Không so bằng nhau
+        # được vì ca chạy vào tháng nào thì đầu tháng đó khác nhau.
+        truong: {tuNgay: "~-01"}
+    toiDaLoiGoi: 3

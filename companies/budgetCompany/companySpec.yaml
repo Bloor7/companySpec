@@ -53,9 +53,11 @@ capabilities:
         tong:   { type: number }
         # { "ăn uống": 2000000, "đi lại": 500000, … } — CEO trừ với thực tế.
         hanMuc: { type: object }
-        # { "ăn uống": "2026-08-04T12:49:00+07:00", … } — mốc bắt đầu đếm. Chi
-        # tiêu TRƯỚC mốc này không tính vào hạn mức: admin đặt hạn mức lúc trưa
-        # là nói về phần còn lại của tháng, không phải trừ ngược buổi sáng.
+        # { "ăn uống": "2026-08-04T12:49:00+07:00", … } — LÚC ĐẶT hạn mức.
+        # GHI CHÚ, KHÔNG phải mốc bắt đầu đếm. Người đọc trường này (CEO,
+        # scheduler) phải đếm chi tiêu CẢ THÁNG rồi mới trừ; dùng nó làm bộ lọc
+        # thì "hạn mức tháng" hoá ra không tính cả tháng, và con số sai theo
+        # hướng trấn an. Đã cắn thật 18/08/2026 — xem ceo/playbooks/tien.md.
         datLuc: { type: object }
         items:  { type: array }
 

@@ -312,17 +312,33 @@ def section_tienbac() -> tuple[str, bool]:
     dat_luc = ns.get("datLuc") or {}
     if han:
         canh, on, con = [], [], 0
+        # ĐẾM CẢ THÁNG, không đếm từ lúc đặt hạn mức.
+        #
+        # Bản cũ lọc theo `datLuc` với lý do: admin đặt "ăn uống 3 triệu" lúc
+        # trưa là nói về phần còn lại của tháng, trừ ngược buổi sáng là hiểu sai
+        # ý. Lý do đó nghe được, nhưng nó MÂU THUẪN VỚI CHÍNH CÁI TÊN: trường
+        # đầu vào là `thang`, nhãn in ra là "Hạn mức tháng". Đã gọi là hạn mức
+        # tháng thì phải đếm cả tháng.
+        #
+        # Đo được 2026-08-18/19, hạn mức ăn uống 5 triệu đặt lúc 16/08 20:16:
+        #   · đếm từ mốc  →  đã tiêu 211.000đ  →  báo "còn 4.789.000đ"
+        #   · đếm cả tháng → đã tiêu 3.908.846đ → đúng phải là "còn 1.091.154đ"
+        # Admin phát hiện vì CEO khi ĐƯỢC HỎI thì tính cả tháng và ra số đúng,
+        # còn báo cáo tối thì ra số kia — hai nơi trong cùng một hệ nói hai con
+        # số khác nhau về cùng một thứ, và admin không có cách nào biết tin cái
+        # nào. Sai theo hướng TRẤN AN: báo còn 4,7 triệu trong khi ví có 23.020đ.
+        #
+        # `datLuc` vẫn giữ, nhưng làm GHI CHÚ chứ không làm bộ lọc — admin nhìn
+        # thấy hạn mức đặt ngày nào là đủ để tự hiểu, không cần hệ âm thầm đổi
+        # mẫu số hộ.
         for dm, muc in sorted(han.items(), key=lambda kv: -kv[1]):
-            # Đếm chi tiêu TỪ LÚC ĐẶT HẠN MỨC, không phải từ đầu tháng.
-            # Admin đặt "ăn uống 3 triệu" lúc 12:49 là nói về phần còn lại của
-            # tháng; trừ ngược những gì đã tiêu buổi sáng là hiểu sai ý và làm
-            # hạn mức trông như đã dùng hết trong khi chưa tiêu đồng nào.
-            tu = dat_luc.get(dm) or dau_thang
-            o = doc_output("expenseCompany", "sumExpenses", {"tuNgay": tu}, loi)
+            o = doc_output("expenseCompany", "sumExpenses",
+                           {"tuNgay": dau_thang}, loi)
             da = (o.get("byCategory") or {}).get(dm, 0)
             con += muc - da
             pct = round(da / muc * 100) if muc else 0
-            moc = f" (từ {tu[8:10]}/{tu[5:7]})" if tu != dau_thang else ""
+            dl = dat_luc.get(dm) or ""
+            moc = f" (đặt {dl[8:10]}/{dl[5:7]})" if dl[:10] > dau_thang else ""
             (canh if pct >= 80 else on).append(
                 f"  {dm}: {tien(da)}/{tien(muc)} ({pct}%){moc}")
         if canh:
