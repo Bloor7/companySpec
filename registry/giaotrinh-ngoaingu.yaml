@@ -1,0 +1,1352 @@
+# Giáo trình Anh–Trung song song — 12 bài, mỗi ngày một bài.
+#
+# ĐÂY LÀ NGUỒN DUY NHẤT. Hai nơi dùng chung file này:
+#   · tin nhắn "Học sáng" mỗi 05:30  — ops/scheduler.py, section_hocsang()
+#   · trang web có nút bấm để nghe   — ops/dung_giaotrinh.py sinh ra từ file này
+# Sửa ở đây rồi chạy lại bộ sinh trang. Đừng sửa thẳng vào HTML: sửa hai chỗ
+# thì sớm muộn hai bản lệch nhau, và không ai biết bản nào đúng.
+#
+# `batDau` quyết định hôm nay là bài mấy: bài N rơi vào ngày batDau + (N-1).
+# Học chậm hơn lịch thì LÙI `batDau` lại, đừng sửa hạn từng bài.
+#
+# enDoc / zhDoc là phiên âm bằng TIẾNG VIỆT — xấp xỉ để mở miệng được ngay,
+# không thay được việc nghe. Nghe vẫn phải bấm nút trên trang.
+lienKet: https://claude.ai/code/artifact/2831510f-d378-4e2b-90f6-080e9da27e4f
+batDau: '2026-08-20'
+bai:
+- ngay: 1
+  ten: Đón khách ở cửa
+  khi: Khách vừa bước vào sảnh. Bốn mươi giây đầu tiên.
+  tu:
+  - vi: Xin chào
+    en: Hello
+    enDoc: hê-lô
+    zh: 你好
+    py: nǐ hǎo
+    zhDoc: ní hảo
+  - vi: Chào buổi sáng
+    en: Good morning
+    enDoc: gút moóc-ninh
+    zh: 早上好
+    py: zǎoshang hǎo
+    zhDoc: chảo-sang hảo
+  - vi: Chào buổi chiều
+    en: Good afternoon
+    enDoc: gút áp-tơ-nun
+    zh: 下午好
+    py: xiàwǔ hǎo
+    zhDoc: xia-ủ hảo
+  - vi: Mời vào
+    en: Come in, please
+    enDoc: cằm in, pliz
+    zh: 请进
+    py: qǐng jìn
+    zhDoc: chỉnh chin
+  - vi: Anh chị cần gì ạ?
+    en: How can I help you?
+    enDoc: hao càn ai help diu
+    zh: 需要什么？
+    py: xūyào shénme
+    zhDoc: xuy-dao sấn-mơ
+  - vi: Anh chị tên gì ạ?
+    en: What's your name?
+    enDoc: goát dơ nêm
+    zh: 您贵姓？
+    py: nín guìxìng
+    zhDoc: nín quây-xing
+  - vi: Tôi tên là…
+    en: My name is…
+    enDoc: mai nêm iz
+    zh: 我叫…
+    py: wǒ jiào
+    zhDoc: ủa chiao
+  - vi: Tôi là chủ ở đây
+    en: I'm the owner here
+    enDoc: aim đơ ô-nơ hia
+    zh: 我是老板
+    py: wǒ shì lǎobǎn
+    zhDoc: ủa sư lảo-bản
+  - vi: Rất vui được gặp
+    en: Nice to meet you
+    enDoc: nai tu mít diu
+    zh: 很高兴认识你
+    py: hěn gāoxìng rènshi nǐ
+    zhDoc: hẩn cao-xing rân-sư nỉ
+  - vi: Khoẻ không?
+    en: How are you?
+    enDoc: hao a diu
+    zh: 你好吗？
+    py: nǐ hǎo ma
+    zhDoc: nỉ hảo ma
+  - vi: Khoẻ, cảm ơn
+    en: I'm fine, thank you
+    enDoc: aim phain, then-kiu
+    zh: 我很好，谢谢
+    py: wǒ hěn hǎo, xièxie
+    zhDoc: ủa hẩn hảo, xia-xịa
+  - vi: Cảm ơn
+    en: Thank you
+    enDoc: then-kiu
+    zh: 谢谢
+    py: xièxie
+    zhDoc: xia-xịa
+  - vi: Không có gì
+    en: You're welcome
+    enDoc: dua goeo-cầm
+    zh: 不客气
+    py: bù kèqi
+    zhDoc: pu khưa-chi
+  - vi: Xin lỗi
+    en: Sorry
+    enDoc: so-ri
+    zh: 对不起
+    py: duìbuqǐ
+    zhDoc: tuây-pu-chỉ
+  - vi: Tạm biệt
+    en: Goodbye
+    enDoc: gút-bai
+    zh: 再见
+    py: zàijiàn
+    zhDoc: chai-chiên
+  mau:
+  - vi: Chào buổi ___
+    en: Good ___
+    zh: ___好
+    thay:
+    - morning / 早上 zǎoshang — sáng
+    - afternoon / 下午 xiàwǔ — chiều
+    - evening / 晚上 wǎnshang — tối
+  - vi: Tôi là ___
+    en: I'm the ___
+    zh: 我是___
+    thay:
+    - owner / 老板 lǎobǎn — chủ
+    - manager / 经理 jīnglǐ — quản lý
+    - receptionist / 前台 qiántái — lễ tân
+  moc:
+  - 'Câu hỏi: tiếng Trung thêm 吗 ma ở cuối, tiếng Việt thêm “không” ở cuối — giống hệt nhau. Tiếng Anh phải đảo
+    cả câu.'
+  - 'Hán-Việt: 好 = hảo · 谢 = tạ (cảm tạ) · 早 = tảo (tảo hôn) · 请 = thỉnh (thỉnh cầu) · 见 = kiến (tái kiến = gặp
+    lại).'
+  - 'Thanh: nǐ hǎo hai thanh 3 liền nhau thì thanh đầu đọc thành thanh 2. Cứ đọc “ní hảo”, đừng đọc “nỉ hảo”.'
+  dungNgay: Mọi khách bước vào cửa, từ sáng mai.
+- ngay: 2
+  ten: Nhận phòng
+  khi: Khách đặt vali xuống. Giấy tờ, chìa khoá, số phòng.
+  tu:
+  - vi: Anh chị đặt phòng chưa?
+    en: Do you have a reservation?
+    enDoc: đu diu hép ơ re-dơ-vê-sần
+    zh: 您预订了吗？
+    py: nín yùdìng le ma
+    zhDoc: nín uy-ting lơ ma
+  - vi: Còn phòng không?
+    en: Do you have any rooms?
+    enDoc: đu diu hép e-ni rum
+    zh: 还有房间吗？
+    py: hái yǒu fángjiān ma
+    zhDoc: hái dẩu pháng-chiên ma
+  - vi: Cho tôi xem hộ chiếu
+    en: May I see your passport?
+    enDoc: mây ai xi dơ pát-pọt
+    zh: 请给我看护照
+    py: qǐng gěi wǒ kàn hùzhào
+    zhDoc: chỉnh cấy ủa khan hu-chao
+  - vi: Ký vào đây giúp tôi
+    en: Please sign here
+    enDoc: pliz xain hia
+    zh: 请在这里签名
+    py: qǐng zài zhèlǐ qiānmíng
+    zhDoc: chỉnh chai chưa-lỉ chiên-mính
+  - vi: Phòng số 203
+    en: Room 203
+    enDoc: rum tu-âu-thri
+    zh: 203号房
+    py: èr líng sān hào fáng
+    zhDoc: ơ-linh-xan hao pháng
+  - vi: Tầng hai
+    en: Second floor
+    enDoc: xé-cần flo
+    zh: 二楼
+    py: èr lóu
+    zhDoc: ơ lấu
+  - vi: Đây là chìa khoá
+    en: Here is your key
+    enDoc: hia iz dơ ki
+    zh: 这是钥匙
+    py: zhè shì yàoshi
+    zhDoc: chưa sư dao-sư
+  - vi: Mời theo tôi
+    en: Please follow me
+    enDoc: pliz pho-lâu mi
+    zh: 请跟我来
+    py: qǐng gēn wǒ lái
+    zhDoc: chỉnh cân ủa lái
+  - vi: Thang máy bên kia
+    en: The lift is over there
+    enDoc: đơ lipt iz ô-vơ đe
+    zh: 电梯在那边
+    py: diàntī zài nàbiān
+    zhDoc: tiên-thi chai na-biên
+  - vi: Ở mấy đêm ạ?
+    en: How many nights?
+    enDoc: hao me-ni nai
+    zh: 住几晚？
+    py: zhù jǐ wǎn
+    zhDoc: chu chỉ oản
+  - vi: Mấy người ạ?
+    en: How many people?
+    enDoc: hao me-ni pi-pồ
+    zh: 几个人？
+    py: jǐ ge rén
+    zhDoc: chỉ cưa rấn
+  - vi: Phòng đã sẵn sàng
+    en: Your room is ready
+    enDoc: dơ rum iz re-đi
+    zh: 房间准备好了
+    py: fángjiān zhǔnbèi hǎo le
+    zhDoc: pháng-chiên chuẩn-bây hảo lơ
+  - vi: Xin đợi một chút
+    en: One moment, please
+    enDoc: oăn mô-mần, pliz
+    zh: 请稍等
+    py: qǐng shāo děng
+    zhDoc: chỉnh sao tẩng
+  - vi: Đặt cọc 200 nghìn
+    en: A deposit of 200,000
+    enDoc: ơ đi-pô-zịt óp tu hăn-đrịt thao-zần
+    zh: 押金二十万
+    py: yājīn èrshí wàn
+    zhDoc: da-chin ơ-sứ oan
+  mau:
+  - vi: Cho tôi xem ___
+    en: May I see your ___?
+    zh: 请给我看___
+    thay:
+    - passport / 护照 hùzhào — hộ chiếu
+    - ID card / 身份证 shēnfènzhèng — căn cước
+    - booking / 订单 dìngdān — đơn đặt
+  - vi: Còn ___ không?
+    en: Do you have any ___?
+    zh: 还有___吗？
+    thay:
+    - rooms / 房间 fángjiān — phòng
+    - towels / 毛巾 máojīn — khăn
+    - blankets / 被子 bèizi — chăn
+  moc:
+  - 'Bằng chứng rõ nhất của lợi thế Hán-Việt: 护照 = hộ chiếu · 预订 = dự đính · 房间 = phòng gian · 楼 = lầu · 签名 = ký
+    danh · 电梯 = điện thê. Sáu từ, đại ca đã biết cả sáu.'
+  - 'Số phòng: tiếng Trung đọc TỪNG chữ số — 203 là èr líng sān (hai không ba). Giống cách người Việt đọc số điện
+    thoại.'
+  - 'Tiếng Anh khó chỗ khác: “Do you have…?” là một khối không có tương đương tiếng Việt. Học nguyên khối, đừng
+    dịch từng chữ.'
+  dungNgay: Mỗi lượt khách nhận phòng. Bài dùng nhiều nhất trong mười hai bài.
+- ngay: 3
+  ten: Số đếm và tiền
+  khi: Câu khách nào cũng hỏi, và là câu không được nói sai.
+  tu:
+  - vi: một, hai, ba
+    en: one, two, three
+    enDoc: oăn, tu, thri
+    zh: 一二三
+    py: yī èr sān
+    zhDoc: i, ơ, xan
+  - vi: bốn, năm, sáu
+    en: four, five, six
+    enDoc: pho, phai, xích
+    zh: 四五六
+    py: sì wǔ liù
+    zhDoc: xư, ủ, liêu
+  - vi: bảy, tám, chín, mười
+    en: seven, eight, nine, ten
+    enDoc: xé-vần, êt, nain, ten
+    zh: 七八九十
+    py: qī bā jiǔ shí
+    zhDoc: chi, pa, chiểu, sứ
+  - vi: một trăm
+    en: one hundred
+    enDoc: oăn hăn-đrịt
+    zh: 一百
+    py: yībǎi
+    zhDoc: i-pải
+  - vi: một nghìn
+    en: one thousand
+    enDoc: oăn thao-zần
+    zh: 一千
+    py: yīqiān
+    zhDoc: i-chiên
+  - vi: mười nghìn
+    en: ten thousand
+    enDoc: ten thao-zần
+    zh: 一万
+    py: yīwàn
+    zhDoc: i-oan
+  - vi: Bao nhiêu tiền?
+    en: How much is it?
+    enDoc: hao mắc iz ít
+    zh: 多少钱？
+    py: duōshao qián
+    zhDoc: tua-sao chiến
+  - vi: Hai trăm nghìn một đêm
+    en: 200,000 a night
+    enDoc: tu hăn-đrịt thao-zần ơ nai
+    zh: 一晚二十万
+    py: yī wǎn èrshí wàn
+    zhDoc: i oản ơ-sứ oan
+  - vi: Rẻ hơn được không?
+    en: Can you make it cheaper?
+    enDoc: càn diu mếch ít chi-pơ
+    zh: 可以便宜点吗？
+    py: kěyǐ piányi diǎn ma
+    zhDoc: khửa-ỉ p'iên-i tiển ma
+  - vi: Đắt quá
+    en: That's too expensive
+    enDoc: đét tu ích-xpen-xịp
+    zh: 太贵了
+    py: tài guì le
+    zhDoc: thai quây lơ
+  - vi: Đã bao gồm ăn sáng
+    en: Breakfast is included
+    enDoc: brếch-phợt iz in-clu-địt
+    zh: 包括早餐
+    py: bāokuò zǎocān
+    zhDoc: pao-khua chảo-xan
+  - vi: Tiền mặt hay thẻ?
+    en: Cash or card?
+    enDoc: két o cát
+    zh: 现金还是刷卡？
+    py: xiànjīn háishi shuākǎ
+    zhDoc: xiên-chin hái-sư soa-khả
+  - vi: Tôi không nhận thẻ
+    en: We don't take cards
+    enDoc: uy đôn têch cát
+    zh: 我们不收卡
+    py: wǒmen bù shōu kǎ
+    zhDoc: ủa-mân pu sâu khả
+  - vi: Đây là tiền thừa
+    en: Here's your change
+    enDoc: hia dơ chênh
+    zh: 这是找您的钱
+    py: zhè shì zhǎo nín de qián
+    zhDoc: chưa sư chảo nín tơ chiến
+  - vi: Tổng cộng là…
+    en: The total is…
+    enDoc: đơ tô-tồ iz
+    zh: 一共…
+    py: yīgòng
+    zhDoc: i-cung
+  mau:
+  - vi: ___ một đêm
+    en: ___ a night
+    zh: 一晚___
+    thay:
+    - 150,000 / 十五万 shíwǔ wàn
+    - 200,000 / 二十万 èrshí wàn
+    - 300,000 / 三十万 sānshí wàn
+  - vi: Quá ___
+    en: Too ___
+    zh: 太___了
+    thay:
+    - expensive / 贵 guì — đắt
+    - cheap / 便宜 piányi — rẻ
+    - cold / 冷 lěng — lạnh
+    - noisy / 吵 chǎo — ồn
+  moc:
+  - 'Cách gom số — chỗ dễ nói nhầm nhất khi báo giá: tiếng Trung gom theo 万 wàn = vạn = 10.000, y như tiếng Việt
+    cổ. 200.000 = 二十万 “hai mươi vạn”. Tiếng Anh gom theo nghìn: two hundred thousand.'
+  - 'Hán-Việt: 钱 = tiền · 贵 = quý (đắt) · 现金 = hiện kim · 包括 = bao quát · 早餐 = tảo xan · 一共 = nhất cộng.'
+  - 'Khuôn vàng: 太…了 tài … le = “quá…”, lắp được vào mọi tính từ.'
+  dungNgay: Báo giá phòng, giá xe máy, giá tô mì. Ba việc mỗi ngày.
+- ngay: 4
+  ten: Phòng có gì
+  khi: Câu hỏi ngay sau khi khách mở cửa phòng.
+  tu:
+  - vi: Mật khẩu wifi là…
+    en: The wifi password is…
+    enDoc: đơ wai-phai pát-uợt iz
+    zh: 无线网密码是…
+    py: wúxiànwǎng mìmǎ shì
+    zhDoc: u-xiên-oảng mi-mả sư
+  - vi: nước nóng
+    en: hot water
+    enDoc: hót uó-tơ
+    zh: 热水
+    py: rè shuǐ
+    zhDoc: rưa suẩy
+  - vi: máy sưởi
+    en: heater
+    enDoc: hi-tơ
+    zh: 暖气
+    py: nuǎnqì
+    zhDoc: noản-chi
+  - vi: điều hoà
+    en: air conditioning
+    enDoc: e cần-đi-sần-ninh
+    zh: 空调
+    py: kōngtiáo
+    zhDoc: khung-thiáo
+  - vi: chăn
+    en: blanket
+    enDoc: blen-kịt
+    zh: 被子
+    py: bèizi
+    zhDoc: bây-chư
+  - vi: gối
+    en: pillow
+    enDoc: pi-lâu
+    zh: 枕头
+    py: zhěntou
+    zhDoc: chẩn-thấu
+  - vi: khăn tắm
+    en: towel
+    enDoc: tao-eo
+    zh: 毛巾
+    py: máojīn
+    zhDoc: máo-chin
+  - vi: máy sấy tóc
+    en: hair dryer
+    enDoc: he đrai-ơ
+    zh: 吹风机
+    py: chuīfēngjī
+    zhDoc: suây-phâng-chi
+  - vi: giấy vệ sinh
+    en: toilet paper
+    enDoc: toi-lịt pây-pơ
+    zh: 卫生纸
+    py: wèishēngzhǐ
+    zhDoc: uây-sâng-chử
+  - vi: Cần thêm gì cứ gọi tôi
+    en: Call me if you need anything
+    enDoc: co mi íp diu nít e-ni-thing
+    zh: 需要什么就叫我
+    py: xūyào shénme jiù jiào wǒ
+    zhDoc: xuy-dao sấn-mơ chiêu chiao ủa
+  - vi: Phòng hướng ra hồ
+    en: The room faces the lake
+    enDoc: đơ rum phê-xịt đơ lêch
+    zh: 房间朝湖
+    py: fángjiān cháo hú
+    zhDoc: pháng-chiên sáo hú
+  - vi: Ở đây ban đêm lạnh
+    en: It gets cold here at night
+    enDoc: ít ghét câu hia ét nai
+    zh: 这里晚上很冷
+    py: zhèlǐ wǎnshang hěn lěng
+    zhDoc: chưa-lỉ oản-sang hẩn lẩng
+  - vi: Nước nóng có sau 5 phút
+    en: Hot water comes after 5 minutes
+    enDoc: hót uó-tơ cằm áp-tơ phai mi-nịt
+    zh: 热水五分钟后就有
+    py: rè shuǐ wǔ fēnzhōng hòu jiù yǒu
+    zhDoc: rưa suẩy ủ phân-chung hâu chiêu dẩu
+  - vi: Không hút thuốc trong phòng
+    en: No smoking in the room
+    enDoc: nâu xmô-king in đơ rum
+    zh: 房间里不能吸烟
+    py: fángjiān lǐ bù néng xīyān
+    zhDoc: pháng-chiên lỉ pu nấng xi-den
+  mau:
+  - vi: Tôi cần thêm ___
+    en: Can I have another ___?
+    zh: 可以再要一个___吗？
+    thay:
+    - towel / 毛巾 máojīn — khăn
+    - blanket / 被子 bèizi — chăn
+    - pillow / 枕头 zhěntou — gối
+    - key / 钥匙 yàoshi — chìa khoá
+  - vi: ___ ở đâu?
+    en: Where is the ___?
+    zh: ___在哪里？
+    thay:
+    - bathroom / 洗手间 xǐshǒujiān — nhà vệ sinh
+    - lift / 电梯 diàntī — thang máy
+    - breakfast / 早餐 zǎocān — bữa sáng
+  moc:
+  - 'Hán-Việt: 密码 = mật mã · 热水 = nhiệt thuỷ · 空调 = không điều · 毛巾 = mao cân · 湖 = hồ · 冷 = lãnh · 吸烟 = hấp yên
+    (hút thuốc).'
+  - 'Lỗi người Việt hay quên: tiếng Trung luôn có 很 trước tính từ, kể cả khi không mang nghĩa “rất”. Nói trống 冷
+    nghe cụt như so sánh dở dang.'
+  - 'Câu Đà Lạt: “Ở đây ban đêm lạnh” là câu đại ca sẽ nói nhiều nhất — khách nào cũng bất ngờ.'
+  dungNgay: Lúc dẫn khách lên phòng, ngay sau bài 2.
+- ngay: 5
+  ten: Giờ giấc, ngày tháng
+  khi: Ở mấy đêm, trả phòng lúc mấy giờ, mai đi lúc nào.
+  tu:
+  - vi: Mấy giờ rồi?
+    en: What time is it?
+    enDoc: goát tai iz ít
+    zh: 几点了？
+    py: jǐ diǎn le
+    zhDoc: chỉ tiển lơ
+  - vi: Bây giờ 7 giờ
+    en: It's seven o'clock
+    enDoc: íts xé-vần ơ-clóc
+    zh: 现在七点
+    py: xiànzài qī diǎn
+    zhDoc: xiên-chai chi tiển
+  - vi: 7 giờ rưỡi
+    en: Half past seven
+    enDoc: háp pát xé-vần
+    zh: 七点半
+    py: qī diǎn bàn
+    zhDoc: chi tiển pan
+  - vi: Trả phòng lúc 12 giờ
+    en: Check-out is at 12
+    enDoc: chéc-aot iz ét toen
+    zh: 十二点退房
+    py: shí'èr diǎn tuìfáng
+    zhDoc: sứ-ơ tiển thuây-pháng
+  - vi: Ăn sáng từ 7 giờ
+    en: Breakfast starts at seven
+    enDoc: brếch-phợt xtát ét xé-vần
+    zh: 七点开始早餐
+    py: qī diǎn kāishǐ zǎocān
+    zhDoc: chi tiển khai-sử chảo-xan
+  - vi: Cửa đóng lúc 11 giờ đêm
+    en: The gate closes at 11 pm
+    enDoc: đơ ghêt clô-zịt ét i-lé-vần pi-em
+    zh: 晚上十一点关门
+    py: wǎnshang shíyī diǎn guānmén
+    zhDoc: oản-sang sứ-i tiển quan-mấn
+  - vi: hôm nay
+    en: today
+    enDoc: tu-đây
+    zh: 今天
+    py: jīntiān
+    zhDoc: chin-thiên
+  - vi: ngày mai
+    en: tomorrow
+    enDoc: tu-mo-râu
+    zh: 明天
+    py: míngtiān
+    zhDoc: mính-thiên
+  - vi: hôm qua
+    en: yesterday
+    enDoc: dét-tơ-đây
+    zh: 昨天
+    py: zuótiān
+    zhDoc: chúa-thiên
+  - vi: sáng / chiều / tối
+    en: morning / afternoon / evening
+    enDoc: moóc-ninh / áp-tơ-nun / íp-ninh
+    zh: 早上 / 下午 / 晚上
+    py: zǎoshang / xiàwǔ / wǎnshang
+    zhDoc: chảo-sang / xia-ủ / oản-sang
+  - vi: Ở thêm một đêm được không?
+    en: Can I stay one more night?
+    enDoc: càn ai xtây oăn mo nai
+    zh: 可以多住一晚吗？
+    py: kěyǐ duō zhù yī wǎn ma
+    zhDoc: khửa-ỉ tua chu i oản ma
+  - vi: Được, không sao
+    en: Sure, no problem
+    enDoc: suơ, nâu prób-lầm
+    zh: 可以，没问题
+    py: kěyǐ, méi wèntí
+    zhDoc: khửa-ỉ, mấy uân-thí
+  - vi: Xin lỗi, hết phòng rồi
+    en: Sorry, we're full
+    enDoc: so-ri, uia phun
+    zh: 抱歉，客满了
+    py: bàoqiàn, kè mǎn le
+    zhDoc: pao-chiên, khưa mản lơ
+  - vi: Mấy giờ anh chị đi?
+    en: What time are you leaving?
+    enDoc: goát tai a diu li-ving
+    zh: 您几点走？
+    py: nín jǐ diǎn zǒu
+    zhDoc: nín chỉ tiển chẩu
+  mau:
+  - vi: ___ lúc mấy giờ?
+    en: What time is ___?
+    zh: ___几点？
+    thay:
+    - breakfast / 早餐 zǎocān
+    - check-out / 退房 tuìfáng
+    - the bus / 巴士 bāshì
+  - vi: ___ giờ
+    en: ___ o'clock
+    zh: ___点
+    thay:
+    - seven / 七 qī
+    - eight / 八 bā
+    - nine / 九 jiǔ
+    - ten / 十 shí
+  moc:
+  - 'Hán-Việt: 今天 = kim thiên · 明天 = minh thiên · 昨天 = tạc thiên · 退房 = thoái phòng · 开始 = khai thuỷ · 问题 = vấn
+    đề.'
+  - 'Trật tự thời gian: Trung và Việt đều đi từ LỚN đến NHỎ (晚上十一点 = buổi tối 11 giờ). Tiếng Anh ngược lại: 11 pm.'
+  - 'Khuôn vàng: 可以…吗？ kěyǐ … ma = “…được không?”, lắp vào mọi việc muốn xin phép.'
+  dungNgay: Mỗi tối khách hỏi giờ đóng cửa, mỗi sáng hỏi ăn sáng.
+- ngay: 6
+  ten: Chỉ đường ở Đà Lạt
+  khi: Khách cầm điện thoại hỏi đi đâu, đi thế nào.
+  tu:
+  - vi: đi thẳng
+    en: go straight
+    enDoc: gâu xtrết
+    zh: 一直走
+    py: yīzhí zǒu
+    zhDoc: i-chứ chẩu
+  - vi: rẽ trái
+    en: turn left
+    enDoc: tơn lép
+    zh: 左转
+    py: zuǒ zhuǎn
+    zhDoc: chủa choản
+  - vi: rẽ phải
+    en: turn right
+    enDoc: tơn rai
+    zh: 右转
+    py: yòu zhuǎn
+    zhDoc: dâu choản
+  - vi: gần đây thôi
+    en: it's very close
+    enDoc: íts ve-ri clâu
+    zh: 很近
+    py: hěn jìn
+    zhDoc: hẩn chin
+  - vi: xa lắm
+    en: it's quite far
+    enDoc: íts quai fa
+    zh: 很远
+    py: hěn yuǎn
+    zhDoc: hẩn doản
+  - vi: đi bộ mười phút
+    en: ten minutes on foot
+    enDoc: ten mi-nịt on phút
+    zh: 走路十分钟
+    py: zǒulù shí fēnzhōng
+    zhDoc: chẩu-lu sứ phân-chung
+  - vi: chợ Đà Lạt
+    en: Da Lat market
+    enDoc: đa lát ma-kịt
+    zh: 大叻市场
+    py: Dàlè shìchǎng
+    zhDoc: ta-lưa sư-chảng
+  - vi: hồ Xuân Hương
+    en: Xuan Huong lake
+    enDoc: xuân hương lêch
+    zh: 春香湖
+    py: Chūnxiāng hú
+    zhDoc: suân-xiang hú
+  - vi: nhà thờ
+    en: the church
+    enDoc: đơ chớch
+    zh: 教堂
+    py: jiàotáng
+    zhDoc: chiao-tháng
+  - vi: Để tôi chỉ trên bản đồ
+    en: Let me show you on the map
+    enDoc: lét mi sâu diu on đơ máp
+    zh: 我给你看地图
+    py: wǒ gěi nǐ kàn dìtú
+    zhDoc: ủa cấy nỉ khan ti-thú
+  - vi: Đi taxi khoảng 50 nghìn
+    en: A taxi is about 50,000
+    enDoc: ơ tắc-xi iz ơ-bao phíp-ti thao-zần
+    zh: 打车大概五万
+    py: dǎchē dàgài wǔ wàn
+    zhDoc: tả-chưa ta-cai ủ oan
+  - vi: Gần bùng binh
+    en: Near the roundabout
+    enDoc: nia đơ rao-đơ-bao
+    zh: 在环岛附近
+    py: zài huándǎo fùjìn
+    zhDoc: chai hoán-tảo phu-chin
+  - vi: Bên tay phải
+    en: On your right
+    enDoc: on dơ rai
+    zh: 在您右边
+    py: zài nín yòubian
+    zhDoc: chai nín dâu-biên
+  - vi: Đi theo đường này
+    en: Follow this road
+    enDoc: pho-lâu đít râu
+    zh: 沿着这条路走
+    py: yánzhe zhè tiáo lù zǒu
+    zhDoc: dén-chưa chưa thiáo lu chẩu
+  mau:
+  - vi: ___ ở đâu?
+    en: Where is ___?
+    zh: ___在哪里？
+    thay:
+    - the market / 市场 shìchǎng
+    - the lake / 湖 hú
+    - the bus station / 车站 chēzhàn
+  - vi: Đi ___ mất bao lâu?
+    en: How long does it take to ___?
+    zh: 到___要多久？
+    thay:
+    - the market / 市场 shìchǎng
+    - the lake / 湖 hú
+    - the airport / 机场 jīchǎng
+  moc:
+  - 'Hán-Việt: 左 = tả, 右 = hữu (tả hữu) · 近 = cận (cận thị) · 远 = viễn · 市场 = thị trường · 地图 = địa đồ · 教堂 = giáo
+    đường.'
+  - 'Tên riêng đọc thẳng ra âm Hán-Việt: Đà Lạt = 大叻 Dàlè (大 = đại) · hồ Xuân Hương = 春香湖 xuân hương hồ.'
+  - 'Tiếng Anh: giới từ chỉ đường (on, at, in, past, across) không có quy tắc gọn. Học theo cụm cố định, đừng cố
+    hiểu logic.'
+  dungNgay: Mỗi sáng khách xuống sảnh hỏi hôm nay đi đâu.
+- ngay: 7
+  ten: Cho thuê xe máy
+  khi: Việc làm ra tiền của đại ca. Bài đáng học kỹ nhất.
+  tu:
+  - vi: Thuê xe máy không?
+    en: Would you like to rent a motorbike?
+    enDoc: gút diu laic tu rent ơ mô-tơ-baic
+    zh: 要租摩托车吗？
+    py: yào zū mótuōchē ma
+    zhDoc: dao chu mua-thua-chưa ma
+  - vi: 120 nghìn một ngày
+    en: 120,000 per day
+    enDoc: oăn tuen-ti thao-zần pơ đây
+    zh: 一天十二万
+    py: yī tiān shí'èr wàn
+    zhDoc: i thiên sứ-ơ oan
+  - vi: Có bằng lái không?
+    en: Do you have a licence?
+    enDoc: đu diu hép ơ lai-xần
+    zh: 有驾照吗？
+    py: yǒu jiàzhào ma
+    zhDoc: dẩu chia-chao ma
+  - vi: Nhớ đội mũ bảo hiểm
+    en: Please wear the helmet
+    enDoc: pliz goe đơ hen-mịt
+    zh: 请戴头盔
+    py: qǐng dài tóukuī
+    zhDoc: chỉnh tai thấu-khuây
+  - vi: Xăng tự đổ nhé
+    en: Petrol is not included
+    enDoc: pét-rồ iz nót in-clu-địt
+    zh: 汽油自己加
+    py: qìyóu zìjǐ jiā
+    zhDoc: chi-dấu chư-chỉ chia
+  - vi: Trả xe trước 6 giờ chiều
+    en: Return it before 6 pm
+    enDoc: ri-tơn ít bi-pho xích pi-em
+    zh: 下午六点前还车
+    py: xiàwǔ liù diǎn qián huán chē
+    zhDoc: xia-ủ liêu tiển chiến hoán chưa
+  - vi: Đặt cọc hộ chiếu
+    en: Passport as deposit
+    enDoc: pát-pọt ét đi-pô-zịt
+    zh: 押护照
+    py: yā hùzhào
+    zhDoc: da hu-chao
+  - vi: Đường đèo trơn, chạy chậm thôi
+    en: The mountain road is slippery, drive slowly
+    enDoc: đơ mao-tần râu iz xli-pơ-ri, đraiv xlâu-li
+    zh: 山路很滑，慢点开
+    py: shānlù hěn huá, màn diǎn kāi
+    zhDoc: san-lu hẩn hoá, man tiển khai
+  - vi: Xe này số tự động
+    en: This one is automatic
+    enDoc: đít oăn iz o-tơ-me-tịc
+    zh: 这辆是自动挡
+    py: zhè liàng shì zìdòngdǎng
+    zhDoc: chưa liang sư chư-tung-tảng
+  - vi: Đầy bình xăng
+    en: Full tank
+    enDoc: phun tenh
+    zh: 满油
+    py: mǎn yóu
+    zhDoc: mản dấu
+  - vi: Có chuyện gì gọi tôi ngay
+    en: Call me right away if anything happens
+    enDoc: co mi rai ơ-guây íp e-ni-thing hép-pần
+    zh: 有事马上打给我
+    py: yǒu shì mǎshàng dǎ gěi wǒ
+    zhDoc: dẩu sư mả-sang tả cấy ủa
+  - vi: Xe hỏng rồi
+    en: The bike broke down
+    enDoc: đơ baic brâu đao
+    zh: 车坏了
+    py: chē huài le
+    zhDoc: chưa hoai lơ
+  - vi: Đổ xăng ở kia
+    en: The petrol station is over there
+    enDoc: đơ pét-rồ xtê-sần iz ô-vơ đe
+    zh: 加油站在那边
+    py: jiāyóuzhàn zài nàbiān
+    zhDoc: chia-dấu-chan chai na-biên
+  - vi: Cẩn thận nhé
+    en: Be careful
+    enDoc: bi ke-phù
+    zh: 小心点
+    py: xiǎoxīn diǎn
+    zhDoc: xiảo-xin tiển
+  mau:
+  - vi: Thuê ___ không?
+    en: Would you like to rent a ___?
+    zh: 要租___吗？
+    thay:
+    - motorbike / 摩托车 mótuōchē — xe máy
+    - bicycle / 自行车 zìxíngchē — xe đạp
+    - car / 汽车 qìchē — ô tô
+  - vi: ___ một ngày
+    en: ___ per day
+    zh: 一天___
+    thay:
+    - 100,000 / 十万 shí wàn
+    - 120,000 / 十二万 shí'èr wàn
+    - 150,000 / 十五万 shíwǔ wàn
+  moc:
+  - 'Hán-Việt: 租 = tô (tô thuế = thuê) · 驾照 = giá chiếu (bằng lái) · 汽油 = khí du (xăng) · 山路 = sơn lộ · 小心 = tiểu
+    tâm.'
+  - 'Mẹo nhớ: 马上 mǎshàng nghĩa đen là “trên lưng ngựa” — thời xưa lên ngựa là đi ngay. Hình ảnh nhớ chắc hơn học
+    thuộc.'
+  - 'Bẫy tiếng Anh: đại ca CHO thuê là rent out; khách ĐI thuê là rent.'
+  dungNgay: Mỗi lần khách hỏi xe. Bài trực tiếp ra tiền.
+- ngay: 8
+  ten: Bán mì và nước
+  khi: Khách đói lúc 9 giờ tối, ngoài đường đã đóng cửa.
+  tu:
+  - vi: Anh chị ăn gì không?
+    en: Would you like something to eat?
+    enDoc: gút diu laic xâm-thing tu ít
+    zh: 要吃点什么吗？
+    py: yào chī diǎn shénme ma
+    zhDoc: dao chư tiển sấn-mơ ma
+  - vi: mì gói
+    en: instant noodles
+    enDoc: in-xtần nu-đồ
+    zh: 泡面
+    py: pàomiàn
+    zhDoc: p'ao-miên
+  - vi: mì bò
+    en: beef noodles
+    enDoc: bíp nu-đồ
+    zh: 牛肉面
+    py: niúròu miàn
+    zhDoc: niếu-râu miên
+  - vi: nước ngọt
+    en: soft drink
+    enDoc: xóp đring
+    zh: 汽水
+    py: qìshuǐ
+    zhDoc: chi-suẩy
+  - vi: nước suối
+    en: bottled water
+    enDoc: bó-tồ uó-tơ
+    zh: 矿泉水
+    py: kuàngquánshuǐ
+    zhDoc: khoang-choén-suẩy
+  - vi: cà phê
+    en: coffee
+    enDoc: co-phi
+    zh: 咖啡
+    py: kāfēi
+    zhDoc: kha-phây
+  - vi: trà
+    en: tea
+    enDoc: ti
+    zh: 茶
+    py: chá
+    zhDoc: chá
+  - vi: Nóng hay lạnh?
+    en: Hot or cold?
+    enDoc: hót o câu
+    zh: 热的还是冷的？
+    py: rè de háishi lěng de
+    zhDoc: rưa tơ hái-sư lẩng tơ
+  - vi: Cay không?
+    en: Is it spicy?
+    enDoc: iz ít xpai-xi
+    zh: 辣吗？
+    py: là ma
+    zhDoc: la ma
+  - vi: Tôi ăn chay
+    en: I'm vegetarian
+    enDoc: aim ve-giơ-te-ri-ần
+    zh: 我吃素
+    py: wǒ chī sù
+    zhDoc: ủa chư xu
+  - vi: Mấy tô ạ?
+    en: How many bowls?
+    enDoc: hao me-ni bâu
+    zh: 几碗？
+    py: jǐ wǎn
+    zhDoc: chỉ oản
+  - vi: Đợi 5 phút nhé
+    en: Five minutes, please
+    enDoc: phai mi-nịt, pliz
+    zh: 请等五分钟
+    py: qǐng děng wǔ fēnzhōng
+    zhDoc: chỉnh tẩng ủ phân-chung
+  - vi: Ngon không anh chị?
+    en: How was it?
+    enDoc: hao goát ít
+    zh: 好吃吗？
+    py: hǎochī ma
+    zhDoc: hảo-chư ma
+  - vi: Ngon lắm
+    en: Very tasty
+    enDoc: ve-ri tây-xti
+    zh: 很好吃
+    py: hěn hǎochī
+    zhDoc: hẩn hảo-chư
+  mau:
+  - vi: Anh chị muốn ___ không?
+    en: Would you like ___?
+    zh: 要___吗？
+    thay:
+    - tea / 茶 chá
+    - coffee / 咖啡 kāfēi
+    - noodles / 面 miàn
+    - water / 水 shuǐ
+  - vi: Mấy ___ ạ?
+    en: How many ___?
+    zh: 几___？
+    thay:
+    - bowls / 碗 wǎn — tô
+    - bottles / 瓶 píng — chai
+    - people / 个人 ge rén — người
+    - nights / 晚 wǎn — đêm
+  moc:
+  - 'Hán-Việt: 面 = miến/mì · 牛肉 = ngưu nhục · 汽水 = khí thuỷ · 矿泉水 = khoáng tuyền thuỷ · 素 = tố (ăn tố = ăn chay)
+    · 茶 = trà.'
+  - 'Câu riêng của đại ca: 我吃素 wǒ chī sù — đại ca ăn chay thứ Hai và ngày rằm. Từ dùng cho bản thân nhớ lâu hơn
+    hẳn.'
+  - 'Cấu trúc chọn lựa: …还是… háishi = “hay là”. Cả ba thứ tiếng đều đặt giữa hai lựa chọn.'
+  dungNgay: Mỗi tối, và mỗi lần khách hỏi quanh đây ăn gì.
+- ngay: 9
+  ten: Sự cố và phàn nàn
+  khi: Bài khó nhất về cảm xúc. Vài câu đúng lúc này giữ được cả đánh giá 5 sao.
+  tu:
+  - vi: Xin lỗi anh chị
+    en: I'm very sorry
+    enDoc: aim ve-ri so-ri
+    zh: 很抱歉
+    py: hěn bàoqiàn
+    zhDoc: hẩn pao-chiên
+  - vi: Có chuyện gì ạ?
+    en: What happened?
+    enDoc: goát hép-pần
+    zh: 怎么了？
+    py: zěnme le
+    zhDoc: chẩn-mơ lơ
+  - vi: Hỏng rồi ạ?
+    en: Is it broken?
+    enDoc: iz ít brâu-cần
+    zh: 坏了吗？
+    py: huài le ma
+    zhDoc: hoai lơ ma
+  - vi: Tôi sửa ngay
+    en: I'll fix it right away
+    enDoc: ai phích ít rai ơ-guây
+    zh: 我马上修
+    py: wǒ mǎshàng xiū
+    zhDoc: ủa mả-sang xiêu
+  - vi: Mất điện rồi
+    en: The power is out
+    enDoc: đơ pao-ơ iz aot
+    zh: 停电了
+    py: tíngdiàn le
+    zhDoc: thính-tiên lơ
+  - vi: Không có nước nóng
+    en: There's no hot water
+    enDoc: đe nâu hót uó-tơ
+    zh: 没有热水
+    py: méiyǒu rè shuǐ
+    zhDoc: mấy-dẩu rưa suẩy
+  - vi: Wifi không vào được
+    en: The wifi isn't working
+    enDoc: đơ wai-phai i-zần uơ-king
+    zh: 无线网连不上
+    py: wúxiànwǎng lián bù shàng
+    zhDoc: u-xiên-oảng liến pu sang
+  - vi: Ồn quá
+    en: It's too noisy
+    enDoc: íts tu noi-zi
+    zh: 太吵了
+    py: tài chǎo le
+    zhDoc: thai chảo lơ
+  - vi: Phòng bẩn
+    en: The room is dirty
+    enDoc: đơ rum iz đơ-ti
+    zh: 房间不干净
+    py: fángjiān bù gānjìng
+    zhDoc: pháng-chiên pu can-ching
+  - vi: Tôi đổi phòng khác cho anh chị
+    en: I'll move you to another room
+    enDoc: ai muv diu tu ơ-ná-đơ rum
+    zh: 我给您换房间
+    py: wǒ gěi nín huàn fángjiān
+    zhDoc: ủa cấy nín hoan pháng-chiên
+  - vi: Cho tôi mười phút
+    en: Give me ten minutes
+    enDoc: gív mi ten mi-nịt
+    zh: 给我十分钟
+    py: gěi wǒ shí fēnzhōng
+    zhDoc: cấy ủa sứ phân-chung
+  - vi: Tôi giảm giá cho anh chị
+    en: I'll give you a discount
+    enDoc: ai gív diu ơ đít-cao
+    zh: 我给您打折
+    py: wǒ gěi nín dǎzhé
+    zhDoc: ủa cấy nín tả-chứa
+  - vi: Mong anh chị thông cảm
+    en: I hope you understand
+    enDoc: ai hôp diu ăn-đơ-xten
+    zh: 请您谅解
+    py: qǐng nín liàngjiě
+    zhDoc: chỉnh nín liang-chiể
+  - vi: Đã sửa xong rồi ạ
+    en: It's fixed now
+    enDoc: íts phíc-xịt nao
+    zh: 修好了
+    py: xiū hǎo le
+    zhDoc: xiêu hảo lơ
+  mau:
+  - vi: ___ hỏng rồi
+    en: The ___ is broken
+    zh: ___坏了
+    thay:
+    - heater / 暖气 nuǎnqì
+    - light / 灯 dēng
+    - lock / 锁 suǒ
+    - shower / 淋浴 línyù
+  - vi: Không có ___
+    en: There's no ___
+    zh: 没有___
+    thay:
+    - hot water / 热水 rè shuǐ
+    - wifi / 无线网 wúxiànwǎng
+    - electricity / 电 diàn
+    - towel / 毛巾 máojīn
+  moc:
+  - 'Hán-Việt: 抱歉 = bão khiểm · 停电 = đình điện · 修 = tu (tu sửa) · 换 = hoán · 谅解 = lượng giải · 打折 = đả chiết (giảm
+    giá).'
+  - 'Trợ từ 了 le: gắn cuối câu để báo “đã thành ra thế” — 坏了 hỏng rồi. Đúng bằng chữ “rồi” tiếng Việt. Tiếng Anh
+    phải đổi cả thì động từ.'
+  - 'Ngoài ngôn ngữ: khách đang bực thì nói chậm và nói ít. Ba câu ngắn rõ ràng trấn an hơn một câu dài lắp bắp.'
+  dungNgay: Lần tới mất điện hoặc hết nước nóng — ở Đà Lạt thì không phải chờ lâu.
+- ngay: 10
+  ten: Thời tiết, gợi ý chỗ chơi
+  khi: Lúc đại ca thành người bản xứ chứ không phải lễ tân.
+  tu:
+  - vi: Hôm nay lạnh lắm
+    en: It's very cold today
+    enDoc: íts ve-ri câu tu-đây
+    zh: 今天很冷
+    py: jīntiān hěn lěng
+    zhDoc: chin-thiên hẩn lẩng
+  - vi: Trời đẹp
+    en: The weather is nice
+    enDoc: đơ ue-đơ iz nai
+    zh: 天气很好
+    py: tiānqì hěn hǎo
+    zhDoc: thiên-chi hẩn hảo
+  - vi: Nhớ mang áo ấm
+    en: Bring a warm jacket
+    enDoc: bring ơ uom giác-kịt
+    zh: 带件外套
+    py: dài jiàn wàitào
+    zhDoc: tai chiên oai-thao
+  - vi: Chiều nay có mưa
+    en: It'll rain this afternoon
+    enDoc: í-tồ rên đít áp-tơ-nun
+    zh: 下午会下雨
+    py: xiàwǔ huì xiàyǔ
+    zhDoc: xia-ủ huây xia-ủy
+  - vi: Mang ô nhé
+    en: Take an umbrella
+    enDoc: têch ần ăm-bre-lơ
+    zh: 带把伞
+    py: dài bǎ sǎn
+    zhDoc: tai pả xản
+  - vi: Sáng sớm có sương mù đẹp lắm
+    en: The morning mist is beautiful
+    enDoc: đơ moóc-ninh mít iz biu-tơ-phù
+    zh: 早上的雾很美
+    py: zǎoshang de wù hěn měi
+    zhDoc: chảo-sang tơ u hẩn mẩy
+  - vi: Anh chị nên đi…
+    en: You should go to…
+    enDoc: diu sút gâu tu
+    zh: 您可以去…
+    py: nín kěyǐ qù
+    zhDoc: nín khửa-ỉ chuy
+  - vi: Chỗ đó rất đẹp
+    en: That place is beautiful
+    enDoc: đét plết iz biu-tơ-phù
+    zh: 那里很漂亮
+    py: nàlǐ hěn piàoliang
+    zhDoc: na-lỉ hẩn p'iao-liang
+  - vi: Đi sớm thì ít người
+    en: Go early, fewer people
+    enDoc: gâu ơ-li, phiu-ơ pi-pồ
+    zh: 早点去人少
+    py: zǎo diǎn qù rén shǎo
+    zhDoc: chảo tiển chuy rấn sảo
+  - vi: Ở đó có cà phê ngon
+    en: There's good coffee there
+    enDoc: đe gút co-phi đe
+    zh: 那里咖啡很好喝
+    py: nàlǐ kāfēi hěn hǎohē
+    zhDoc: na-lỉ kha-phây hẩn hảo-hưa
+  - vi: Cuối tuần đông lắm
+    en: It's crowded at weekends
+    enDoc: íts crao-địt ét uých-en
+    zh: 周末人很多
+    py: zhōumò rén hěn duō
+    zhDoc: châu-mua rấn hẩn tua
+  - vi: Chúc anh chị đi chơi vui
+    en: Have a nice trip
+    enDoc: hép ơ nai tríp
+    zh: 玩得开心
+    py: wán de kāixīn
+    zhDoc: oán tơ khai-xin
+  - vi: Nhớ mặc ấm
+    en: Dress warmly
+    enDoc: đrét uom-li
+    zh: 穿暖一点
+    py: chuān nuǎn yīdiǎn
+    zhDoc: soan noản i-tiển
+  - vi: Đường lên đó hơi dốc
+    en: The road up there is steep
+    enDoc: đơ râu áp đe iz xtíp
+    zh: 上去的路很陡
+    py: shàngqù de lù hěn dǒu
+    zhDoc: sang-chuy tơ lu hẩn tẩu
+  mau:
+  - vi: Hôm nay rất ___
+    en: It's very ___ today
+    zh: 今天很___
+    thay:
+    - cold / 冷 lěng
+    - hot / 热 rè
+    - windy / 大风 dàfēng
+    - beautiful / 美 měi
+  - vi: Anh chị nên đi ___
+    en: You should go to ___
+    zh: 您可以去___
+    thay:
+    - the lake / 湖 hú
+    - the market / 市场 shìchǎng
+    - the flower garden / 花园 huāyuán
+  moc:
+  - 'Hán-Việt: 雨 = vũ · 雾 = vụ (sương mù) · 美 = mỹ · 外套 = ngoại sáo · 开心 = khai tâm (mở lòng = vui) · 周末 = chu mạt.'
+  - 'Thì tương lai: tiếng Trung dùng 会 huì trước động từ, đúng bằng chữ “sẽ” tiếng Việt. Tiếng Anh đổi hẳn cấu trúc.'
+  - 'Từ riêng của Đà Lạt: 雾 wù — sương mù. Khách Trung lên Đà Lạt là để xem thứ này.'
+  dungNgay: Mỗi sáng ở sảnh, lúc khách còn đang phân vân.
+- ngay: 11
+  ten: Trả phòng
+  khi: Tiền bạc và giấy tờ. Chỗ không được phép nói nhầm.
+  tu:
+  - vi: Anh chị trả phòng ạ?
+    en: Are you checking out?
+    enDoc: a diu chéc-king aot
+    zh: 您要退房吗？
+    py: nín yào tuìfáng ma
+    zhDoc: nín dao thuây-pháng ma
+  - vi: Tổng cộng là…
+    en: The total is…
+    enDoc: đơ tô-tồ iz
+    zh: 一共…
+    py: yīgòng
+    zhDoc: i-cung
+  - vi: Ba đêm, sáu trăm nghìn
+    en: Three nights, 600,000
+    enDoc: thri nai, xích hăn-đrịt thao-zần
+    zh: 三晚，六十万
+    py: sān wǎn, liùshí wàn
+    zhDoc: xan oản, liêu-sứ oan
+  - vi: Tiền mặt hay chuyển khoản?
+    en: Cash or bank transfer?
+    enDoc: két o beng tren-xphơ
+    zh: 现金还是转账？
+    py: xiànjīn háishi zhuǎnzhàng
+    zhDoc: xiên-chin hái-sư choản-chang
+  - vi: Quét mã này
+    en: Scan this code
+    enDoc: xken đít câu
+    zh: 扫这个码
+    py: sǎo zhège mǎ
+    zhDoc: xảo chưa-cưa mả
+  - vi: Đây là hoá đơn
+    en: Here's your receipt
+    enDoc: hia dơ ri-xít
+    zh: 这是收据
+    py: zhè shì shōujù
+    zhDoc: chưa sư sâu-chuy
+  - vi: Anh chị quên gì trong phòng không?
+    en: Did you leave anything in the room?
+    enDoc: đít diu liv e-ni-thing in đơ rum
+    zh: 房间里有落东西吗？
+    py: fángjiān lǐ yǒu là dōngxi ma
+    zhDoc: pháng-chiên lỉ dẩu la tung-xi ma
+  - vi: Gửi hành lý được không?
+    en: Can I leave my luggage here?
+    enDoc: càn ai liv mai lá-ghịt hia
+    zh: 可以寄存行李吗？
+    py: kěyǐ jìcún xínglǐ ma
+    zhDoc: khửa-ỉ chi-suấn xính-lỉ ma
+  - vi: Được, để đây nhé
+    en: Sure, leave it here
+    enDoc: suơ, liv ít hia
+    zh: 可以，放这里
+    py: kěyǐ, fàng zhèlǐ
+    zhDoc: khửa-ỉ, phang chưa-lỉ
+  - vi: Tôi gọi taxi cho anh chị nhé
+    en: Let me call you a taxi
+    enDoc: lét mi co diu ơ tắc-xi
+    zh: 我帮您叫车
+    py: wǒ bāng nín jiào chē
+    zhDoc: ủa pang nín chiao chưa
+  - vi: Xe tới trong 5 phút
+    en: The car comes in 5 minutes
+    enDoc: đơ ca cằm in phai mi-nịt
+    zh: 车五分钟到
+    py: chē wǔ fēnzhōng dào
+    zhDoc: chưa ủ phân-chung tao
+  - vi: Cảm ơn anh chị đã ở đây
+    en: Thank you for staying with us
+    enDoc: then-kiu pho xtây-ing uít ắt
+    zh: 谢谢您的入住
+    py: xièxie nín de rùzhù
+    zhDoc: xia-xịa nín tơ ru-chu
+  - vi: Đi đường bình an
+    en: Have a safe trip
+    enDoc: hép ơ xêp tríp
+    zh: 一路平安
+    py: yīlù píng'ān
+    zhDoc: i-lu p'ính-an
+  - vi: Hẹn gặp lại
+    en: See you again
+    enDoc: xi diu ơ-ghen
+    zh: 再见
+    py: zàijiàn
+    zhDoc: chai-chiên
+  mau:
+  - vi: ___ đêm, tổng ___
+    en: ___ nights, total ___
+    zh: ___晚，一共___
+    thay:
+    - two / 两 liǎng
+    - three / 三 sān
+    - four / 四 sì
+  - vi: Tôi gọi ___ cho anh chị
+    en: Let me call you a ___
+    zh: 我帮您叫___
+    thay:
+    - taxi / 车 chē
+    - motorbike taxi / 摩的 mó dī
+    - bus / 巴士 bāshì
+  moc:
+  - 'Hán-Việt: 一共 = nhất cộng · 转账 = chuyển trướng · 收据 = thu cứ · 行李 = hành lý · 入住 = nhập trú · 一路平安 = nhất lộ
+    bình an.'
+  - 'Hai từ gần y hệt tiếng Việt: 行李 hành lý và 转账 chuyển khoản. Đọc lên là hiểu, không cần học.'
+  - 'Chữ 帮 bāng = “giúp”, thay cho “for” tiếng Anh: 我帮您叫车 = tôi giúp anh gọi xe.'
+  dungNgay: Mỗi buổi trưa, giờ trả phòng.
+- ngay: 12
+  ten: Giữ khách quay lại
+  khi: Bài duy nhất không phục vụ giao dịch nào. Nó phục vụ lần sau.
+  tu:
+  - vi: Anh chị từ đâu đến?
+    en: Where are you from?
+    enDoc: goe a diu phrom
+    zh: 您从哪里来？
+    py: nín cóng nǎlǐ lái
+    zhDoc: nín xúng ná-lỉ lái
+  - vi: Tôi từ Việt Nam
+    en: I'm from Vietnam
+    enDoc: aim phrom vi-ét-nam
+    zh: 我从越南来
+    py: wǒ cóng Yuènán lái
+    zhDoc: ủa xúng duê-nán lái
+  - vi: Lần đầu đến Đà Lạt à?
+    en: Is this your first time in Da Lat?
+    enDoc: iz đít dơ phơt tai in đa lát
+    zh: 第一次来大叻吗？
+    py: dì-yī cì lái Dàlè ma
+    zhDoc: ti-i sư lái ta-lưa ma
+  - vi: Anh chị thấy Đà Lạt thế nào?
+    en: How do you like Da Lat?
+    enDoc: hao đu diu laic đa lát
+    zh: 您觉得大叻怎么样？
+    py: nín juéde Dàlè zěnmeyàng
+    zhDoc: nín chuế-tơ ta-lưa chẩn-mơ-dang
+  - vi: Tôi sống ở đây từ nhỏ
+    en: I've lived here since I was a child
+    enDoc: aiv livd hia xin ai goz ơ chai
+    zh: 我从小住在这里
+    py: wǒ cóngxiǎo zhù zài zhèlǐ
+    zhDoc: ủa xúng-xiảo chu chai chưa-lỉ
+  - vi: Anh chị làm nghề gì?
+    en: What do you do?
+    enDoc: goát đu diu đu
+    zh: 您做什么工作？
+    py: nín zuò shénme gōngzuò
+    zhDoc: nín chua sấn-mơ cung-chua
+  - vi: Ở đây mấy ngày?
+    en: How long are you staying?
+    enDoc: hao long a diu xtây-ing
+    zh: 住几天？
+    py: zhù jǐ tiān
+    zhDoc: chu chỉ thiên
+  - vi: Lần sau lại đến nhé
+    en: Come back again next time
+    enDoc: cằm béc ơ-ghen néc tai
+    zh: 下次再来
+    py: xiàcì zài lái
+    zhDoc: xia-sư chai lái
+  - vi: Cho tôi xin đánh giá nhé
+    en: Could you leave us a review?
+    enDoc: cút diu liv ắt ơ ri-viu
+    zh: 可以给个评价吗？
+    py: kěyǐ gěi ge píngjià ma
+    zhDoc: khửa-ỉ cấy cưa p'ính-chia ma
+  - vi: Kết bạn nhé
+    en: Let's stay in touch
+    enDoc: lét xtây in tắch
+    zh: 加个微信吧
+    py: jiā ge Wēixìn ba
+    zhDoc: chia cưa uây-xin ba
+  - vi: Đây là số của tôi
+    en: This is my number
+    enDoc: đít iz mai năm-bơ
+    zh: 这是我的号码
+    py: zhè shì wǒ de hàomǎ
+    zhDoc: chưa sư ủa tơ hao-mả
+  - vi: Có gì cứ nhắn tôi
+    en: Message me anytime
+    enDoc: mét-xịt mi e-ni-tai
+    zh: 随时联系我
+    py: suíshí liánxì wǒ
+    zhDoc: xuấy-sứ liến-xi ủa
+  - vi: Chúc anh chị mọi điều tốt lành
+    en: All the best
+    enDoc: ol đơ bét
+    zh: 祝您一切顺利
+    py: zhù nín yīqiè shùnlì
+    zhDoc: chu nín i-chiê suân-li
+  - vi: Đi đường bình an
+    en: Have a safe trip
+    enDoc: hép ơ xêp tríp
+    zh: 一路平安
+    py: yīlù píng'ān
+    zhDoc: i-lu p'ính-an
+  mau:
+  - vi: Anh chị từ ___ đến à?
+    en: Are you from ___?
+    zh: 您从___来吗？
+    thay:
+    - China / 中国 Zhōngguó
+    - Korea / 韩国 Hánguó
+    - America / 美国 Měiguó
+    - Japan / 日本 Rìběn
+  - vi: Lần đầu đến ___ à?
+    en: First time in ___?
+    zh: 第一次来___吗？
+    thay:
+    - Da Lat / 大叻 Dàlè
+    - Vietnam / 越南 Yuènán
+    - this hotel / 这家酒店 zhè jiā jiǔdiàn
+  moc:
+  - 'Hán-Việt: 第一次 = đệ nhất thứ · 评价 = bình giá · 越南 = Việt Nam · 中国 = Trung Quốc · 美国 = Mỹ Quốc · 顺利 = thuận lợi.'
+  - 'Câu đáng giá nhất bài: 加个微信吧 — thêm WeChat. Khách Trung Quốc không dùng Facebook hay Zalo.'
+  - 'Tiếng Anh khó ở thì hiện tại hoàn thành: “I''ve lived here since…” — Trung và Việt đều không có thì này. Học
+    thuộc nguyên câu.'
+  dungNgay: Lúc khách chờ taxi. Ba phút cuối quyết định họ có quay lại không.

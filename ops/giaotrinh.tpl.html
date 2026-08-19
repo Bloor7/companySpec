@@ -1,0 +1,204 @@
+<title>Lễ tân ba thứ tiếng</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,600&family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Sans+SC:wght@400;500&display=swap">
+<style>
+:root{--ground:#F1F3EF;--surface:#FFF;--sunk:#DDE3D9;--ink:#1A211D;--ink2:#4C574F;--ink3:#7E887F;
+ --line:#D6DCD3;--line2:#C2CABE;--pine:#2E5B48;--pine-bg:#E2EDE6;--en:#2C6382;--en-bg:#E2EDF4;
+ --zh:#A03A3A;--zh-bg:#F6E6E4;--vi:#61762F;--vi-bg:#EDF1DF}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+ --ground:#0F1411;--surface:#171E19;--sunk:#141A16;--ink:#E6EBE3;--ink2:#A6B0A6;--ink3:#778177;
+ --line:#28312A;--line2:#3A453C;--pine:#78BC9C;--pine-bg:#152220;--en:#84B8D6;--en-bg:#122029;
+ --zh:#E39B95;--zh-bg:#26191A;--vi:#AFC66E;--vi-bg:#1B2116}}
+:root[data-theme="dark"]{--ground:#0F1411;--surface:#171E19;--sunk:#141A16;--ink:#E6EBE3;--ink2:#A6B0A6;
+ --ink3:#778177;--line:#28312A;--line2:#3A453C;--pine:#78BC9C;--pine-bg:#152220;--en:#84B8D6;
+ --en-bg:#122029;--zh:#E39B95;--zh-bg:#26191A;--vi:#AFC66E;--vi-bg:#1B2116}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:"IBM Plex Sans",system-ui,sans-serif;
+ font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:800px;margin:0 auto;padding:0 18px 90px}
+h1,h2,h3{font-family:Newsreader,Georgia,serif;font-weight:600;text-wrap:balance;margin:0}
+.han{font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}
+header{padding:46px 0 24px;border-bottom:2px solid var(--line2)}
+h1{font-size:clamp(32px,7vw,46px);line-height:1.06;letter-spacing:-.02em}
+.deck{font-size:17px;color:var(--ink2);margin:14px 0 0;max-width:60ch}
+.facts{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+.fact{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 11px;
+ font-size:13px;color:var(--ink2)}
+.fact b{color:var(--ink)}
+h2{font-size:clamp(22px,4.4vw,28px);margin:44px 0 4px}
+h2+.sub{color:var(--ink3);font-size:14.5px;margin:0 0 16px}
+h3{font-size:17px;margin:22px 0 8px}
+p{margin:12px 0;max-width:66ch}
+.warn{background:var(--zh-bg);border-radius:8px;padding:12px 15px;margin:14px 0;font-size:14px;color:var(--ink2)}
+.week{display:grid;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:9px;
+ overflow:hidden;margin:18px 0}
+.day{background:var(--surface);padding:12px 15px;display:grid;grid-template-columns:74px 1fr;gap:12px;
+ align-items:baseline}
+.day b{font-size:12.5px;color:var(--pine);text-transform:uppercase;letter-spacing:.03em}
+.day span{font-size:14.5px;color:var(--ink2)}
+.day span em{color:var(--ink);font-style:normal;font-weight:500}
+table.tone{border-collapse:collapse;width:100%;font-size:14.5px;margin:12px 0}
+table.tone th,table.tone td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+table.tone th{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3)}
+.toc{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1px;background:var(--line);
+ border:1px solid var(--line);border-radius:9px;overflow:hidden;margin:18px 0}
+.toc a{background:var(--surface);padding:11px 14px;text-decoration:none;color:var(--ink);display:grid;
+ grid-template-columns:58px 1fr;gap:8px;align-items:baseline;font-size:14px}
+.toc a:hover{background:var(--pine-bg)}
+.toc i{font-style:normal;color:var(--ink3);font-size:12.5px}
+.lesson{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:22px 20px 18px;
+ margin:20px 0;scroll-margin-top:14px}
+.lhead{border-bottom:1px solid var(--line);padding-bottom:13px;margin-bottom:4px}
+.lnum{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--pine);font-weight:600}
+.lesson h3{font-size:21px;margin:5px 0}
+.lwhen{font-size:13.5px;color:var(--ink3);margin:0}
+.rows{display:flex;flex-direction:column;gap:1px;background:var(--line);border:1px solid var(--line);
+ border-radius:8px;overflow:hidden;margin:16px 0}
+.row{background:var(--surface);padding:11px 13px;display:grid;gap:6px}
+@media(min-width:760px){.row{grid-template-columns:1fr 1.15fr 1.3fr;gap:14px;align-items:start}}
+.cell{font-size:15px;line-height:1.4}
+.r-vi{color:var(--ink);font-weight:500}.r-en{color:var(--en)}.r-zh{color:var(--zh)}
+.tag{display:inline-block;font-size:10px;font-weight:600;padding:1px 5px;border-radius:3px;margin-right:5px;
+ vertical-align:1px;letter-spacing:.05em}
+.t-en{background:var(--en-bg);color:var(--en)}.t-zh{background:var(--zh-bg);color:var(--zh)}
+.doc{display:block;font-size:13px;color:var(--ink3);margin-top:2px;font-style:italic}
+.py{color:var(--ink3);font-size:13px;margin-left:4px}
+.spk{background:none;border:1px solid var(--line2);color:var(--ink3);border-radius:5px;cursor:pointer;
+ font-size:12px;padding:1px 6px;margin-left:6px;vertical-align:1px;font-family:inherit;line-height:1.5}
+.spk:hover{background:var(--pine-bg);color:var(--pine);border-color:var(--pine)}
+.spk:focus-visible{outline:2px solid var(--pine);outline-offset:1px}
+.spk.on{background:var(--pine);color:var(--surface);border-color:var(--pine)}
+.pat{background:var(--pine-bg);border-radius:8px;padding:14px 16px;margin:16px 0}
+.pat b.h{color:var(--pine);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;display:block;
+ margin-bottom:9px}
+.pat .p1{font-size:15px;margin:9px 0 3px;color:var(--ink);font-weight:500}
+.pat .p2{font-size:14.5px;margin:2px 0}
+.slot{background:var(--surface);border:1px dashed var(--line2);border-radius:4px;padding:0 7px;
+ color:var(--pine);font-weight:600}
+.swap{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.swap span{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:3px 10px;
+ font-size:13px;color:var(--ink2)}
+.hook{background:var(--vi-bg);border-radius:8px;padding:13px 16px;margin:14px 0 0}
+.hook b.h{color:var(--vi);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;display:block;
+ margin-bottom:7px}
+.hook ul{margin:0;padding-left:17px}
+.hook li{margin:5px 0;font-size:14px;color:var(--ink2)}
+.use{font-size:13.5px;color:var(--ink3);margin:13px 0 0;padding-top:11px;border-top:1px dashed var(--line2)}
+.use b{color:var(--ink2)}
+hr{border:0;border-top:1px solid var(--line);margin:40px 0}
+.foot{color:var(--ink3);font-size:13px;max-width:66ch}
+</style>
+
+<div class="wrap">
+<header>
+  <h1>Lễ tân ba thứ tiếng</h1>
+  <p class="deck">Mười hai ngày học tiếng Anh và tiếng Trung song song, cho một người quản lý khách sạn nhỏ ở Đà Lạt. Bấm vào bất kỳ câu nào để nghe đọc. Mỗi bài có mẫu câu lắp ghép để không phải học vẹt.</p>
+  <div class="facts">
+    <div class="fact"><b>__SO_BAI__</b> bài · <b>1</b> bài mỗi ngày</div>
+    <div class="fact"><b>__SO_CAU__</b> câu</div>
+    <div class="fact">bắt đầu <b>__BAT_DAU__</b></div>
+    <div class="fact">có <b>phiên âm</b> · bấm để <b>nghe</b></div>
+  </div>
+</header>
+
+<h2>Đọc trước một lần</h2>
+<p class="sub">Ba thứ giúp bài học không thành học vẹt</p>
+<h3>Nghe</h3>
+<p>Mỗi câu có nút <b>♪</b> bên cạnh. Bấm là điện thoại đọc lên bằng đúng giọng thứ tiếng đó, chậm hơn bình thường để nghe rõ. Không cần cài gì, không cần mạng ngoài.</p>
+<div class="warn"><b>Bấm mà không ra tiếng?</b> Máy chưa có giọng tiếng Trung. Vào Cài đặt → Ngôn ngữ → Chuyển văn bản thành lời nói, tải thêm gói <b>中文 (普通话)</b>. Tiếng Anh thì máy nào cũng có sẵn.</div>
+<h3>Phiên âm</h3>
+<p>Dưới mỗi câu có dòng chữ nghiêng — <b>cách đọc ghi bằng tiếng Việt</b>. Nó là xấp xỉ, không thay được việc nghe, nhưng giúp mở miệng ngay từ ngày đầu thay vì ngồi đoán.</p>
+<h3>Bốn thanh tiếng Trung, so với tiếng Việt</h3>
+<table class="tone">
+<tr><th>Thanh</th><th>Dấu</th><th>Đọc như</th><th>Ví dụ</th></tr>
+<tr><td>1</td><td>ā</td><td>cao và <b>đều</b>, kéo dài, không lên không xuống</td><td class="han">妈 mā (mẹ)</td></tr>
+<tr><td>2</td><td>á</td><td>đi <b>lên</b> — giống dấu sắc: <i>má</i></td><td class="han">麻 má (gai)</td></tr>
+<tr><td>3</td><td>ǎ</td><td><b>xuống rồi lên</b> — giống dấu hỏi: <i>mả</i></td><td class="han">马 mǎ (ngựa)</td></tr>
+<tr><td>4</td><td>à</td><td><b>rơi mạnh</b> xuống, dứt khoát — như quát <i>Mạ!</i></td><td class="han">骂 mà (mắng)</td></tr>
+</table>
+<p>Đây là lợi thế thật của người Việt: tai đại ca đã quen phân biệt cao thấp cả đời. Người Âu Mỹ mất hàng tháng mới nghe ra bốn thanh này.</p>
+<h3>Mẫu câu lắp ghép</h3>
+<p>Mỗi bài có hai khuôn với ô trống. Thuộc một khuôn rồi thay từ vào là ra hàng chục câu. Người nói được tự nhiên là nhờ thuộc vài trăm khuôn như vậy, chứ không phải nhờ ghép ngữ pháp lúc khách đang đứng đợi.</p>
+
+<h2>Nhịp mỗi ngày</h2>
+<p class="sub">Học sáng · nhẩm cả ngày · nhớ lại trước khi ngủ</p>
+<div class="week">
+  <div class="day"><b>05:30</b><span>Mở cửa. Tin nhắn <em>Học sáng</em> gửi trọn bài hôm nay — đọc thẳng trong Telegram, không cần mở trang.</span></div>
+  <div class="day"><b>10′</b><span><em>Nhớ lại bài hôm qua</em> — che đáp án, tự nói. Mười phút quan trọng nhất.</span></div>
+  <div class="day"><b>25′</b><span><em>Bài mới</em> — mở trang này, bấm nghe từng câu, đọc theo, chép chữ Hán.</span></div>
+  <div class="day"><b>15′</b><span><em>Mẫu lắp ghép</em> — thay từ vào ô trống, tự đặt 10 câu, nói to.</span></div>
+  <div class="day"><b>10′</b><span><em>Viết lại 5 câu từ trí nhớ</em>, không nhìn.</span></div>
+  <div class="day"><b>Cả ngày</b><span><em>Nhẩm khi rảnh tay.</em> Gặp khách thì dùng thử một câu. Sai cũng nói.</span></div>
+  <div class="day"><b>Trước ngủ</b><span><em>Hai phút</em> nằm nhớ lại. Nhớ được ba phần tư là tốt.</span></div>
+</div>
+
+<h2>Mười hai ngày</h2>
+<p class="sub">Theo đúng trình tự khách đi qua nhà đại ca</p>
+<div class="toc" id="toc"></div>
+<div id="baihoc"></div>
+
+<hr>
+<h2>Hết mười hai ngày rồi sao</h2>
+<p>Khoảng <b>__SO_CAU__ câu</b> cộng 24 khuôn lắp ghép — đủ chạy trọn một lượt khách từ lúc bước vào tới lúc lên taxi, bằng cả hai thứ tiếng.</p>
+<p>Sau đó đừng học bài mới ngay. Quay lại từ Ngày 1, mỗi ngày ôn hai bài, và lần này <b>không nhìn cột tiếng Việt</b>. Vòng hai mới là vòng khắc vào trí nhớ; vòng một chỉ là làm quen.</p>
+<p class="foot">Trang này được sinh ra từ <code>registry/giaotrinh-ngoaingu.yaml</code> — cùng một nguồn với tin nhắn 5h30 mỗi sáng. Sửa nội dung thì sửa ở file đó rồi dựng lại trang, đừng sửa thẳng vào đây.</p>
+</div>
+
+<script>
+const GT = /*__DU_LIEU__*/;
+const BAI = GT.bai;
+const esc = t => String(t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const oTrong = t => esc(t).replace(/___/g, '<span class="slot">…</span>');
+let dangDoc = null;
+
+function noi(text, lang, btn){
+  if(!('speechSynthesis' in window)){ alert('Trình duyệt này không đọc được. Thử mở bằng Chrome.'); return; }
+  speechSynthesis.cancel();
+  if(dangDoc) dangDoc.classList.remove('on');
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = lang; u.rate = 0.78;
+  const v = speechSynthesis.getVoices().filter(x =>
+    x.lang && x.lang.replace('_','-').toLowerCase().startsWith(lang.toLowerCase()));
+  if(v.length) u.voice = v[0];
+  btn.classList.add('on'); dangDoc = btn;
+  u.onend = u.onerror = () => btn.classList.remove('on');
+  speechSynthesis.speak(u);
+}
+const nut = (t,l) => `<button class="spk" data-t="${esc(t)}" data-l="${l}" aria-label="Nghe đọc">♪</button>`;
+
+document.getElementById('toc').innerHTML = BAI.map(b =>
+  `<a href="#b${b.ngay}"><i>Ngày ${b.ngay}</i>${esc(b.ten)}</a>`).join('');
+
+document.getElementById('baihoc').innerHTML = BAI.map(b => `
+<section class="lesson" id="b${b.ngay}">
+  <div class="lhead">
+    <div class="lnum">Ngày ${b.ngay}</div>
+    <h3>${esc(b.ten)}</h3>
+    <p class="lwhen">${esc(b.khi)}</p>
+  </div>
+  <div class="rows">${b.tu.map(t => `
+    <div class="row">
+      <div class="cell r-vi">${esc(t.vi)}</div>
+      <div class="cell r-en"><span class="tag t-en">EN</span>${esc(t.en)}${nut(t.en,'en-US')}
+        <span class="doc">${esc(t.enDoc)}</span></div>
+      <div class="cell r-zh"><span class="tag t-zh">中</span><span class="han">${esc(t.zh)}</span>${nut(t.zh,'zh-CN')}
+        <span class="py">${esc(t.py)}</span><span class="doc">${esc(t.zhDoc)}</span></div>
+    </div>`).join('')}
+  </div>
+  ${b.mau.map(m => `
+  <div class="pat">
+    <b class="h">Mẫu lắp ghép — thay từ vào ô trống</b>
+    <div class="p1">${oTrong(m.vi)}</div>
+    <div class="p2 r-en">${oTrong(m.en)}</div>
+    <div class="p2 r-zh han">${oTrong(m.zh)}</div>
+    <div class="swap">${m.thay.map(x => `<span>${esc(x)}</span>`).join('')}</div>
+  </div>`).join('')}
+  <div class="hook"><b class="h">Móc nhớ</b><ul>${b.moc.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>
+  <p class="use"><b>Dùng ngay:</b> ${esc(b.dungNgay)}</p>
+</section>`).join('');
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('.spk');
+  if(b) noi(b.dataset.t, b.dataset.l, b);
+});
+if('speechSynthesis' in window) speechSynthesis.getVoices();
+</script>

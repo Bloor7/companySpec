@@ -77,29 +77,41 @@ schedules:
     # Không dùng LLM (RP1) — mọi con số đều tra được bằng code cứng, nên báo cáo
     # này chạy mỗi tối mà không tốn một đồng hạn mức nào.
 
-  - scheduleId: goalNudge
+  - scheduleId: hocSang
     displayName: "Học sáng"
     enabled: true
-    at: "05:30"                  # admin dậy 5h30 mở cửa — học lúc đầu còn trống
-    days: [2, 3, 4, 5, 6, 7, 8]  # MỖI NGÀY, đổi từ "chỉ thứ Hai" ngày 19/08
+    at: "05:30"                  # admin dậy 5h30 mở cửa — đầu óc sạch nhất ngày
+    days: [2, 3, 4, 5, 6, 7, 8]  # mỗi ngày
+    kind: digest
+    sections: [hocsang]
+    # true, không phải false. Trước ngày `batDau` thì mục này cố ý trả về rỗng;
+    # để false thì tối nay admin nhận một tin chỉ có mỗi dòng tiêu đề "Học sáng"
+    # và không có gì bên dưới. Mọi trường hợp CÓ chuyện để nói — kể cả lỗi đọc
+    # giáo trình — đều tự đánh dấu là đáng gửi, nên im ở đây là im đúng chỗ.
+    quietIfEmpty: true
+    # Không dùng LLM (RP1) — đọc thẳng registry/giaotrinh-ngoaingu.yaml, nên
+    # tin này tốn 0đ mỗi sáng và vẫn tới kể cả khi hết hạn mức Claude.
+    #
+    # GỬI TRỌN BÀI chứ không gửi mỗi cái link: admin học lúc vừa mở cửa, tay
+    # còn bận. Bắt mở trình duyệt là thêm một bậc thềm, và bậc thềm nào cũng là
+    # chỗ để bỏ dở — kế hoạch tiếng Anh cũ nằm ở 0/6 suốt ba tháng đúng vì thế.
+    # Link để ở cuối, cho lúc muốn NGHE phát âm (thứ duy nhất Telegram không chở
+    # được).
+
+  - scheduleId: goalNudge
+    displayName: "Bước sắp tới hạn"
+    enabled: true
+    at: "08:00"
+    days: [2]                    # TRẢ VỀ sáng thứ Hai ngày 19/08.
     kind: companyCall
     companyId: goalCompany
     capability: dueSteps         # read — cron nhắc, admin mới đánh dấu (S3)
     input: { trongNgay: 7, chiKhiCo: true }
     quietIfEmpty: true
-    #
-    # VÌ SAO ĐỔI TỪ TUẦN SANG NGÀY: giáo trình Anh–Trung chia 12 tuần, mỗi tuần
-    # một bước có hạn vào Chủ nhật. `trongNgay: 7` vì thế luôn trúng đúng bước
-    # của TUẦN HIỆN TẠI và tự sang bước mới khi qua tuần — không cần ai đánh dấu.
-    #
-    # Mẫu câu nằm trong TÊN bước chứ không nằm trong `ghiChu`, vì `dueSteps`
-    # chỉ đưa tên bước vào tin nhắn. Đo 19/08: `ghiChu` không lọt ra summary,
-    # nên nhét mẫu câu vào đó là viết cho không ai đọc.
-    #
-    # Lặp lại mỗi sáng ở đây là CÓ CHỦ ĐÍCH, khác với luật "lỗi lặp thì im":
-    # thứ lặp lại là mấy câu cần thuộc, và nhìn lại mỗi sáng chính là cách nhớ.
-    # Nhưng nó cũng có nghĩa: bước QUÁ HẠN sẽ nhắc mỗi ngày cho tới khi được
-    # đánh dấu xong hoặc bỏ. Đó là áp lực đúng chỗ, miễn là đừng để tồn nhiều.
+    # Sáng 19/08 từng đổi thành mỗi ngày để nhắc bài ngoại ngữ. Nay `hocSang`
+    # gửi trọn bài rồi, nên để nó chạy hằng ngày nữa là hai tin cùng nói về một
+    # kế hoạch — đúng kiểu lặp lại làm admin ngừng đọc thông báo. Trả về tuần,
+    # và để nó lo đúng việc cũ: nhắc bước sắp tới hạn của MỌI kế hoạch.
 
   - scheduleId: weeklyPlan
     displayName: "Tiến độ 100 video"

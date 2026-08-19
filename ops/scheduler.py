@@ -449,7 +449,82 @@ def section_plan() -> tuple[str, bool]:
     return "Tiến độ:\n  " + "\n  ".join(dong), True
 
 
+GIAO_TRINH = os.path.join(ROOT, "registry", "giaotrinh-ngoaingu.yaml")
+
+
+def section_hocsang() -> tuple[str, bool]:
+    """Bài học ngoại ngữ của hôm nay, gửi TRỌN VẸN vào Telegram.
+
+    VÌ SAO KHÔNG CHỈ GỬI CÁI LINK: admin học lúc 5h30 vừa mở cửa khách sạn,
+    tay còn bận. Bắt mở trình duyệt mới đọc được bài là thêm một bậc thềm, và
+    bậc thềm nào cũng là chỗ để bỏ dở — kế hoạch tiếng Anh cũ nằm ở 0/6 suốt
+    ba tháng đúng vì thế. Chữ thì Telegram chở được hết; chỉ có TIẾNG là không,
+    nên link để ở cuối cho lúc muốn nghe phát âm.
+
+    Không gọi model (RP1): mọi thứ đọc thẳng từ registry/giaotrinh-ngoaingu.yaml
+    nên tin nhắn này tốn 0đ mỗi sáng, và vẫn tới kể cả khi hết hạn mức Claude.
+
+    Bài nào rơi vào hôm nay tính bằng NGÀY, không đếm số lần đã gửi: mất mạng
+    một hôm thì hôm sau vẫn đúng bài, không bị lệch dồn.
+    """
+    try:
+        with open(GIAO_TRINH, encoding="utf-8") as fh:
+            gt = yaml.safe_load(fh) or {}
+    except OSError as e:
+        # O10 — thiếu giáo trình là chuyện phải BIẾT, không phải im lặng bỏ qua.
+        return f"Không đọc được giáo trình ({e.__class__.__name__}). Em chưa gửi bài được.", True
+
+    bai = gt.get("bai") or []
+    if not bai:
+        return "", False
+    try:
+        d0 = datetime.strptime(str(gt.get("batDau")), "%Y-%m-%d").date()
+    except ValueError:
+        return "Giáo trình khai `batDau` sai định dạng, em chưa biết hôm nay bài mấy.", True
+
+    stt = (now_local().date() - d0).days
+    if stt < 0:
+        return "", False                      # chưa tới ngày bắt đầu thì im
+    if stt >= len(bai):
+        # Hết bài thì KHÔNG im lặng biến mất — nói rõ, và đề nghị việc tiếp theo.
+        return ("Đã xong cả " + str(len(bai)) + " bài giáo trình Anh–Trung.\n"
+                "Giờ quay lại từ Bài 1, mỗi ngày ôn hai bài, và lần này đừng nhìn "
+                "cột tiếng Việt. Vòng hai mới là vòng khắc vào trí nhớ.\n"
+                + (gt.get("lienKet") or "")), True
+
+    b = bai[stt]
+    d = [f"Ngày {b['ngay']} — {b['ten']}", b.get("khi", ""), ""]
+
+    for t in b.get("tu") or []:
+        d.append(t["vi"])
+        d.append(f"   EN  {t['en']}")
+        d.append(f"       đọc: {t['enDoc']}")
+        d.append(f"   中  {t['zh']}  {t['py']}")
+        d.append(f"       đọc: {t['zhDoc']}")
+        d.append("")
+
+    for m in b.get("mau") or []:
+        d.append("MẪU LẮP GHÉP — thay từ vào chỗ ___")
+        d.append(f"   {m['vi']}")
+        d.append(f"   {m['en']}")
+        d.append(f"   {m['zh']}")
+        for x in m.get("thay") or []:
+            d.append(f"     · {x}")
+        d.append("")
+
+    d.append("MÓC NHỚ")
+    for x in b.get("moc") or []:
+        d.append(f"   · {x}")
+    d.append("")
+    d.append(f"Dùng ngay: {b.get('dungNgay', '')}")
+    if gt.get("lienKet"):
+        d.append("")
+        d.append(f"Bấm để NGHE đọc từng câu: {gt['lienKet']}")
+    return "\n".join(d).strip(), True
+
+
 SECTIONS = {"agenda": section_agenda, "tienbac": section_tienbac,
+            "hocsang": section_hocsang,
             "quota": section_quota,
             "activity": section_activity, "approvals": section_approvals,
             "permissions": section_permissions, "plan": section_plan}
