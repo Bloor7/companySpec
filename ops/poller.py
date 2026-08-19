@@ -111,14 +111,22 @@ def run_gateway(update: dict) -> list:
         proc = subprocess.run(
             [sys.executable, GATEWAY, "handle"],
             input=json.dumps(update, ensure_ascii=False),
-            capture_output=True, text=True, cwd=ROOT, timeout=900,
+            # 1140 > TREO_GIAY (1020) của gateway > 900s ngân sách company dài
+            # nhất. Lớp ngoài phải chờ lâu hơn lớp trong, nếu không thì câu báo
+            # cụ thể của gateway không bao giờ kịp gửi.
+            capture_output=True, text=True, cwd=ROOT, timeout=1140,
         )
     except subprocess.TimeoutExpired:
         return [{"kind": "sendMessage", "chatId": ADMIN,
-                 "text": "Quá 15 phút chưa xong, em dừng lại rồi.",
+                 "text": "Quá 19 phút chưa xong, em dừng lại rồi. Việc có thể CHƯA CHẠY — đại ca kiểm lại trước khi nhắn lại.",
                  "replyMarkupJson": '{"inline_keyboard": []}'}]
     if proc.returncode != 0:
-        log("gateway lỗi:", proc.stderr.strip()[:300])
+        # 2000 chứ không phải 300. Traceback Python có thứ đáng giá nhất ở
+        # DÒNG CUỐI (loại lỗi và câu lỗi), còn 300 ký tự đầu chỉ đủ mấy khung
+        # gọi trên cùng. Đo được 2026-08-19: gateway sập vì TimeoutExpired,
+        # journal chỉ giữ tới "line 1597, in h" rồi cụt — mất đúng dòng nói nó
+        # hỏng vì cái gì, phải đi suy ngược từ dấu thời gian mới ra.
+        log("gateway lỗi:", proc.stderr.strip()[-2000:])
         return [{"kind": "sendMessage", "chatId": ADMIN,
                  "text": "Hệ gặp lỗi khi xử lý. Xem log để biết chi tiết.",
                  "replyMarkupJson": '{"inline_keyboard": []}'}]

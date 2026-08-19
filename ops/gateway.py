@@ -1117,6 +1117,44 @@ def danh_muc_block() -> str:
             "admin trả lời, đừng tự đi làm.\n\n" + "\n".join(dong))
 
 
+# Trần thời gian chờ một phiên CEO.
+#
+# PHẢI LỚN HƠN HẲN ngân sách company dài nhất, ngược chiều với luật "timeout
+# phải nhỏ hơn hẳn ngân sách" ở tầng dispatcher. Ở đây ta là người GỌI: cắt
+# sớm hơn ngân sách bên trong nghĩa là giết một việc còn đang chạy đúng.
+# Company dài nhất hiện nay là researchCompany.nghienCuu và seoCompany.auditSite,
+# cùng 900s — nên 600s của bản cũ BẢO ĐẢM giết mọi lời gọi nghiên cứu giữa
+# chừng. Lỗi này chưa ai gặp vì admin ít gọi nghiên cứu, nhưng nó nằm sẵn đó.
+#
+# CHUỖI PHẢI TĂNG DẦN TỪ TRONG RA NGOÀI, nếu không thì lớp ngoài giết lớp trong
+# trước khi lớp trong kịp báo lỗi tử tế:
+#     company 900s  <  run_ceo 1020s  <  poller 1140s
+# Đo được 2026-08-19: nâng run_ceo lên 1200 mà quên poller (900) là tự tay làm
+# câu báo `_ceo_treo` thành chữ chết — poller cắt trước, admin nhận câu cụt hơn.
+# Sửa một con số trong chuỗi thì phải nhìn cả ba.
+TREO_GIAY = 1020
+
+
+def _ceo_treo() -> dict:
+    """CEO treo quá lâu — trả về một kết quả BÁO ĐƯỢC, không để gateway sập.
+
+    O8 — cửa vào không được phép sập. `subprocess.run(timeout=…)` ném
+    TimeoutExpired, và trước đây KHÔNG AI BẮT: cả tiến trình gateway chết kèm
+    traceback, poller cắt còn 300 ký tự, admin nhận về một cục Python.
+
+    Đo được 2026-08-19: admin bấm duyệt lúc 12:57:14, CEO treo mà không gọi
+    dispatch lần nào, đúng 600 giây sau (13:07:14) gateway văng. Admin chờ mười
+    phút, việc không chạy, mã duyệt thì đã tiêu — và thứ nhận về là traceback.
+    Ba cái hỏng chồng lên nhau, mà nguyên nhân chỉ là một dòng try thiếu.
+    """
+    return {"result":
+            f"CEO không trả lời trong {TREO_GIAY // 60} phút nên em đã dừng nó. "
+            "Việc RẤT CÓ THỂ CHƯA CHẠY — đại ca kiểm lại rồi hãy nhắn tiếp, "
+            "đừng nhắn lại từ đầu ngay. Nếu vừa bấm duyệt thì mã đó đã tiêu "
+            "rồi, em phải xin duyệt lại.",
+            "is_error": True, "usage": {}, "total_cost_usd": 0.0, "num_turns": 0}
+
+
 def run_ceo(message: str, session_id: str, resume: bool,
             them: str = "") -> dict:
     with open(SYSTEM_PROMPT, encoding="utf-8") as fh:
@@ -1162,8 +1200,11 @@ def run_ceo(message: str, session_id: str, resume: bool,
     env = {**os.environ,
            "COMPANYSPEC_SESSION_ID": session_id,
            "COMPANYSPEC_TRACE_ID": trace_of(session_id)}
-    proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True,
-                          input=message, timeout=600, env=env)
+    try:
+        proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True,
+                              input=message, timeout=TREO_GIAY, env=env)
+    except subprocess.TimeoutExpired:
+        return _ceo_treo()
 
     # Phiên cũ không còn thì MỞ PHIÊN MỚI, đừng bắt admin gõ lại.
     #
@@ -1177,8 +1218,12 @@ def run_ceo(message: str, session_id: str, resume: bool,
         cmd_moi = [c for c in cmd]
         i = cmd_moi.index("--resume")
         cmd_moi[i:i + 2] = ["--session-id", str(uuid.uuid4())]
-        proc = subprocess.run(cmd_moi, cwd=ROOT, capture_output=True, text=True,
-                              input=message, timeout=600, env=env)
+        try:
+            proc = subprocess.run(cmd_moi, cwd=ROOT, capture_output=True,
+                                  text=True, input=message, timeout=TREO_GIAY,
+                                  env=env)
+        except subprocess.TimeoutExpired:
+            return _ceo_treo()
 
     if proc.returncode != 0:
         return {"result": f"CEO không chạy được (mã {proc.returncode}). "
@@ -1581,26 +1626,88 @@ def handle_callback(update, cfg):
         session_id = str(uuid.uuid4())
 
     since = now()
-    if noi_lai:
-        loi_nhac = (f"Admin đã duyệt yêu cầu {approval_id}. Gọi lại đúng lệnh cũ, "
-                    f"thêm --approval-id {approval_id}. Không đổi nội dung.")
-    else:
-        loi_nhac = (
-            f"Admin vừa duyệt yêu cầu {approval_id}. Yêu cầu này sinh ra ngoài "
-            f"cuộc trò chuyện nên bạn không có ngữ cảnh cũ — đừng đoán. "
-            f"Chạy đúng lệnh này, không đổi một chữ nào:\n"
-            f"python3 ops/dispatch.py call --company {row['companyId']} "
-            f"--capability {row['capability']} --input '{row['inputJson']}' "
-            f"--approval-id {approval_id}\n"
-            f"Xong thì báo lại NGẮN kết quả cho admin.")
+    # GATEWAY TỰ CHẠY, KHÔNG NHỜ CEO GÕ LẠI.
+    #
+    # Bản cũ đưa CEO nguyên câu lệnh kèm toàn bộ input rồi bảo "không đổi một
+    # chữ nào". Với payload lớn thì đó là bắt model chép tay vài nghìn ký tự và
+    # chấm điểm bằng payloadHash — sai một dấu là hỏng. Nhưng tệ hơn cả sự mong
+    # manh: nó đặt CEO vào ĐƯỜNG TỚI HẠN của một việc admin ĐÃ đồng ý.
+    #
+    # Đo được 2026-08-19, hai lần liên tiếp: admin bấm duyệt, phiên CEO nằm im
+    # ở `do_epoll_wait` (3 giây CPU trong 10 phút, kết nối tới API mở nhưng
+    # không có gì trả về), không gọi dispatch lần nào, rồi bị timeout giết. Mã
+    # duyệt tiêu mất, việc không chạy, và admin phải bấm lại từ đầu.
+    #
+    # Gateway đã cầm sẵn `inputJson` nguyên vẹn trong sổ duyệt — chính chuỗi mà
+    # admin vừa đọc và đồng ý. Chạy thẳng nó thì:
+    #   · việc XONG kể cả khi CEO chết hoặc treo;
+    #   · không còn cửa nào để nội dung bị đổi giữa admin và dispatcher (G13/G14
+    #     mạnh lên chứ không yếu đi — CEO vốn không được phép đổi ở bước này);
+    #   · mã duyệt được tiêu ngay, không phụ thuộc CEO chạy nhanh hay chậm.
+    # CEO vẫn nói câu cuối với admin, nhưng chỉ để DIỄN ĐẠT một kết quả đã có.
+    kq = chay_viec_da_duyet(row, approval_id)
+
+    if kq["hong"]:
+        # Việc hỏng thì nói thẳng, đừng bắt CEO đoán hộ.
+        actions.append(say(kq["tom_tat"]))
+        return actions
+
+    loi_nhac = (
+        f"Admin vừa bấm duyệt và hệ ĐÃ CHẠY XONG việc đó. Kết quả:\n"
+        f"{kq['tom_tat']}\n\n"
+        f"Việc đã xong rồi — ĐỪNG gọi lại {row['companyId']}.{row['capability']} "
+        f"nữa, gọi lại là làm hai lần. Chỉ báo lại NGẮN cho admin bằng lời của bạn.")
 
     data = run_ceo(loi_nhac, session_id, resume=noi_lai)
+    if data.get("is_error"):
+        # CEO hỏng thì việc VẪN XONG — nói kết quả thô còn hơn im lặng.
+        actions.append(say(kq["tom_tat"]))
+        return actions
     record_run(trace_of(session_id), session_id, data)
 
     reply = build_reply(chat_id, None, session_id, data, since)
     if note:
         reply[0]["text"] += esc(note)
     return actions + reply
+
+
+def chay_viec_da_duyet(row, approval_id: str) -> dict:
+    """Gọi dispatcher cho một việc admin vừa bấm duyệt. Trả {tom_tat, hong}.
+
+    Đi qua ĐÚNG cổng thật (`ops/dispatch.py`) như mọi lời gọi khác — T2 không
+    có ngoại lệ nào, kể cả cho gateway. Chỉ khác một chỗ: nội dung lấy từ sổ
+    duyệt chứ không lấy từ miệng model.
+    """
+    spec = cap_spec(row["companyId"], row["capability"]) or {}
+    # Chờ lâu hơn ngân sách company một chút để nó kịp báo lỗi tử tế, nhưng
+    # ngắn hơn hẳn TREO_GIAY để còn chỗ cho CEO nói câu cuối.
+    han = min(int(spec.get("maxDurationSec") or 120) + 30, TREO_GIAY - 120)
+    try:
+        proc = subprocess.run(
+            [sys.executable, os.path.join(ROOT, "ops", "dispatch.py"), "call",
+             "--company", row["companyId"], "--capability", row["capability"],
+             "--input", row["inputJson"], "--approval-id", approval_id],
+            capture_output=True, text=True, cwd=ROOT, timeout=han)
+    except subprocess.TimeoutExpired:
+        return {"hong": True,
+                "tom_tat": f"Việc chạy quá {han} giây chưa xong nên em dừng. "
+                           "Đại ca kiểm lại rồi hãy nhờ lại."}
+    try:
+        res = json.loads(proc.stdout)
+    except ValueError:
+        # O10 — không nuốt. Không đọc được kết quả thì nói là không đọc được,
+        # tuyệt đối đừng báo "xong rồi".
+        return {"hong": True,
+                "tom_tat": "Em chạy việc đó nhưng không đọc được kết quả trả về. "
+                           "Đại ca kiểm lại giúp em trước khi nhờ lại."
+                           + (f"\n{(proc.stderr or proc.stdout).strip()[:200]}"
+                              if (proc.stderr or proc.stdout).strip() else "")}
+    tom = (res.get("summary") or "").strip()
+    if res.get("status") != "ok":
+        return {"hong": True,
+                "tom_tat": f"Chưa làm được ({res.get('status')}). "
+                           + (tom or str(res.get("error") or "")[:200])}
+    return {"hong": False, "tom_tat": tom or "Xong."}
 
 
 def cmd_soat_so_tay(args) -> int:
