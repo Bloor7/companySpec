@@ -158,6 +158,55 @@ capabilities:
         denNgay: { type: [string, "null"] }
         events:  { type: array }
 
+  - name: deleteEvents
+    description: >
+      Bỏ NHIỀU sự kiện khỏi lịch trong MỘT lời gọi — admin bấm duyệt một lần cho
+      cả mẻ. PHẢI gọi listEvents trước để lấy eventId và đúng tên từng cái.
+      Dùng khi phải dọn một loạt sự kiện lặp lại: đổi giờ một việc hằng ngày, bỏ
+      lịch của một dự án đã ngừng. Notion giữ thùng rác 30 ngày.
+      Chỉ có MỘT cái thì gọi deleteEvent cho gọn.
+    riskTier: write
+    maxDurationSec: 120
+    # CỐ Ý KHÔNG whitelist (G12): xoá thì lần nào cũng phải hỏi, kể cả cả mẻ.
+    #
+    # VÌ SAO CÓ NĂNG LỰC NÀY — hệ đang LỆCH giữa tạo và dọn. `addEvents` đặt
+    # được 31 sự kiện với một nút duyệt, nhưng gỡ chúng ra thì phải bấm 31 nút.
+    # Đo được 2026-08-19: admin đổi giờ học từ 21:00 sang 05:30, còn 13 sự kiện
+    # cũ nằm lại, và cách duy nhất để dọn là 13 yêu cầu duyệt. Đó đúng là con
+    # bug mà `addEvents` sinh ra để chữa (39 nút, xem chú thích ở src/main.py),
+    # chỉ khác chiều. Guardrail bắt bấm 13 lần thì tới nút thứ ba đã không ai
+    # đọc nữa — nó thôi bảo vệ và chỉ còn làm phiền.
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [cacSuKien]
+      properties:
+        cacSuKien:
+          type: array
+          minItems: 1
+          maxItems: 31          # cùng trần với addEvents, để hai chiều cân nhau
+          items:
+            type: object
+            additionalProperties: false
+            # D7 — `ten` để ĐỐI CHIẾU với thứ admin nhìn thấy lúc bấm duyệt.
+            # Chỉ có eventId thì admin đang duyệt một dãy id vô nghĩa.
+            required: [eventId, ten]
+            properties:
+              eventId: { type: string, minLength: 32, maxLength: 40 }
+              ten:     { type: string, minLength: 1, maxLength: 200 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [count, events]
+      properties:
+        count:  { type: integer }
+        # Đã bị xoá từ trước — không phải lỗi, nhưng phải nói ra.
+        boQua:  { type: integer }
+        # Cái nào KHÔNG xoá được và vì sao. O10 — hỏng một phần thì phải hiện
+        # ra, đừng để tổng số đẹp che mất mấy cái trượt.
+        loi:    { type: array }
+        events: { type: array }
+
   - name: deleteEvent
     description: >
       Bỏ một sự kiện khỏi lịch. PHẢI gọi listEvents hoặc todayAgenda trước để lấy

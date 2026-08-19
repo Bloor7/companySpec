@@ -338,10 +338,82 @@ def delete_event(token, inp):
     )
 
 
+def delete_events(token, inp):
+    """Bỏ nhiều sự kiện trong một lời gọi.
+
+    VÌ SAO CẦN: `addEvents` đã chữa được chiều TẠO (31 sự kiện, một nút duyệt),
+    nhưng chiều DỌN vẫn một-cái-một-lần. Đo 2026-08-19: admin đổi giờ học từ
+    21:00 sang 05:30, còn lại 13 sự kiện cũ, và cách duy nhất để gỡ là 13 yêu
+    cầu duyệt. Cùng con bug với vụ 39 nút bấm hồi 04/08, chỉ khác chiều.
+
+    CHẠY HẾT RỒI MỚI BÁO, không dừng ở cái hỏng đầu tiên. Dừng giữa chừng để
+    lại một trạng thái nửa vời — vài cái đã xoá, vài cái chưa — mà admin không
+    có cách nào biết đã tới đâu. Chạy hết thì trạng thái cuối luôn rõ ràng.
+
+    Nhưng O10: hỏng một phần PHẢI hiện ra. Cái nào trượt thì nằm trong `loi` và
+    được nói thẳng trong câu tóm tắt, chứ không để con số "đã xoá 11" che mất
+    hai cái còn sót — admin đọc xong tưởng sạch rồi thì lần sau lại ngạc nhiên.
+    """
+    xoa, side, loi, bo_qua = [], [], [], 0
+
+    for sk in inp["cacSuKien"]:
+        eid, ten = sk["eventId"], sk["ten"]
+        try:
+            page = notion.get_page(token, eid)
+            if page.get("archived"):
+                bo_qua += 1          # đã xoá từ trước — không phải lỗi
+                continue
+            cur = row_to_event(page)
+            # D7 — đối chiếu với thứ admin đã nhìn thấy lúc bấm duyệt.
+            if cur["ten"].strip().lower() != ten.strip().lower():
+                loi.append(f'"{ten}": trên lịch tên là "{cur["ten"]}", em không xoá')
+                continue
+            notion.archive_page(token, eid)
+            d = cur["_bd"]
+            xoa.append({"eventId": eid, "ten": cur["ten"],
+                        "batDau": cur["batDau"], "loai": cur["loai"],
+                        "gio": cur["gio"]})
+            side.append({
+                "type": "notion.archivePage", "target": eid,
+                "idempotencyKey": f"delete|{eid}", "reversible": True,
+                "previousValue": f'{cur["batDau"]}|{cur["ten"]}|{cur["loai"]}'})
+        except Exception as exc:
+            # Không nuốt. Một cái hỏng vì mạng chập không được phép làm hỏng cả
+            # mẻ, nhưng cũng không được phép biến mất khỏi báo cáo.
+            loi.append(f'"{ten}": {type(exc).__name__}: {exc}')
+
+    if not xoa:
+        if bo_qua and not loi:
+            raise ValueError(
+                f"Cả {bo_qua} sự kiện đều đã bị xoá từ trước rồi, không còn gì để bỏ.")
+        raise ValueError("Không xoá được cái nào. " + " · ".join(loi))
+
+    d1 = min((e["batDau"] for e in xoa if e["batDau"]), default=None)
+    d2 = max((e["batDau"] for e in xoa if e["batDau"]), default=None)
+    khoang = ""
+    if d1:
+        a, _ = parse_dt(d1)
+        b, _ = parse_dt(d2)
+        khoang = (f", từ {ngay_viet(a)} đến {ngay_viet(b)}"
+                  if a and b and d1 != d2 else f" ngày {ngay_viet(a)}" if a else "")
+
+    tom = f"Đã bỏ {len(xoa)} sự kiện khỏi lịch{khoang}."
+    if bo_qua:
+        tom += f" ({bo_qua} cái đã xoá từ trước.)"
+    if loi:
+        tom += (f" CÒN {len(loi)} CÁI CHƯA XOÁ ĐƯỢC: " + " · ".join(loi[:5])
+                + ("…" if len(loi) > 5 else ""))
+    tom += " Notion giữ trong thùng rác 30 ngày."
+
+    return ({"count": len(xoa), "boQua": bo_qua, "loi": loi, "events": xoa},
+            tom, side)
+
+
 HANDLERS = {"todayAgenda": today_agenda, "listEvents": list_events,
             "addEvents": add_events,
             "upcomingEvents": upcoming_events, "addEvent": add_event,
-            "deleteEvent": delete_event}
+            "deleteEvent": delete_event,
+            "deleteEvents": delete_events}
 
 
 def main() -> int:

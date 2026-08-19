@@ -78,16 +78,28 @@ schedules:
     # này chạy mỗi tối mà không tốn một đồng hạn mức nào.
 
   - scheduleId: goalNudge
-    displayName: "Bước sắp tới hạn"
+    displayName: "Học sáng"
     enabled: true
-    at: "08:00"
-    days: [2]                    # sáng thứ Hai, cùng nhịp với tiến độ video
+    at: "05:30"                  # admin dậy 5h30 mở cửa — học lúc đầu còn trống
+    days: [2, 3, 4, 5, 6, 7, 8]  # MỖI NGÀY, đổi từ "chỉ thứ Hai" ngày 19/08
     kind: companyCall
     companyId: goalCompany
     capability: dueSteps         # read — cron nhắc, admin mới đánh dấu (S3)
     input: { trongNgay: 7, chiKhiCo: true }
-    # Tuần nào không có bước nào tới hạn thì im.
     quietIfEmpty: true
+    #
+    # VÌ SAO ĐỔI TỪ TUẦN SANG NGÀY: giáo trình Anh–Trung chia 12 tuần, mỗi tuần
+    # một bước có hạn vào Chủ nhật. `trongNgay: 7` vì thế luôn trúng đúng bước
+    # của TUẦN HIỆN TẠI và tự sang bước mới khi qua tuần — không cần ai đánh dấu.
+    #
+    # Mẫu câu nằm trong TÊN bước chứ không nằm trong `ghiChu`, vì `dueSteps`
+    # chỉ đưa tên bước vào tin nhắn. Đo 19/08: `ghiChu` không lọt ra summary,
+    # nên nhét mẫu câu vào đó là viết cho không ai đọc.
+    #
+    # Lặp lại mỗi sáng ở đây là CÓ CHỦ ĐÍCH, khác với luật "lỗi lặp thì im":
+    # thứ lặp lại là mấy câu cần thuộc, và nhìn lại mỗi sáng chính là cách nhớ.
+    # Nhưng nó cũng có nghĩa: bước QUÁ HẠN sẽ nhắc mỗi ngày cho tới khi được
+    # đánh dấu xong hoặc bỏ. Đó là áp lực đúng chỗ, miễn là đừng để tồn nhiều.
 
   - scheduleId: weeklyPlan
     displayName: "Tiến độ 100 video"
