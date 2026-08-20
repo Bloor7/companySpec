@@ -1,4 +1,4 @@
-# Giáo trình Anh–Trung song song — 12 bài, mỗi ngày một bài.
+# Giáo trình Anh–Trung song song — 12 bài, học theo tiến độ admin tích.
 #
 # ĐÂY LÀ NGUỒN DUY NHẤT. Hai nơi dùng chung file này:
 #   · tin nhắn "Học sáng" mỗi 05:30  — ops/scheduler.py, section_hocsang()
@@ -6,17 +6,22 @@
 # Sửa ở đây rồi chạy lại bộ sinh trang. Đừng sửa thẳng vào HTML: sửa hai chỗ
 # thì sớm muộn hai bản lệch nhau, và không ai biết bản nào đúng.
 #
-# `batDau` quyết định hôm nay là bài mấy: bài N rơi vào ngày batDau + (N-1).
-# Học chậm hơn lịch thì LÙI `batDau` lại, đừng sửa hạn từng bài.
-#
 # enDoc / zhDoc là phiên âm bằng TIẾNG VIỆT — xấp xỉ để mở miệng được ngay,
 # không thay được việc nghe. Nghe vẫn phải bấm nút trên trang.
+# Bài nào là bài HÔM NAY do TIẾN ĐỘ ADMIN TÍCH quyết định, không do lịch.
+# Bộ chạy hỏi goalCompany xem bước nào chưa "xong", bước đầu tiên chưa xong
+# chính là bài đang học. Admin bảo "xong bài 1 rồi" thì CEO tích, hôm sau tự
+# sang bài 2 — không phải sửa cấu hình gì cả.
+#
+# Đổi từ cách tính theo ngày (batDau + nhịp) ngày 2026-08-20: học nhanh chậm
+# tuỳ hôm, mà lịch thì không biết điều đó. Lịch đi trước tiến độ thì admin nhận
+# bài mới trong khi bài cũ chưa thuộc; lịch đi sau thì nhận lại bài đã thuộc.
+# Tiến độ tự nó không bao giờ lệch.
+#
+# `keHoach` phải khớp ĐÚNG TỪNG KÝ TỰ tên bảng trên Notion.
+keHoach: "Anh–Trung song song cho khách sạn"
+
 lienKet: https://claude.ai/code/artifact/2831510f-d378-4e2b-90f6-080e9da27e4f
-# Mỗi bài kéo dài mấy ngày. Admin học thử một ngày rồi chốt 2 (20/08): 15 câu
-# một ngày là nhiều, giãn ra thì ngày thứ hai dành cho việc NHỚ LẠI thay vì nạp
-# thêm. Đổi số này là đổi cả lịch, không phải sửa hạn từng bài.
-soNgayMoiBai: 2
-batDau: '2026-08-20'
 bai:
 - ngay: 1
   ten: Đón khách ở cửa

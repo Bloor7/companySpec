@@ -453,50 +453,59 @@ GIAO_TRINH = os.path.join(ROOT, "registry", "giaotrinh-ngoaingu.yaml")
 
 
 def _bai_hom_nay():
-    """(giáo trình, bài của hôm nay, câu báo lỗi).
+    """(giáo trình, bài đang học, câu báo lỗi, đã học hết chưa).
 
-    `bai` là None khi chưa tới ngày bắt đầu, hoặc đã học hết — hai chuyện khác
-    nhau nên bên gọi tự phân biệt bằng `da_het()`.
+    Bài nào là bài HÔM NAY do TIẾN ĐỘ ADMIN TÍCH quyết định, không do lịch:
+    hỏi goalCompany bước nào chưa "xong", bước đầu tiên chưa xong chính là bài
+    đang học. Admin bảo "xong bài 1 rồi" thì CEO tích, hôm sau tự sang bài 2.
 
-    Tách ra vì HAI mục dùng chung phép tính này: `hocsang` gửi trọn bài lúc
-    05:30, `hocnhac` gửi bản gọn bốn lần trong ngày. Hai bản sao của cùng một
-    phép tính thì sớm muộn lệch nhau — đúng cái lỗi hạn mức tháng hôm 19/08.
+    VÌ SAO BỎ CÁCH TÍNH THEO NGÀY (2026-08-20): học nhanh chậm tuỳ hôm, mà
+    lịch thì không biết điều đó. Lịch đi trước tiến độ thì admin nhận bài mới
+    trong khi bài cũ chưa thuộc; lịch đi sau thì nhận lại bài đã thuộc rồi.
+    Bản trước phải khai `soNgayMoiBai` để chỉnh tay, và mỗi lần đổi nhịp là
+    một lần phải nhớ sửa. Tiến độ tự nó không bao giờ lệch.
+
+    Cái giá: mỗi lần gửi tin phải hỏi Notion một câu (`read`, S3 cho phép,
+    không tốn hạn mức LLM). Đổi lại không còn con số nào phải chỉnh tay.
     """
     try:
         with open(GIAO_TRINH, encoding="utf-8") as fh:
             gt = yaml.safe_load(fh) or {}
     except OSError as e:
         # O10 — thiếu giáo trình là chuyện phải BIẾT, không im lặng bỏ qua.
-        return None, None, f"Không đọc được giáo trình ({e.__class__.__name__})."
+        return None, None, f"Không đọc được giáo trình ({e.__class__.__name__}).", False
+
     bai = gt.get("bai") or []
+    ke_hoach = (gt.get("keHoach") or "").strip()
     if not bai:
-        return gt, None, None
-    try:
-        d0 = datetime.strptime(str(gt.get("batDau")), "%Y-%m-%d").date()
-    except ValueError:
-        return gt, None, "Giáo trình khai `batDau` sai định dạng."
-    qua = (now_local().date() - d0).days
-    # Tính bằng NGÀY, không đếm số lần đã gửi: mất mạng một hôm thì hôm sau
-    # vẫn đúng bài, không bị lệch dồn về sau.
-    nhip = max(1, int(gt.get("soNgayMoiBai") or 1))
-    stt = qua // nhip
-    if 0 <= stt < len(bai):
-        b = dict(bai[stt])
-        b["_ngayTrongBai"] = qua % nhip + 1     # 1 hoặc 2 khi nhịp là 2 ngày
-        b["_nhip"] = nhip
-        return gt, b, None
-    return gt, None, None
+        return gt, None, None, False
+    if not ke_hoach:
+        return gt, None, "Giáo trình chưa khai `keHoach` nên em không tra được tiến độ.", False
 
+    loi: list = []
+    o = doc_output("goalCompany", "planSteps", {"keHoach": ke_hoach}, loi)
+    if loi:
+        # KHÔNG đoán bài. Tra hỏng mà vẫn gửi bài nào đó thì admin học nhầm bài
+        # và không có cách nào biết — im lặng sai còn tệ hơn không gửi.
+        return gt, None, f"Chưa tra được tiến độ ({loi[0]}).", False
 
-def da_het(gt) -> bool:
-    """Đã đi qua bài cuối chưa (khác với 'chưa tới ngày bắt đầu')."""
-    bai = (gt or {}).get("bai") or []
-    try:
-        d0 = datetime.strptime(str(gt.get("batDau")), "%Y-%m-%d").date()
-    except (ValueError, AttributeError):
-        return False
-    nhip = max(1, int((gt or {}).get("soNgayMoiBai") or 1))
-    return bool(bai) and (now_local().date() - d0).days // nhip >= len(bai)
+    steps = o.get("steps") or []
+    if not steps:
+        return gt, None, (f'Chưa thấy kế hoạch "{ke_hoach}" trên Notion, '
+                          "hoặc nó chưa có bước nào."), False
+
+    chua = [x for x in steps if (x.get("trangThai") or "") != "xong"]
+    if not chua:
+        return gt, None, None, True                 # đã tích hết
+
+    stt = min(int(x.get("thuTu") or 0) for x in chua) - 1
+    if not 0 <= stt < len(bai):
+        return gt, None, (f"Kế hoạch có {len(steps)} bước nhưng giáo trình có "
+                          f"{len(bai)} bài — hai bên lệch nhau, em chưa dám gửi."), False
+    b = dict(bai[stt])
+    b["_xong"] = len(steps) - len(chua)
+    b["_tong"] = len(steps)
+    return gt, b, None, False
 
 
 def section_hocsang() -> tuple[str, bool]:
@@ -512,28 +521,22 @@ def section_hocsang() -> tuple[str, bool]:
     này tốn 0đ mỗi sáng, và vẫn tới kể cả khi hết hạn mức Claude — ngày hết hạn
     mức đúng là ngày dễ bỏ học nhất.
     """
-    gt, b, loi = _bai_hom_nay()
+    gt, b, loi, het = _bai_hom_nay()
     if loi:
         return loi + " Em chưa gửi bài được.", True
+    if het:
+        # Hết bài thì KHÔNG im lặng biến mất — nói rõ và chỉ việc tiếp theo.
+        return ("Đã tích xong cả " + str(len(gt["bai"])) + " bài giáo trình Anh–Trung.\n"
+                "Giờ quay lại từ Bài 1, mỗi ngày ôn hai bài, và lần này đừng "
+                "nhìn cột tiếng Việt. Vòng hai mới là vòng khắc vào trí nhớ.\n"
+                + (gt.get("lienKet") or "")), True
     if b is None:
-        if da_het(gt):
-            # Hết bài thì KHÔNG im lặng biến mất — nói rõ và chỉ việc tiếp theo.
-            return ("Đã xong cả " + str(len(gt["bai"])) + " bài giáo trình Anh–Trung.\n"
-                    "Giờ quay lại từ Bài 1, mỗi ngày ôn hai bài, và lần này đừng "
-                    "nhìn cột tiếng Việt. Vòng hai mới là vòng khắc vào trí nhớ.\n"
-                    + (gt.get("lienKet") or "")), True
         return "", False
 
-    # Ngày thứ hai của cùng một bài thì không nạp thêm gì mới — đổi lời mở
-    # đầu để admin biết hôm nay là ngày CỦNG CỐ, không phải bài mới. Vẫn gửi
-    # trọn bài: đang học dở thì vẫn cần đủ chữ trước mắt, chỉ khác cách dùng.
-    if b.get("_ngayTrongBai", 1) > 1:
-        d = [f"Bài {b['ngay']} — {b['ten']}  (ngày {b['_ngayTrongBai']}/{b['_nhip']})",
-             "Hôm nay không có bài mới. Che cột tiếng Việt lại, tự nói ra hai "
-             "thứ tiếng kia rồi mới nhìn xuống đối chiếu — nhớ lại mạnh hơn "
-             "đọc lại nhiều lần.", ""]
-    else:
-        d = [f"Bài {b['ngay']} — {b['ten']}", b.get("khi", ""), ""]
+    d = [f"Bài {b['ngay']}/{b['_tong']} — {b['ten']}   (đã xong {b['_xong']})",
+         b.get("khi", ""),
+         "Thuộc rồi thì nhắn em \u201cxong bài này\u201d, mai em gửi bài kế tiếp. "
+         "Chưa thuộc thì cứ để nguyên, em gửi lại bài này.", ""]
     for t in b.get("tu") or []:
         d.append(t["vi"])
         d.append(f"   EN  {t['en']}")
@@ -575,11 +578,12 @@ def section_hocnhac() -> tuple[str, bool]:
     Hợp với chính luật trong giáo trình: nhớ lại mạnh hơn đọc lại. Lần thứ hai
     trong ngày không cần dạy lại, chỉ cần cho admin cái để tự kiểm.
     """
-    gt, b, loi = _bai_hom_nay()
+    gt, b, loi, het = _bai_hom_nay()
     if loi:
         return loi + " Em chưa nhắc bài được.", True
     if b is None:
-        return "", False          # ngoài khoảng giáo trình thì im hẳn
+        # Hết bài, hoặc chưa tra được — mục sáng đã nói rồi, ở đây im cho gọn.
+        return "", False
     d = [f"Ôn lại — Bài {b['ngay']}: {b['ten']}", ""]
     for t in b.get("tu") or []:
         d.append(t["vi"])
