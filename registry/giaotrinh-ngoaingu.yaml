@@ -12,6 +12,10 @@
 # enDoc / zhDoc là phiên âm bằng TIẾNG VIỆT — xấp xỉ để mở miệng được ngay,
 # không thay được việc nghe. Nghe vẫn phải bấm nút trên trang.
 lienKet: https://claude.ai/code/artifact/2831510f-d378-4e2b-90f6-080e9da27e4f
+# Mỗi bài kéo dài mấy ngày. Admin học thử một ngày rồi chốt 2 (20/08): 15 câu
+# một ngày là nhiều, giãn ra thì ngày thứ hai dành cho việc NHỚ LẠI thay vì nạp
+# thêm. Đổi số này là đổi cả lịch, không phải sửa hạn từng bài.
+soNgayMoiBai: 2
 batDau: '2026-08-20'
 bai:
 - ngay: 1

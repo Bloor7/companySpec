@@ -475,11 +475,16 @@ def _bai_hom_nay():
         d0 = datetime.strptime(str(gt.get("batDau")), "%Y-%m-%d").date()
     except ValueError:
         return gt, None, "Giáo trình khai `batDau` sai định dạng."
-    stt = (now_local().date() - d0).days
+    qua = (now_local().date() - d0).days
     # Tính bằng NGÀY, không đếm số lần đã gửi: mất mạng một hôm thì hôm sau
     # vẫn đúng bài, không bị lệch dồn về sau.
+    nhip = max(1, int(gt.get("soNgayMoiBai") or 1))
+    stt = qua // nhip
     if 0 <= stt < len(bai):
-        return gt, bai[stt], None
+        b = dict(bai[stt])
+        b["_ngayTrongBai"] = qua % nhip + 1     # 1 hoặc 2 khi nhịp là 2 ngày
+        b["_nhip"] = nhip
+        return gt, b, None
     return gt, None, None
 
 
@@ -490,7 +495,8 @@ def da_het(gt) -> bool:
         d0 = datetime.strptime(str(gt.get("batDau")), "%Y-%m-%d").date()
     except (ValueError, AttributeError):
         return False
-    return bool(bai) and (now_local().date() - d0).days >= len(bai)
+    nhip = max(1, int((gt or {}).get("soNgayMoiBai") or 1))
+    return bool(bai) and (now_local().date() - d0).days // nhip >= len(bai)
 
 
 def section_hocsang() -> tuple[str, bool]:
@@ -518,7 +524,16 @@ def section_hocsang() -> tuple[str, bool]:
                     + (gt.get("lienKet") or "")), True
         return "", False
 
-    d = [f"Ngày {b['ngay']} — {b['ten']}", b.get("khi", ""), ""]
+    # Ngày thứ hai của cùng một bài thì không nạp thêm gì mới — đổi lời mở
+    # đầu để admin biết hôm nay là ngày CỦNG CỐ, không phải bài mới. Vẫn gửi
+    # trọn bài: đang học dở thì vẫn cần đủ chữ trước mắt, chỉ khác cách dùng.
+    if b.get("_ngayTrongBai", 1) > 1:
+        d = [f"Bài {b['ngay']} — {b['ten']}  (ngày {b['_ngayTrongBai']}/{b['_nhip']})",
+             "Hôm nay không có bài mới. Che cột tiếng Việt lại, tự nói ra hai "
+             "thứ tiếng kia rồi mới nhìn xuống đối chiếu — nhớ lại mạnh hơn "
+             "đọc lại nhiều lần.", ""]
+    else:
+        d = [f"Bài {b['ngay']} — {b['ten']}", b.get("khi", ""), ""]
     for t in b.get("tu") or []:
         d.append(t["vi"])
         d.append(f"   EN  {t['en']}")
@@ -565,7 +580,7 @@ def section_hocnhac() -> tuple[str, bool]:
         return loi + " Em chưa nhắc bài được.", True
     if b is None:
         return "", False          # ngoài khoảng giáo trình thì im hẳn
-    d = [f"Ôn lại — Ngày {b['ngay']}: {b['ten']}", ""]
+    d = [f"Ôn lại — Bài {b['ngay']}: {b['ten']}", ""]
     for t in b.get("tu") or []:
         d.append(t["vi"])
         d.append(f"   {t['en']} ({t['enDoc']})  ·  {t['zh']} {t['py']} ({t['zhDoc']})")

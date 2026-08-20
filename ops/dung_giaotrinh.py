@@ -21,6 +21,7 @@ import html
 import json
 import os
 import sys
+from datetime import datetime, timedelta
 
 import yaml
 
@@ -33,6 +34,12 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Dựng trang giáo trình từ YAML")
     ap.add_argument("--ra", help="ghi ra file; bỏ trống thì in ra stdout")
     args = ap.parse_args()
+
+    def _vn(d):
+        try:
+            return datetime.strptime(str(d), "%Y-%m-%d").strftime("%d/%m/%Y")
+        except ValueError:
+            return str(d)
 
     with open(NGUON, encoding="utf-8") as fh:
         gt = yaml.safe_load(fh)
@@ -54,7 +61,21 @@ def main() -> int:
     so_bai = len(gt.get("bai") or [])
     so_cau = sum(len(b.get("tu") or []) for b in gt.get("bai") or [])
     trang = trang.replace("__SO_BAI__", str(so_bai)).replace("__SO_CAU__", str(so_cau))
-    trang = trang.replace("__BAT_DAU__", html.escape(str(gt.get("batDau", ""))))
+    trang = trang.replace("__BAT_DAU__", html.escape(_vn(gt.get("batDau"))))
+
+    # Nhịp và ngày kết thúc suy ra từ dữ liệu, KHÔNG viết cứng vào khung: admin
+    # đổi `soNgayMoiBai` là trang phải đổi theo, nếu không thì trang nói một
+    # đằng còn tin nhắn 5h30 gửi một nẻo — đúng lỗi "hai nơi, hai kiểu".
+    nhip = max(1, int(gt.get("soNgayMoiBai") or 1))
+    trang = trang.replace("__NHIP__", "mỗi ngày một bài" if nhip == 1
+                          else f"mỗi bài {nhip} ngày")
+    trang = trang.replace("__SO_NGAY__", str(so_bai * nhip))
+    try:
+        d0 = datetime.strptime(str(gt.get("batDau")), "%Y-%m-%d").date()
+        het = d0 + timedelta(days=so_bai * nhip - 1)
+        trang = trang.replace("__KET_THUC__", html.escape(het.strftime("%d/%m/%Y")))
+    except ValueError:
+        trang = trang.replace("__KET_THUC__", "?")
 
     if args.ra:
         with open(args.ra, "w", encoding="utf-8") as fh:
