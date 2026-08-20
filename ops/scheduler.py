@@ -494,14 +494,24 @@ def _bai_hom_nay():
         return gt, None, (f'Chưa thấy kế hoạch "{ke_hoach}" trên Notion, '
                           "hoặc nó chưa có bước nào."), False
 
+    # Số bước phải BẰNG số bài, không phải chỉ "đủ dùng". Bảng Notion được
+    # sinh ra từ chính file giáo trình nên lệch nghĩa là một bên đã đổi mà bên
+    # kia chưa. Ít bước hơn số bài là kiểu lệch nguy nhất: admin tích hết bảng,
+    # hệ báo "xong cả giáo trình", mà mấy bài cuối chưa từng được gửi — sai mà
+    # trông y hệt đúng. Bản đầu chỉ chặn chiều ngược lại; thử ra mới thấy.
+    if len(steps) != len(bai):
+        return gt, None, (f"Kế hoạch trên Notion có {len(steps)} bước nhưng giáo "
+                          f"trình có {len(bai)} bài — hai bên lệch nhau nên em "
+                          "chưa dám gửi. Dựng lại bảng cho khớp đã."), False
+
     chua = [x for x in steps if (x.get("trangThai") or "") != "xong"]
     if not chua:
         return gt, None, None, True                 # đã tích hết
 
     stt = min(int(x.get("thuTu") or 0) for x in chua) - 1
     if not 0 <= stt < len(bai):
-        return gt, None, (f"Kế hoạch có {len(steps)} bước nhưng giáo trình có "
-                          f"{len(bai)} bài — hai bên lệch nhau, em chưa dám gửi."), False
+        return gt, None, (f"Bước có thứ tự {stt + 1}, ngoài khoảng 1–{len(bai)} "
+                          "của giáo trình. Em chưa dám gửi."), False
     b = dict(bai[stt])
     b["_xong"] = len(steps) - len(chua)
     b["_tong"] = len(steps)
