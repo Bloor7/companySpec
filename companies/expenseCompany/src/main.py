@@ -12,6 +12,7 @@ import json
 import os
 import sqlite3
 import sys
+import unicodedata
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -125,24 +126,56 @@ def _date_filter(inp):
     ]}
 
 
+def _bo_dau(t: str) -> str:
+    """Bỏ dấu tiếng Việt để so chữ.
+
+    Admin gõ "bach hoa xanh" nhưng ghi chú lưu "Bách Hoá Xanh" — so nguyên bản
+    thì trượt. Và trượt ở đây im lặng: trả về 0 khoản trông y hệt "không có
+    khoản nào", nên admin tin là sổ không có thật.
+    """
+    t = unicodedata.normalize("NFD", (t or "").lower())
+    return "".join(c for c in t if unicodedata.category(c) != "Mn").replace("đ", "d")
+
+
 def list_expenses(token, inp):
     frm, to, flt = _date_filter(inp)
     if inp.get("danhMuc"):
         flt["and"].append(
             {"property": "Danh mục", "select": {"equals": inp["danhMuc"]}})
 
+    tu_khoa = (inp.get("tuKhoa") or "").strip()
+    # Lấy rộng hơn khi có từ khoá, vì lọc chữ làm ở đây chứ không ở Notion:
+    # `contains` của Notion phân biệt dấu nên "bach hoa" không khớp "Bách Hoá".
+    # Lấy đúng `gioiHan` rồi mới lọc thì admin xin 20 khoản BHX mà chỉ nhận
+    # được số khoản BHX nằm trong 20 dòng gần nhất — thiếu mà trông như đủ.
+    page_size = 100 if tu_khoa else inp.get("gioiHan", 50)
+
     pages = notion.query_database(
         token, database_id(), filter_=flt,
         sorts=[{"property": "Ngày", "direction": "descending"}],
-        page_size=inp.get("gioiHan", 50),
+        page_size=page_size,
     )
     items = [row_to_expense(p) for p in pages]
+
+    da_loc = False
+    if tu_khoa:
+        can = _bo_dau(tu_khoa)
+        items = [i for i in items if can in _bo_dau(i.get("note") or "")]
+        items = items[: inp.get("gioiHan", 50)]
+        da_loc = True
+
     total = sum(i["amount"] or 0 for i in items)
-    return (
-        {"expenses": items, "count": len(items)},
-        f"{frm} → {to}: {len(items)} khoản, tổng {money(total)}",
-        [],
-    )
+    tom = f"{frm} → {to}: {len(items)} khoản, tổng {money(total)}"
+    if da_loc:
+        tom = (f'{frm} → {to}, lọc theo "{tu_khoa}": {len(items)} khoản, '
+               f"tổng {money(total)}")
+        if not items:
+            # O10 — nói rõ VÌ SAO rỗng. "0 khoản" trơ trọi bị đọc thành "không
+            # tiêu gì", trong khi sự thật thường là khoản đó ghi mà KHÔNG có
+            # ghi chú, nên tìm theo chữ không ra.
+            tom += (". Không thấy khoản nào có chữ đó trong ghi chú — có thể "
+                    "khoản đó đã ghi nhưng để trống ghi chú, thử tra theo ngày.")
+    return ({"expenses": items, "count": len(items)}, tom, [])
 
 
 def sum_expenses(token, inp):

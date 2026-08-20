@@ -65,6 +65,13 @@ capabilities:
         danhMuc:
           enum: [ăn uống, đi lại, nhà cửa, sức khoẻ, học tập, giải trí, công việc, khác]
         gioiHan: { type: integer, minimum: 1, maximum: 100 }
+        # Tìm theo chữ trong ghi chú, không phân biệt hoa thường và dấu.
+        #
+        # VÌ SAO CÓ: admin hỏi "khoản mua ở Bách Hoá Xanh hôm nào" và CEO chịu,
+        # vì lọc chỉ có ngày với danh mục — có ghi chú rồi vẫn phải dò bằng mắt
+        # qua cả trăm dòng. Đo 2026-08-20. Notion lọc `contains` phân biệt dấu
+        # nên lọc nốt ở phía company sau khi lấy về (xem src/main.py).
+        tuKhoa: { type: string, minLength: 1, maxLength: 60 }
     outputSchema:
       type: object
       additionalProperties: false

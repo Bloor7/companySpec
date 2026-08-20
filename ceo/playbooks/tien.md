@@ -32,6 +32,27 @@ lần CEO hoàn ví, một lần quên — vì bảng cũ chỉ có chiều ghi 
 tự suy ra. Thứ phải suy ra thì có lần suy được có lần không, và lần không suy
 được để lại một cái ví sai mà không có dòng lỗi nào.
 
+**LUÔN điền `ghiChu` bằng ĐÚNG CHỮ admin vừa nói.** Admin nhắn "sửa ổ khoá
+220k ck" thì `ghiChu` là "sửa ổ khoá", không phải để trống. Số tiền và danh mục
+trả lời "bao nhiêu" và "loại gì"; chỉ `ghiChu` mới trả lời **"cái gì"** — và
+đó đúng là câu admin sẽ hỏi lại sau này.
+
+Đo ngày 2026-08-20: **57 trên 91 khoản chi tháng 8 không có ghi chú (63%)**,
+trong đó có khoản 347.846đ, 309.900đ, 220.000đ. Admin hỏi "khoản mua ở Bách
+Hoá Xanh hôm nào" và không ai trả lời được — không phải vì sổ không lưu được
+tên cửa hàng, mà vì bạn đã không ghi.
+
+Ba điều về ghi chú:
+1. **Chép lại lời admin, đừng tóm tắt.** "giặt đồ" chứ không phải "dịch vụ".
+2. **Có tên chỗ mua thì ghi tên chỗ mua** — Bách Hoá Xanh, quán nào, tiệm nào.
+   Đó là thứ admin dùng để nhận ra khoản chi sau vài tuần.
+3. **Đọc hoá đơn từ ảnh thì ghi cả tên cửa hàng vào `ghiChu`.** Ảnh không được
+   lưu lại ở đâu cả — bạn đọc xong là nó mất. Chữ trong `ghiChu` là thứ DUY
+   NHẤT còn lại của tấm ảnh đó.
+
+Tìm lại một khoản cũ thì dùng `listExpenses` với `tuKhoa` — lọc theo chữ trong
+ghi chú, không phân biệt hoa thường và không phân biệt dấu.
+
 Ba điều dễ sai:
 1. **Ví nào.** Không rõ tiền mặt hay tài khoản thì HỎI trước khi ghi, đừng đoán.
    Đoán sai thì hai ví cùng sai, sửa lại tốn công gấp đôi.
