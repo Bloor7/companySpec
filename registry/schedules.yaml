@@ -98,6 +98,57 @@ schedules:
     # Link để ở cuối, cho lúc muốn NGHE phát âm (thứ duy nhất Telegram không chở
     # được).
 
+  # ── Nhắc lại bài trong ngày (thêm 20/08) ───────────────────────────────
+  #
+  # Admin nói: cả ngày còn nhắn nhiều việc khác nên bài học buổi sáng bị TRÔI
+  # lên trên, tới lúc rảnh muốn ôn thì phải cuộn đi tìm. Bốn lần nhắc lại kéo
+  # nó xuống đáy màn hình đúng lúc admin ngơi tay.
+  #
+  # Bản GỌN, không phải bản đầy đủ: bài buổi sáng dài 2.500 ký tự, đẩy nguyên
+  # nó năm lần thì Telegram thành bức tường và mọi tin khác bị chôn — đúng cái
+  # đang than, chỉ đảo chiều.
+  #
+  # Giờ giãn dần từ buổi sáng (05:30 → 09:00 → 12:00 → 16:00 → 20:00), theo
+  # đúng luật ôn giãn cách: khoảng cách rộng dần thì nhớ lâu hơn ôn dồn.
+  # Đây là chỗ lặp lại CÓ CHỦ ĐÍCH, khác hẳn luật "lỗi lặp thì im" — thứ lặp
+  # lại là mấy câu cần thuộc, và nhìn lại nhiều lần chính là cách nhớ.
+
+  - scheduleId: hocNhac1
+    displayName: "Ôn bài"
+    enabled: true
+    at: "09:00"
+    days: [2, 3, 4, 5, 6, 7, 8]
+    kind: digest
+    sections: [hocnhac]
+    quietIfEmpty: true        # ngoài 12 ngày giáo trình thì im
+
+  - scheduleId: hocNhac2
+    displayName: "Ôn bài"
+    enabled: true
+    at: "12:00"
+    days: [2, 3, 4, 5, 6, 7, 8]
+    kind: digest
+    sections: [hocnhac]
+    quietIfEmpty: true
+
+  - scheduleId: hocNhac3
+    displayName: "Ôn bài"
+    enabled: true
+    at: "16:00"
+    days: [2, 3, 4, 5, 6, 7, 8]
+    kind: digest
+    sections: [hocnhac]
+    quietIfEmpty: true
+
+  - scheduleId: hocNhac4
+    displayName: "Ôn bài"
+    enabled: true
+    at: "20:00"               # trước báo cáo tiền 21:00, không chen vào nhau
+    days: [2, 3, 4, 5, 6, 7, 8]
+    kind: digest
+    sections: [hocnhac]
+    quietIfEmpty: true
+
   - scheduleId: goalNudge
     displayName: "Bước sắp tới hạn"
     enabled: true

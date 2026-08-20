@@ -452,6 +452,47 @@ def section_plan() -> tuple[str, bool]:
 GIAO_TRINH = os.path.join(ROOT, "registry", "giaotrinh-ngoaingu.yaml")
 
 
+def _bai_hom_nay():
+    """(giáo trình, bài của hôm nay, câu báo lỗi).
+
+    `bai` là None khi chưa tới ngày bắt đầu, hoặc đã học hết — hai chuyện khác
+    nhau nên bên gọi tự phân biệt bằng `da_het()`.
+
+    Tách ra vì HAI mục dùng chung phép tính này: `hocsang` gửi trọn bài lúc
+    05:30, `hocnhac` gửi bản gọn bốn lần trong ngày. Hai bản sao của cùng một
+    phép tính thì sớm muộn lệch nhau — đúng cái lỗi hạn mức tháng hôm 19/08.
+    """
+    try:
+        with open(GIAO_TRINH, encoding="utf-8") as fh:
+            gt = yaml.safe_load(fh) or {}
+    except OSError as e:
+        # O10 — thiếu giáo trình là chuyện phải BIẾT, không im lặng bỏ qua.
+        return None, None, f"Không đọc được giáo trình ({e.__class__.__name__})."
+    bai = gt.get("bai") or []
+    if not bai:
+        return gt, None, None
+    try:
+        d0 = datetime.strptime(str(gt.get("batDau")), "%Y-%m-%d").date()
+    except ValueError:
+        return gt, None, "Giáo trình khai `batDau` sai định dạng."
+    stt = (now_local().date() - d0).days
+    # Tính bằng NGÀY, không đếm số lần đã gửi: mất mạng một hôm thì hôm sau
+    # vẫn đúng bài, không bị lệch dồn về sau.
+    if 0 <= stt < len(bai):
+        return gt, bai[stt], None
+    return gt, None, None
+
+
+def da_het(gt) -> bool:
+    """Đã đi qua bài cuối chưa (khác với 'chưa tới ngày bắt đầu')."""
+    bai = (gt or {}).get("bai") or []
+    try:
+        d0 = datetime.strptime(str(gt.get("batDau")), "%Y-%m-%d").date()
+    except (ValueError, AttributeError):
+        return False
+    return bool(bai) and (now_local().date() - d0).days >= len(bai)
+
+
 def section_hocsang() -> tuple[str, bool]:
     """Bài học ngoại ngữ của hôm nay, gửi TRỌN VẸN vào Telegram.
 
@@ -461,40 +502,23 @@ def section_hocsang() -> tuple[str, bool]:
     ba tháng đúng vì thế. Chữ thì Telegram chở được hết; chỉ có TIẾNG là không,
     nên link để ở cuối cho lúc muốn nghe phát âm.
 
-    Không gọi model (RP1): mọi thứ đọc thẳng từ registry/giaotrinh-ngoaingu.yaml
-    nên tin nhắn này tốn 0đ mỗi sáng, và vẫn tới kể cả khi hết hạn mức Claude.
-
-    Bài nào rơi vào hôm nay tính bằng NGÀY, không đếm số lần đã gửi: mất mạng
-    một hôm thì hôm sau vẫn đúng bài, không bị lệch dồn.
+    Không gọi model (RP1): đọc thẳng registry/giaotrinh-ngoaingu.yaml nên tin
+    này tốn 0đ mỗi sáng, và vẫn tới kể cả khi hết hạn mức Claude — ngày hết hạn
+    mức đúng là ngày dễ bỏ học nhất.
     """
-    try:
-        with open(GIAO_TRINH, encoding="utf-8") as fh:
-            gt = yaml.safe_load(fh) or {}
-    except OSError as e:
-        # O10 — thiếu giáo trình là chuyện phải BIẾT, không phải im lặng bỏ qua.
-        return f"Không đọc được giáo trình ({e.__class__.__name__}). Em chưa gửi bài được.", True
-
-    bai = gt.get("bai") or []
-    if not bai:
+    gt, b, loi = _bai_hom_nay()
+    if loi:
+        return loi + " Em chưa gửi bài được.", True
+    if b is None:
+        if da_het(gt):
+            # Hết bài thì KHÔNG im lặng biến mất — nói rõ và chỉ việc tiếp theo.
+            return ("Đã xong cả " + str(len(gt["bai"])) + " bài giáo trình Anh–Trung.\n"
+                    "Giờ quay lại từ Bài 1, mỗi ngày ôn hai bài, và lần này đừng "
+                    "nhìn cột tiếng Việt. Vòng hai mới là vòng khắc vào trí nhớ.\n"
+                    + (gt.get("lienKet") or "")), True
         return "", False
-    try:
-        d0 = datetime.strptime(str(gt.get("batDau")), "%Y-%m-%d").date()
-    except ValueError:
-        return "Giáo trình khai `batDau` sai định dạng, em chưa biết hôm nay bài mấy.", True
 
-    stt = (now_local().date() - d0).days
-    if stt < 0:
-        return "", False                      # chưa tới ngày bắt đầu thì im
-    if stt >= len(bai):
-        # Hết bài thì KHÔNG im lặng biến mất — nói rõ, và đề nghị việc tiếp theo.
-        return ("Đã xong cả " + str(len(bai)) + " bài giáo trình Anh–Trung.\n"
-                "Giờ quay lại từ Bài 1, mỗi ngày ôn hai bài, và lần này đừng nhìn "
-                "cột tiếng Việt. Vòng hai mới là vòng khắc vào trí nhớ.\n"
-                + (gt.get("lienKet") or "")), True
-
-    b = bai[stt]
     d = [f"Ngày {b['ngay']} — {b['ten']}", b.get("khi", ""), ""]
-
     for t in b.get("tu") or []:
         d.append(t["vi"])
         d.append(f"   EN  {t['en']}")
@@ -502,7 +526,6 @@ def section_hocsang() -> tuple[str, bool]:
         d.append(f"   中  {t['zh']}  {t['py']}")
         d.append(f"       đọc: {t['zhDoc']}")
         d.append("")
-
     for m in b.get("mau") or []:
         d.append("MẪU LẮP GHÉP — thay từ vào chỗ ___")
         d.append(f"   {m['vi']}")
@@ -511,7 +534,6 @@ def section_hocsang() -> tuple[str, bool]:
         for x in m.get("thay") or []:
             d.append(f"     · {x}")
         d.append("")
-
     d.append("MÓC NHỚ")
     for x in b.get("moc") or []:
         d.append(f"   · {x}")
@@ -523,8 +545,38 @@ def section_hocsang() -> tuple[str, bool]:
     return "\n".join(d).strip(), True
 
 
+def section_hocnhac() -> tuple[str, bool]:
+    """Nhắc lại bài trong ngày — bản GỌN, gửi bốn lần sau buổi sáng.
+
+    VÌ SAO CÓ: admin nói cả ngày còn nhắn nhiều việc khác nên bài buổi sáng bị
+    TRÔI lên trên, lúc rảnh muốn ôn thì phải cuộn đi tìm.
+
+    VÌ SAO GỌN CHỨ KHÔNG GỬI LẠI Y HỆT: bản đầy đủ dài 2.500 ký tự. Đẩy nguyên
+    nó năm lần một ngày thì Telegram thành một bức tường và mọi tin khác bị
+    chôn — đúng cái admin đang than, chỉ đảo chiều. Bản này bỏ phần GIẢNG (mẫu
+    lắp ghép, móc nhớ) và giữ phần ÔN: đủ ba thứ tiếng cộng phiên âm, liếc một
+    cái là nhớ lại được.
+
+    Hợp với chính luật trong giáo trình: nhớ lại mạnh hơn đọc lại. Lần thứ hai
+    trong ngày không cần dạy lại, chỉ cần cho admin cái để tự kiểm.
+    """
+    gt, b, loi = _bai_hom_nay()
+    if loi:
+        return loi + " Em chưa nhắc bài được.", True
+    if b is None:
+        return "", False          # ngoài khoảng giáo trình thì im hẳn
+    d = [f"Ôn lại — Ngày {b['ngay']}: {b['ten']}", ""]
+    for t in b.get("tu") or []:
+        d.append(t["vi"])
+        d.append(f"   {t['en']} ({t['enDoc']})  ·  {t['zh']} {t['py']} ({t['zhDoc']})")
+    if gt.get("lienKet"):
+        d.append("")
+        d.append(f"Nghe đọc: {gt['lienKet']}")
+    return "\n".join(d), True
+
+
 SECTIONS = {"agenda": section_agenda, "tienbac": section_tienbac,
-            "hocsang": section_hocsang,
+            "hocsang": section_hocsang, "hocnhac": section_hocnhac,
             "quota": section_quota,
             "activity": section_activity, "approvals": section_approvals,
             "permissions": section_permissions, "plan": section_plan}
