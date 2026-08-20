@@ -200,6 +200,71 @@ def sum_expenses(token, inp):
     )
 
 
+def sua_expense(token, inp):
+    """Sửa ghi chú / danh mục của một khoản đã ghi.
+
+    VÌ SAO CẦN: sổ chỉ có thêm và xoá. Admin giải thích một khoản trong lúc
+    trò chuyện — "220k đó là ứng cho khách sạn" — thì CEO hiểu và nói lại đúng,
+    rồi lời giải thích ấy chết theo cuộc trò chuyện. Trong sổ khoản chi vẫn trơ
+    ra "220.000đ · công việc", và hôm sau hỏi lại là chịu. Đo 2026-08-19.
+
+    KHÔNG cho sửa số tiền và ngày. Số tiền đã đi kèm một lần cộng trừ ví; sửa
+    nó ở đây thì ví và sổ lệch nhau ngay, mà không có dòng nào báo. Sai số tiền
+    thì xoá đi ghi lại — hai bước, nhưng ví theo kịp.
+    """
+    page = notion.get_page(token, inp["expenseId"])
+    if page.get("archived"):
+        raise ValueError("Khoản này đã bị xoá rồi, không sửa được.")
+    cur = row_to_expense(page)
+
+    # D7 — đối chiếu với thứ admin nhìn thấy lúc bấm duyệt. Sửa nhầm khoản thì
+    # ghi chú của khoản này đắp sang khoản kia, và cái sai đó im lặng.
+    if float(cur["amount"] or 0) != float(inp["soTien"]):
+        raise ValueError(
+            f"Không khớp: khoản đó là {money(cur['amount'] or 0)}, "
+            f"không phải {money(inp['soTien'])}. Em không sửa.")
+
+    ghi_chu_moi = inp.get("ghiChu")
+    danh_muc_moi = inp.get("danhMuc")
+    if ghi_chu_moi is None and danh_muc_moi is None:
+        raise ValueError("Chưa nói sửa gì — cần `ghiChu` hoặc `danhMuc`.")
+
+    truoc = {"ghiChu": cur.get("note") or "", "danhMuc": cur.get("category") or ""}
+    props = {}
+    if ghi_chu_moi is not None:
+        props["Ghi chú"] = notion.text_prop(ghi_chu_moi)
+        # Tên trang lấy theo ghi chú lúc tạo (xem add_expense), nên đổi ghi chú
+        # mà không đổi tên thì mở Notion ra vẫn thấy nhãn cũ.
+        props["Tên"] = notion.title_prop(ghi_chu_moi or (danh_muc_moi or truoc["danhMuc"]))
+    if danh_muc_moi is not None:
+        props["Danh mục"] = notion.select_prop(danh_muc_moi)
+
+    notion.update_page(token, inp["expenseId"], props)
+
+    sau_ghi = truoc["ghiChu"] if ghi_chu_moi is None else ghi_chu_moi
+    sau_dm = truoc["danhMuc"] if danh_muc_moi is None else danh_muc_moi
+    doi = []
+    if ghi_chu_moi is not None and ghi_chu_moi != truoc["ghiChu"]:
+        doi.append(f'ghi chú "{truoc["ghiChu"]}" → "{ghi_chu_moi}"')
+    if danh_muc_moi is not None and danh_muc_moi != truoc["danhMuc"]:
+        doi.append(f'danh mục {truoc["danhMuc"]} → {danh_muc_moi}')
+    # Không đổi gì thì NÓI RA. "Đã sửa xong" khi thực ra không sửa gì là một
+    # câu trấn an sai — admin tin là đã ghi lại, mà sổ vẫn y nguyên.
+    tom = (f'Khoản {money(cur["amount"] or 0)} ngày {(cur["date"] or "")[:10]}: '
+           + (" · ".join(doi) if doi else "nội dung mới giống hệt cũ, không có gì đổi"))
+
+    return (
+        {"expenseId": inp["expenseId"], "ghiChu": sau_ghi, "danhMuc": sau_dm,
+         "soTien": cur["amount"], "ngay": (cur["date"] or "")[:10],
+         "truocDo": truoc},
+        tom,
+        [{"type": "notion.updatePage", "target": inp["expenseId"],
+          "idempotencyKey": f'sua|{inp["expenseId"]}|{sau_ghi}|{sau_dm}',
+          "reversible": True,
+          "previousValue": f'{truoc["ghiChu"]}|{truoc["danhMuc"]}'}],
+    )
+
+
 def delete_expense(token, inp):
     """Xoá một khoản, nhưng chỉ khi nó đúng là khoản admin đã duyệt.
 
@@ -245,7 +310,8 @@ def delete_expense(token, inp):
 
 
 HANDLERS = {"addExpense": add_expense, "listExpenses": list_expenses,
-            "sumExpenses": sum_expenses, "deleteExpense": delete_expense}
+            "sumExpenses": sum_expenses, "suaExpense": sua_expense,
+            "deleteExpense": delete_expense}
 
 
 def main() -> int:

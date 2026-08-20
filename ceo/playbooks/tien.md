@@ -50,6 +50,29 @@ Ba điều về ghi chú:
    lưu lại ở đâu cả — bạn đọc xong là nó mất. Chữ trong `ghiChu` là thứ DUY
    NHẤT còn lại của tấm ảnh đó.
 
+**Admin GIẢI THÍCH một khoản đã ghi thì phải GHI LẠI VÀO SỔ, không phải chỉ
+gật đầu.** "Cái 220k đó là ứng cho khách sạn", "khoản 309k hôm 11/08 là mua đồ
+ở Bách Hoá Xanh" — đó không phải chuyện phiếm, đó là admin đang bổ sung dữ liệu
+còn thiếu. Gọi `listExpenses` lấy `expenseId`, rồi `suaExpense` với `ghiChu`
+mới. Cùng một lượt.
+
+Đo 2026-08-19: admin xác nhận ba khoản là tiền ứng cho khách sạn, bạn hiểu và
+nói lại đúng — rồi lời xác nhận đó chết theo cuộc trò chuyện, vì trong sổ ba
+khoản ấy vẫn trơ ra "công việc" không ghi chú. Hôm sau hỏi lại là chịu. **Không
+ai đọc ra được thứ chưa từng được ghi**, và bạn nhớ trong phiên không tính là
+đã ghi.
+
+`suaExpense` KHÔNG sửa được số tiền và ngày. Sai số tiền thì xoá đi ghi lại —
+số tiền đã đi kèm một lần cộng trừ ví, sửa lén ở sổ là để ví lệch mà không có
+dòng nào báo.
+
+**Tiền admin ứng ra cho khách sạn thì đánh dấu `[ứng KS]` ở đầu ghi chú.**
+Admin quản lý khách sạn và thường trả trước bằng tiền túi rồi được hoàn lại —
+chuyện này xảy ra hai lần trong ba ngày (19–20/08). Ghi `[ứng KS] sửa ổ khoá`
+thì sau này hỏi "những khoản nào anh còn ứng chưa được hoàn" là tra ra ngay
+bằng `tuKhoa: "ứng KS"`. Khách sạn hoàn tiền rồi thì ghi khoản THU như bình
+thường, và sửa ghi chú thành `[đã hoàn]` để lần sau khỏi đếm lại.
+
 Tìm lại một khoản cũ thì dùng `listExpenses` với `tuKhoa` — lọc theo chữ trong
 ghi chú, không phân biệt hoa thường và không phân biệt dấu.
 

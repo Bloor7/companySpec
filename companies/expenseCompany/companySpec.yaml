@@ -101,6 +101,50 @@ capabilities:
         to:         { type: string }
         byCategory: { type: object }
 
+  - name: suaExpense
+    description: >
+      Sửa GHI CHÚ hoặc DANH MỤC của một khoản chi đã ghi. PHẢI gọi listExpenses
+      trước để lấy expenseId và số tiền của đúng khoản đó.
+      Dùng khi admin giải thích hay đính chính một khoản đã ghi — "khoản 220k
+      đó là ứng cho khách sạn", "cái 309k hôm 11/08 là mua đồ ở Bách Hoá Xanh".
+      KHÔNG sửa được số tiền và ngày: sai số tiền thì xoá đi ghi lại, để ví và
+      sổ còn khớp nhau.
+    riskTier: write
+    maxDurationSec: 20
+    # CỐ Ý KHÔNG whitelist: sửa ghi chú thì nhẹ, nhưng sửa danh mục làm đổi
+    # tổng của cả một nhóm chi tiêu — và đó là con số admin dùng để so hạn mức.
+    #
+    # VÌ SAO CÓ NĂNG LỰC NÀY: sổ chỉ có thêm/xoá, không có sửa. Admin giải
+    # thích một khoản trong lúc trò chuyện thì CEO hiểu, nói lại đúng, rồi lời
+    # giải thích đó chết theo cuộc trò chuyện — trong sổ khoản chi vẫn trơ ra
+    # "220.000đ · công việc". Đo 2026-08-19: CEO in "ba khoản hôm nay đại ca
+    # xác nhận là ứng cho khách sạn" mà không có chỗ nào ghi lại điều đó, nên
+    # hôm sau hỏi lại là chịu. Không ai đọc ra được thứ chưa từng được ghi.
+    inputSchema:
+      type: object
+      additionalProperties: false
+      # D7 — `soTien` để ĐỐI CHIẾU với thứ admin nhìn thấy lúc bấm duyệt, không
+      # phải để sửa. Sửa nhầm khoản thì ghi chú của khoản này đắp sang khoản kia.
+      required: [expenseId, soTien]
+      properties:
+        expenseId: { type: string, minLength: 32, maxLength: 40 }
+        soTien:    { type: number, minimum: 0 }
+        ghiChu:    { type: string, maxLength: 200 }
+        danhMuc:
+          enum: [ăn uống, đi lại, nhà cửa, sức khoẻ, học tập, giải trí, công việc, khác]
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [expenseId, ghiChu, danhMuc]
+      properties:
+        expenseId: { type: string }
+        ghiChu:    { type: string }
+        danhMuc:   { type: string }
+        soTien:    { type: number }
+        ngay:      { type: string }
+        # Giá trị TRƯỚC khi sửa — để admin đối chiếu và để còn lần ngược được.
+        truocDo:   { type: object }
+
   - name: deleteExpense
     description: >
       Xoá một khoản chi đã ghi. PHẢI gọi listExpenses trước để lấy expenseId và

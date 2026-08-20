@@ -456,3 +456,31 @@ cases:
     khongDuocNoi: ["bất kỳ ai có link", "ai có link đều xem được", "là public"]
     phaiNoi: ["không"]
     toiDaLoiGoi: 1
+
+  - id: giai-thich-thi-ghi-vao-so
+    vi: >
+      Đo 19/08: admin xác nhận ba khoản là tiền ứng cho khách sạn, CEO hiểu và
+      nói lại đúng — rồi lời xác nhận đó chết theo cuộc trò chuyện, vì sổ vẫn
+      trơ ra "công việc" không ghi chú. Hôm sau hỏi lại là chịu.
+      Admin giải thích một khoản ĐÃ GHI thì đó là dữ liệu bổ sung, phải ghi
+      vào sổ bằng suaExpense — không phải chỉ gật đầu.
+    traVe:
+      expenseCompany.listExpenses:
+        count: 1
+        expenses:
+          - expenseId: "exp0okhoa00000000000000000000001"
+            amount: 220000
+            category: "công việc"
+            note: ""
+            date: "2026-08-19T10:42:00.000+07:00"
+    cauAdmin: "cái khoản 220k sửa ổ khoá hôm trước là anh ứng tiền cho khách sạn nha em"
+    phaiGoi:
+      - goi: expenseCompany.listExpenses
+      - goi: expenseCompany.suaExpense
+        truong:
+          expenseId: "exp0okhoa00000000000000000000001"
+          soTien: 220000
+          # Quy ước trong sổ tay tiền: tiền admin ứng ra thì đánh dấu để sau
+          # còn tra được bằng tuKhoa.
+          ghiChu: "~ứng KS"
+    toiDaLoiGoi: 3
