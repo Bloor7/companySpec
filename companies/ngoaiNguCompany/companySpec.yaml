@@ -1,0 +1,159 @@
+# Company sổ câu ngoại ngữ của riêng admin — câu admin TỰ THÊM khi đang nói
+# chuyện với CEO, để hôm sau nó có mặt trong bài học buổi sáng.
+#
+# VÌ SAO CÓ (24/08): giáo trình 12 bài ở registry/giaotrinh-ngoaingu.yaml là do
+# tớ soạn trước, nên nó đoán việc admin làm hằng ngày. Đoán thì có câu trúng có
+# câu trượt — admin nói thẳng: "có vài câu anh không xài nhiều". Câu admin THẬT
+# SỰ cần lại đến vào lúc gặp khách, tức là lúc đang cầm điện thoại nhắn cho CEO
+# chứ không phải lúc ngồi sửa file YAML. Không có cửa nào để nhét nó vào.
+#
+# C4 — ranh giới là công việc "giữ những câu admin muốn thuộc". Khác giáo trình
+# ở chỗ nguồn: giáo trình là thứ SOẠN SẴN, sổ này là thứ ĐỜI SỐNG đưa tới. Nên
+# hai nguồn nằm hai chỗ và không ai ghi đè ai: tớ sửa giáo trình không xoá mất
+# câu của admin, admin thêm câu không phải mở file giáo trình ra.
+#
+# C5 — không chồng lấn profileCompany: hồ sơ giữ điều ĐÚNG VỀ ADMIN, sổ này giữ
+# câu admin ĐANG HỌC. Hồ sơ đi vào system prompt mỗi lượt; sổ này chỉ đi vào
+# tin nhắn học buổi sáng.
+
+companyId: ngoaiNguCompany
+displayName: "Phòng ngoại ngữ"
+version: 0.1.0
+
+runtime: code                     # RP1
+entrypoint: ./src/main.py
+runtimeReason: >
+  Cất và đọc lại vài chục thẻ từ. Phần cần hiểu ngôn ngữ — dịch sang Anh/Trung,
+  phiên âm — do CEO làm xong TRƯỚC khi gọi; company chỉ giữ đúng cái nhận được.
+
+# Nguồn sự thật là FILE YAML người đọc được, không phải sqlite — cùng lý lẽ với
+# PROFILE.md của profileCompany: đây là thứ admin sẽ muốn mở ra xem mình đã thêm
+# gì, sửa một chữ phiên âm nghe không giống, hoặc xoá hàng loạt. Thêm nữa nó
+# cùng HÌNH với khối `tu:` trong giáo trình, nên câu ở đây chép sang giáo trình
+# được mà không phải đổi định dạng.
+dataStore: ./CAU-CUA-TOI.yaml
+secrets: []
+env:     []
+canBeCalledBy: [ceo]
+canCall: []
+owner: admin
+
+capabilities:
+  - name: themCau
+    description: >
+      Thêm MỘT câu vào sổ câu của admin, đủ cả ba thứ tiếng và phiên âm. Câu
+      thêm hôm nay có mặt trong tin học 05:30 sáng mai và bốn lần ôn trong ngày.
+    riskTier: write
+    maxDurationSec: 10
+    # G8 — whitelist theo NHÓM, giống expenseCompany khoá theo danh mục. Admin
+    # bấm "luôn cho phép" cho nhóm nào thì những câu sau cùng nhóm tự chạy.
+    # Không mở rộng hơn thế: nhóm là thứ admin đọc được trên nút duyệt.
+    whitelistScope: [nhom]
+    inputSchema:
+      type: object
+      additionalProperties: false
+      # PHIÊN ÂM LÀ BẮT BUỘC, không phải tuỳ chọn. Admin học bằng cách mở miệng
+      # đọc theo chữ Việt ("gút moóc-ninh") — đó là cả cách dùng của giáo trình.
+      # Để tuỳ chọn thì CEO sẽ bỏ trống cho nhanh, và thứ đọng lại trong sổ là
+      # mấy dòng chữ Hán admin không phát âm nổi: đúng bằng không có gì.
+      required: [vi, en, enDoc, zh, py, zhDoc, nhom]
+      properties:
+        vi:    { type: string, minLength: 1, maxLength: 200 }
+        en:    { type: string, minLength: 1, maxLength: 200 }
+        enDoc: { type: string, minLength: 1, maxLength: 200 }
+        zh:    { type: string, minLength: 1, maxLength: 120 }
+        py:    { type: string, minLength: 1, maxLength: 200 }
+        zhDoc: { type: string, minLength: 1, maxLength: 200 }
+        # C2.5 — từ vựng đóng, và cố ý ĐÚNG BẰNG tên 12 bài giáo trình (+ "khác").
+        # Để tự do thì mỗi câu một nhóm mới, vài tháng sau whitelist vô dụng và
+        # không gom được câu nào với câu nào.
+        nhom:
+          enum: [đón khách, nhận phòng, số đếm và tiền, phòng có gì,
+                 giờ giấc, chỉ đường, thuê xe máy, bán đồ ăn,
+                 sự cố và phàn nàn, gợi ý chỗ chơi, trả phòng,
+                 giữ khách quay lại, khác]
+        khi: { type: string, maxLength: 200 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [cauId, vi, nhom, tong]
+      properties:
+        cauId: { type: string }
+        vi:    { type: string }
+        nhom:  { type: string }
+        tong:  { type: integer }
+
+  - name: dsCau
+    description: >
+      Đọc sổ câu của admin. Mặc định chỉ trả câu ĐANG HỌC; muốn xem cả câu đã
+      thuộc thì nêu trangThai.
+    riskTier: read
+    maxDurationSec: 10
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        nhom:
+          enum: [đón khách, nhận phòng, số đếm và tiền, phòng có gì,
+                 giờ giấc, chỉ đường, thuê xe máy, bán đồ ăn,
+                 sự cố và phàn nàn, gợi ý chỗ chơi, trả phòng,
+                 giữ khách quay lại, khác]
+        trangThai:
+          enum: [đang học, thuộc, tất cả]
+        gioiHan: { type: integer, minimum: 1, maximum: 200 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [cau, count]
+      properties:
+        count: { type: integer }
+        cau:   { type: array }
+
+  - name: danhDauThuoc
+    description: >
+      Đánh dấu một câu đã thuộc — nó thôi xuất hiện trong tin học hằng ngày
+      nhưng vẫn nằm trong sổ để tra lại. PHẢI gọi dsCau trước để lấy cauId.
+    riskTier: write
+    maxDurationSec: 10
+    # Cố ý KHÔNG whitelist: nó quyết định câu nào thôi được ôn, và đoán sai thì
+    # cái mất là một câu admin tưởng mình đã thuộc. Rẻ hơn thì hỏi một câu.
+    inputSchema:
+      type: object
+      additionalProperties: false
+      # D7 — `vi` để ĐỐI CHIẾU chứ không phải để tìm. Admin duyệt dựa trên câu
+      # tiếng Việt hiện trên nút; cauId trỏ chỗ khác là dừng.
+      required: [cauId, vi]
+      properties:
+        cauId: { type: string, minLength: 2, maxLength: 12 }
+        vi:    { type: string, minLength: 1, maxLength: 200 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [cauId, vi, conLai]
+      properties:
+        cauId:  { type: string }
+        vi:     { type: string }
+        conLai: { type: integer }
+
+  - name: xoaCau
+    description: >
+      Xoá hẳn một câu khỏi sổ. Dùng khi câu đó thêm nhầm hoặc dịch sai — câu chỉ
+      "không cần ôn nữa" thì dùng danhDauThuoc. PHẢI gọi dsCau trước để lấy cauId.
+    riskTier: write
+    maxDurationSec: 10
+    # D8 — xoá thì lần nào cũng phải hỏi, không có đường whitelist.
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [cauId, vi]
+      properties:
+        cauId: { type: string, minLength: 2, maxLength: 12 }
+        vi:    { type: string, minLength: 1, maxLength: 200 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [cauId, vi, conLai]
+      properties:
+        cauId:  { type: string }
+        vi:     { type: string }
+        conLai: { type: integer }

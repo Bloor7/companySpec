@@ -518,6 +518,79 @@ def _bai_hom_nay():
     return gt, b, None, False
 
 
+# Số câu ĐẠI CA TỰ THÊM gửi kèm mỗi ngày. Bốn — bằng khoảng một phần ba số câu
+# của một bài giáo trình, đủ để có mặt mà không đẩy bài chính xuống dưới.
+CAU_MOI_NGAY = 4
+# Bản ôn gọn gửi bốn lần trong ngày nên lấy ít hơn, và lấy ĐÚNG mấy câu đầu của
+# cửa sổ buổi sáng — ôn là gặp lại thứ sáng nay đã học, không phải thứ mới.
+CAU_ON_LAI = 3
+
+
+def _cau_cua_toi(so_cau: int) -> tuple[list, str]:
+    """(câu admin tự thêm cho hôm nay, câu báo lỗi nếu tra hỏng).
+
+    XOAY VÒNG THEO NGÀY chứ không gửi cả sổ: sổ này chỉ có lớn lên, và một tin
+    dài thêm mỗi tuần thì đến tháng sau admin thôi đọc — cùng cái bẫy đã khiến
+    bản nhắc lại trong ngày phải rút gọn hôm 20/08.
+
+    KHÔNG ghi lại "hôm qua đã ôn câu nào": cron chỉ được ĐỌC (S3), nên trí nhớ
+    giữa các lần gửi không thể là một cột trong sổ. Cửa sổ trượt theo ngày trong
+    năm giải đúng bài toán đó mà không cần nhớ gì — trong cùng một ngày thì năm
+    tin nhắn trùng nhau (đúng ý: đó là ôn), sang ngày mới tự sang câu khác, và
+    hết vòng thì quay lại từ đầu.
+
+    Sổ rỗng thì trả về rỗng và IM — admin chưa thêm câu nào là chuyện bình
+    thường, không phải chuyện phải báo. Còn tra HỎNG thì nói ra (O10): im ở đây
+    nghĩa là mấy câu admin tự thêm lặng lẽ biến mất khỏi bài học và không ai hay.
+    """
+    loi: list = []
+    o = doc_output("ngoaiNguCompany", "dsCau", {"trangThai": "đang học"}, loi)
+    if loi:
+        return [], f"(Chưa lấy được sổ câu đại ca tự thêm — {loi[0]})"
+    cau = o.get("cau") or []
+    if not cau:
+        return [], ""
+    dau = (now_local().timetuple().tm_yday * CAU_MOI_NGAY) % len(cau)
+    return [cau[(dau + i) % len(cau)] for i in range(min(so_cau, len(cau)))], ""
+
+
+def _khoi_cau_day() -> str:
+    """Khối câu tự thêm, dạng ĐẦY ĐỦ — cùng hình với phần `tu` của bài giáo
+    trình, để mắt đọc theo một thói quen chứ không phải học lại cách đọc."""
+    cau, canh = _cau_cua_toi(CAU_MOI_NGAY)
+    if canh:
+        return canh
+    if not cau:
+        return ""
+    d = ["CÂU CỦA ĐẠI CA — tự thêm trong lúc nhắn với em", ""]
+    for t in cau:
+        d.append(t["vi"] + (f"   ({t['khi']})" if t.get("khi") else ""))
+        d.append(f"   EN  {t['en']}")
+        d.append(f"       đọc: {t['enDoc']}")
+        d.append(f"   中  {t['zh']}  {t['py']}")
+        d.append(f"       đọc: {t['zhDoc']}")
+        d.append("")
+    d.append("Thêm câu mới: cứ nhắn em “học câu: <câu tiếng Việt>”.")
+    return "\n".join(d).strip()
+
+
+def _khoi_cau_gon() -> str:
+    """Bản GỌN cho bốn lần nhắc trong ngày — mỗi câu một dòng, đủ ba thứ tiếng.
+
+    Tra hỏng thì ở ĐÂY im, khác `_khoi_cau_day`. Không phải nuốt lỗi (O10): tin
+    05:30 đã nói ra rồi, và bản này gửi bốn lần một ngày — lặp lại cùng một câu
+    báo lỗi bốn lần chính là cách dạy admin bỏ qua thông báo.
+    """
+    cau, _canh = _cau_cua_toi(CAU_ON_LAI)
+    if not cau:
+        return ""
+    d = ["Câu của đại ca:"]
+    for t in cau:
+        d.append(t["vi"])
+        d.append(f"   {t['en']} ({t['enDoc']})  ·  {t['zh']} {t['py']} ({t['zhDoc']})")
+    return "\n".join(d)
+
+
 def section_hocsang() -> tuple[str, bool]:
     """Bài học ngoại ngữ của hôm nay, gửi TRỌN VẸN vào Telegram.
 
@@ -533,13 +606,22 @@ def section_hocsang() -> tuple[str, bool]:
     """
     gt, b, loi, het = _bai_hom_nay()
     if loi:
-        return loi + " Em chưa gửi bài được.", True
+        # Giáo trình tra hỏng thì sổ câu riêng VẪN gửi được: nó nằm trong máy,
+        # không dính Notion. Trả về mỗi câu báo lỗi là để một sự cố ở phía kia
+        # cướp luôn phần bài học không hề phụ thuộc vào nó.
+        khoi = _khoi_cau_day()
+        return (loi + " Em chưa gửi bài giáo trình được."
+                + (f"\n\n{khoi}" if khoi else "")), True
     if het:
         # Hết bài thì KHÔNG im lặng biến mất — nói rõ và chỉ việc tiếp theo.
+        # Câu tự thêm vẫn gửi: sổ đó không hết bao giờ, và đây đúng là lúc nó
+        # thành phần chính của tin buổi sáng thay vì phần phụ.
+        khoi = _khoi_cau_day()
         return ("Đã tích xong cả " + str(len(gt["bai"])) + " bài giáo trình Anh–Trung.\n"
                 "Giờ quay lại từ Bài 1, mỗi ngày ôn hai bài, và lần này đừng "
                 "nhìn cột tiếng Việt. Vòng hai mới là vòng khắc vào trí nhớ.\n"
-                + (gt.get("lienKet") or "")), True
+                + (gt.get("lienKet") or "")
+                + (f"\n\n{khoi}" if khoi else "")), True
     if b is None:
         return "", False
 
@@ -567,6 +649,10 @@ def section_hocsang() -> tuple[str, bool]:
         d.append(f"   · {x}")
     d.append("")
     d.append(f"Dùng ngay: {b.get('dungNgay', '')}")
+    khoi = _khoi_cau_day()
+    if khoi:
+        d.append("")
+        d.append(khoi)
     if gt.get("lienKet"):
         d.append("")
         d.append(f"Bấm để NGHE đọc từng câu: {gt['lienKet']}")
@@ -590,14 +676,23 @@ def section_hocnhac() -> tuple[str, bool]:
     """
     gt, b, loi, het = _bai_hom_nay()
     if loi:
-        return loi + " Em chưa nhắc bài được.", True
+        khoi = _khoi_cau_gon()      # cùng lý lẽ với section_hocsang
+        return (loi + " Em chưa nhắc bài giáo trình được."
+                + (f"\n\n{khoi}" if khoi else "")), True
     if b is None:
         # Hết bài, hoặc chưa tra được — mục sáng đã nói rồi, ở đây im cho gọn.
-        return "", False
+        # Nhưng sổ câu tự thêm thì KHÔNG hết bao giờ: hết giáo trình mà tắt
+        # luôn bốn lần nhắc là bỏ đi đúng phần admin tự chọn để học.
+        khoi = _khoi_cau_gon()
+        return (khoi, True) if khoi else ("", False)
     d = [f"Ôn lại — Bài {b['ngay']}: {b['ten']}", ""]
     for t in b.get("tu") or []:
         d.append(t["vi"])
         d.append(f"   {t['en']} ({t['enDoc']})  ·  {t['zh']} {t['py']} ({t['zhDoc']})")
+    khoi = _khoi_cau_gon()
+    if khoi:
+        d.append("")
+        d.append(khoi)
     if gt.get("lienKet"):
         d.append("")
         d.append(f"Nghe đọc: {gt['lienKet']}")

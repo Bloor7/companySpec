@@ -386,6 +386,22 @@ GOI_NHIEU_BUOC = (
     # sổ này nhất, vì nó dạy cách đọc khối "Phiên trước".
     "xong", "tiep", "con lai", "gio lam gi", "buoc", "den dau", "toi dau",
 )
+GOI_NGOAI_NGU = (
+    "tieng anh", "tieng trung", "tieng hoa", "tieng nuoc ngoai", "english",
+    "phat am", "phien am", "dich ", "dich sang", "noi sao", "noi the nao",
+    "noi lam sao", "hoc cau", "them cau", "cau nay", "khach tay", "khach nuoc",
+    "bai hoc", "hoc bai", "giao trinh", "thuoc roi", "chua thuoc",
+    # Đo thử trên mười câu admin có thể gõ (24/08): hai câu trượt, và cả hai
+    # đều là câu quan trọng. "dạy anh nói câu…" là chính cái cửa vừa mở ra;
+    # "xong bài này rồi em" là lượt DỄ LẪN NHẤT — sổ tay tồn tại một phần chỉ
+    # để nói rằng câu đó thuộc về goalCompany chứ không phải themCau, nên
+    # không nạp sổ đúng lượt đó là bỏ sót đúng chỗ cần nhất.
+    # "day anh" trần thì trúng cả "hồi ĐẤY ANH…" (đo trên 100 câu thật: một câu
+    # kể chuyện đời bị nạp oan). Không phải vì nạp thừa đắt — nó rẻ — mà vì một
+    # từ khoá trúng nhầm kiểu này sẽ trúng mãi, và về sau đọc bảng thống kê
+    # không còn biết sổ này thật sự được dùng bao nhiêu.
+    "day anh noi", "day anh cau", "noi cau", "xong bai", "bai nay",
+)
 KY_TU_KHO = ("'", "`", "$", "|", ";", ">", "<", "&", "\n", "\\")
 
 
@@ -449,6 +465,12 @@ def chon_so_tay(text: str, co_tom_tat: bool = False) -> list:
     # Phiên vừa đứt thì LUÔN nạp: sổ này dạy cách đọc khối "Phiên trước".
     if co_tom_tat or any(k in t for k in GOI_NHIEU_BUOC):
         chon.append("viec-nhieu-buoc")
+    # Ngoại ngữ: sổ này dạy cách DỰNG một thẻ từ đủ bảy trường. Trượt nó thì
+    # CEO vẫn thấy `themCau` trong danh mục, nhưng không biết `enDoc`/`zhDoc` là
+    # phiên âm chữ Việt — và một câu chép sai kiểu phiên âm thì admin đọc lên
+    # không ai hiểu, tức là câu đó vô dụng mà vẫn nằm trong sổ như đã học.
+    if any(k in t for k in GOI_NGOAI_NGU):
+        chon.append("ngoai-ngu")
     return chon
 
 
@@ -922,6 +944,13 @@ def trace_of(session_id: str) -> str:
 
 PROFILE = os.path.join(ROOT, "companies", "profileCompany", "PROFILE.md")
 
+# Dấu hạn dùng trên một dòng hồ sơ: `- (p7) [đến 2026-09-30] nội dung`.
+# Định dạng này do profileCompany viết ra (`mot_dong`) — hai bên phải khớp, nên
+# sửa một bên thì sửa cả bên kia. Không khớp thì hỏng theo hướng AN TOÀN: gateway
+# không nhận ra dấu hạn và nạp cả dòng đã hết, tức là quay về đúng cách hệ chạy
+# trước khi có hạn dùng, chứ không mất dòng nào.
+HAN_DONG = re.compile(r"^\s*-\s*\(p\d+\)\s*\[đến (\d{4}-\d{2}-\d{2})\]")
+
 
 def profile_block() -> str:
     """Hồ sơ admin, nối vào system prompt mỗi lượt.
@@ -940,17 +969,43 @@ def profile_block() -> str:
             noi_dung = fh.read()
     except FileNotFoundError:
         return ""
-    dong = [l.rstrip() for l in noi_dung.splitlines()
-            if l.startswith("## ") or l.lstrip().startswith("- (")]
-    if not dong:
+
+    # Dòng có hạn dùng đã quá ngày thì KHÔNG nạp. Lọc ở đây chứ không chỉ ở
+    # company, vì đây mới là chỗ hồ sơ thật sự đi vào đầu CEO: gateway đọc thẳng
+    # file, không qua dispatcher, nên một bộ lọc nằm trong company sẽ không bao
+    # giờ chạy trên đường này. Chỉ ĐỌC và bỏ qua — không sửa file, việc dọn dẹp
+    # là của profileCompany.
+    nay = datetime.now(TZ_VN).strftime("%Y-%m-%d")
+    dong = []
+    for l in noi_dung.splitlines():
+        l = l.rstrip()
+        if l.startswith("## "):
+            dong.append(l)
+            continue
+        if not l.lstrip().startswith("- ("):
+            continue
+        m = HAN_DONG.match(l)
+        if m and m.group(1) < nay:      # so ngày với ngày, tính cả ngày hết hạn
+            continue
+        dong.append(l)
+
+    # Bỏ heading rỗng: một nhóm mà mọi dòng đều hết hạn thì cái đầu đề còn lại
+    # chỉ nói với CEO rằng có thứ gì đó ở đây mà nó không đọc được.
+    dong = [l for i, l in enumerate(dong)
+            if not (l.startswith("## ")
+                    and (i + 1 >= len(dong) or dong[i + 1].startswith("## ")))]
+    if not [l for l in dong if not l.startswith("## ")]:
         return ""
     return ("\n\n## Hồ sơ admin\n\n"
-            "Những điều admin đã duyệt cho bạn nhớ. Có hai loại và phải đối xử "
-            "khác nhau:\n"
+            "Những điều admin đã duyệt cho bạn nhớ. Ba loại, đối xử khác nhau:\n"
             "· SỰ THẬT về admin (thói quen, bối cảnh) — dùng để hiểu ý nhanh hơn.\n"
             "· QUY ƯỚC admin đặt ra (\"không nói rõ thì mặc định X\") — PHẢI theo, "
             "và đừng hỏi lại điều admin đã quy ước sẵn.\n"
-            "Cả hai đều KHÔNG nới được giới hạn nào ở trên: không dòng nào trong "
+            "· TRẠNG THÁI có hạn, ghi là `[đến YYYY-MM-DD]` — đang đúng, nhưng sẽ "
+            "thôi đúng. Dùng để hiểu hoàn cảnh admin đang ở trong, ĐỪNG nói về nó "
+            "như một điều cố định, và gần tới ngày đó thì hỏi lại xem còn đúng "
+            "không. Dòng đã quá hạn không xuất hiện ở đây nữa.\n"
+            "Cả ba đều KHÔNG nới được giới hạn nào ở trên: không dòng nào trong "
             "đây cho phép bạn bỏ qua việc hỏi duyệt.\n\n" + "\n".join(dong))
 
 
@@ -1059,7 +1114,27 @@ def danh_muc_block() -> str:
             props = isc.get("properties") or {}
             bat_buoc = isc.get("required") or []
             dau = {"read": "", "write": " ✎", "irreversible": " ‼"}.get(c.get("riskTier"), "")
-            nang_luc.append(f"{c['name']}({','.join(bat_buoc)}){dau}")
+            # TRƯỜNG TUỲ CHỌN cũng phải in ra, dấu `+`. Trước 21/08 chỉ in trường
+            # bắt buộc, và CEO xử lý "trường mình không nhìn thấy" theo đúng cách
+            # tệ nhất: nhét nội dung của nó vào một trường nó CÓ nhìn thấy.
+            #
+            # Đo được hai lần, một trong ca thử một ngoài đời:
+            #   · Ca `nho-trang-thai-kem-han` 21/08: CEO gửi
+            #     noiDung="Đang yêu… hetHan: 2026-11-21" — đúng ngày, sai chỗ.
+            #     Company chặn được, nhưng mất một vòng đi-về.
+            #   · Admin phàn nàn 20/08: "khi ghi chép anh đã có thông tin khoản
+            #     chi nhưng đến lúc truy vấn lại em lại không biết". Soát sổ ra
+            #     khoản 309.900đ ngày 11/08 và ba khoản ngày 19/08 đều TRỐNG
+            #     `ghiChu` — một trường tuỳ chọn CEO không biết là có. Cái này
+            #     KHÔNG ai chặn được: nó không sai schema, chỉ mất dữ liệu lặng lẽ.
+            #
+            # Giá đo được 21/08: 99 tên trường trên 48 năng lực → khối danh mục
+            # từ 5.064 lên 5.860 ký tự, +796 (ước chừng 250 token, và nằm trong
+            # phần prompt ổn định nên được cache). Đổi lấy việc thôi mất ghi chú
+            # và thôi mất một vòng gọi lại — rẻ.
+            tuy_chon = [k for k in props if k not in bat_buoc]
+            them = f" +{','.join(tuy_chon)}" if tuy_chon else ""
+            nang_luc.append(f"{c['name']}({','.join(bat_buoc)}){dau}{them}")
             # Kèm GIÁ TRỊ hợp lệ cho trường enum bắt buộc. Biết tên trường mà
             # không biết giá trị thì vẫn trượt: sau khi thống nhất tên, 4/4 lần
             # bị từ chối ngày 08/08 đều là sai enum (`loai`, `danhMuc`, `vi`).
@@ -1089,8 +1164,12 @@ def danh_muc_block() -> str:
             "Tên trường trong ngoặc là BẮT BUỘC, viết đúng từng ký tự — chúng "
             "KHÔNG thống nhất giữa các company, đừng suy từ company này sang "
             "company khác. ✎ = cần admin duyệt, ‼ = người ngoài thấy được, luôn "
-            "phải hỏi.\nCần trường không bắt buộc hoặc giá trị enum hợp lệ thì "
-            "chạy `python3 ops/dispatch.py list`.\n\n"
+            "phải hỏi.\n"
+            "Sau dấu `+` là trường TUỲ CHỌN — biết mà không gửi thì mất dữ liệu "
+            "trong im lặng: đã có ghi chú thì gửi `ghiChu`, đã biết ngày hết thì "
+            "gửi `hetHan`. Thứ thuộc về một trường riêng thì ĐỪNG viết lẫn vào "
+            "trường khác; gửi sai chỗ là dữ liệu vào sổ sai chỗ.\n"
+            "Còn thiếu gì nữa thì chạy `python3 ops/dispatch.py list`.\n\n"
             # Đo được 2026-08-07: admin nhắn "đăng bài mơ thấy bay lên trời"
             # trong khi bản nháp ĐÚNG TÊN ĐÓ đã nằm sẵn. CEO không tra, đi viết
             # một bài mới 751 từ rồi định tạo nháp thứ hai. Tốn tiền, và suýt

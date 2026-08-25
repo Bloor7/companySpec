@@ -1,0 +1,22 @@
+# Câu ngoại ngữ do đại ca tự thêm — sổ riêng của ngoaiNguCompany.
+#
+# Sinh và đọc bởi companies/ngoaiNguCompany. Sửa tay thoải mái: company đọc lại
+# đúng file này, không giữ bản sao ở đâu khác. Giữ nguyên tên trường thì thôi.
+#
+# Khác registry/giaotrinh-ngoaingu.yaml ở NGUỒN: giáo trình là 12 bài soạn sẵn,
+# file này là câu đời sống đưa tới. Hai bên không ai ghi đè ai.
+#
+# trangThai: "đang học" (còn được gửi mỗi sáng) | "thuộc" (nằm lại để tra).
+
+soDaCap: 2
+cau:
+- id: c2
+  vi: Đây là mật khẩu wifi ạ
+  en: Here is the wifi password
+  enDoc: hia iz đơ wai-phai pát-uợt
+  zh: 这是wifi密码
+  py: zhè shì wifi mìmǎ
+  zhDoc: chưa sư wai-phai mi-mả
+  nhom: nhận phòng
+  trangThai: đang học
+  themLuc: '2026-08-24'

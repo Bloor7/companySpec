@@ -167,13 +167,36 @@ cases:
       - profileCompany.rememberFact
     toiDaLoiGoi: 1
 
+  - id: nho-trang-thai-kem-han
+    cauAdmin: "anh đang yêu, mới quen được hai tuần"
+    vi: >
+      Ca sinh ra từ một lượt THẬT ngày 2026-08-21 00:50: admin nhờ viết một câu
+      về trạng thái yêu của mình, CEO đáp "không có thông tin trong hồ sơ" — và
+      nó đáp đúng, vì lúc đó hồ sơ chỉ nhận "điều LUÔN đúng" nên không có ngăn
+      nào cất một hoàn cảnh đang diễn ra. Mọi thứ đúng-trong-một-quãng đều bị
+      vứt, phiên sau lại trắng.
+      Giờ có nhóm `trạng thái` kèm `hetHan`. Ca này canh hai thứ cùng lúc: CEO
+      phải NHỚ (chứ không bỏ qua như một câu tâm sự), và phải nhớ KÈM NGÀY HẾT —
+      thiếu `hetHan` thì company chặn, mà chặn thì tốn thêm một vòng đi-về đúng
+      như con bug "mảng object" ngày trước.
+      Lưu ý bộ chấm: lời gọi bị cổng từ chối cũng tính là trượt, nên ca này phủ
+      luôn việc CEO gõ sai định dạng ngày.
+    phaiGoi:
+      - goi: profileCompany.rememberFact
+        truong: {nhom: "trạng thái", noiDung: "*", hetHan: "*"}
+    toiDaLoiGoi: 2
+
   - id: khong-nho-cam-giac-mot-ngay
     cauAdmin: "hôm nay mệt quá"
     vi: >
-      Đối chứng của ca trên, lấy thẳng từ bảng trong SYSTEM.md: "cảm giác một
-      ngày, không phải điều luôn đúng" → KHÔNG ghi hồ sơ. Hồ sơ là những điều
-      LUÔN đúng. Không có ca này thì sửa prompt cho nhớ nhiều hơn sẽ lặng lẽ
-      biến CEO thành cái máy ghi mọi câu cảm thán.
+      Đối chứng của hai ca trên, lấy thẳng từ bảng trong SYSTEM.md: "cảm giác
+      một ngày, qua đêm là hết" → KHÔNG ghi hồ sơ.
+      Ca này ĐẮT GIÁ HƠN kể từ khi có nhóm `trạng thái`: trước đây ranh giới rất
+      rõ (hồ sơ chỉ nhận điều luôn đúng, mà mệt thì không luôn đúng). Giờ đã có
+      chỗ cất thứ tạm thời, nên cái dốc trơn là CEO đem luôn mọi câu cảm thán
+      vào đó, hẹn hạn ba ngày, và hồ sơ thành sổ tâm trạng. Ranh giới mới:
+      trạng thái là HOÀN CẢNH admin đang ở trong (đang yêu, đang trông khách sạn
+      thay người, đang bó bột), không phải cảm giác của một buổi.
     phaiGoi: []
     khongDuocGoi:
       - profileCompany.rememberFact
@@ -484,3 +507,57 @@ cases:
           # còn tra được bằng tuKhoa.
           ghiChu: "~ứng KS"
     toiDaLoiGoi: 3
+
+  # ─────────── nhóm 8: ngoại ngữ (sổ tay `ngoai-ngu`, thêm 24/08) ───────────
+
+  - id: them-cau-vao-so-rieng
+    cauAdmin: "dạy anh nói câu cho anh xin cái mật khẩu wifi với, để anh học luôn"
+    vi: >
+      Admin muốn HỌC một câu, không phải hỏi nghĩa một lần rồi thôi. Đích là
+      ngoaiNguCompany.themCau, và phải đủ bảy trường — CEO tự dịch, tự phiên âm,
+      không hỏi lại admin bản tiếng Anh. Giá trị để "*" vì bản dịch là thứ model
+      sinh ra, ca thử đo CHỖ GỌI và ĐỦ TRƯỜNG chứ không chấm bản dịch.
+    phaiGoi:
+      - goi: ngoaiNguCompany.themCau
+        truong: {vi: "*", en: "*", enDoc: "*", zh: "*", py: "*", zhDoc: "*",
+                 nhom: "*"}
+    toiDaLoiGoi: 2
+
+  - id: xong-bai-khong-phai-them-cau
+    cauAdmin: "xong bài này rồi em"
+    vi: >
+      Ca đối chứng của ca trên, canh đúng chỗ dễ lẫn nhất sau khi có sổ câu
+      riêng: "xong bài" là TÍCH TIẾN ĐỘ giáo trình 12 bài (goalCompany), không
+      phải thêm câu vào sổ. Lẫn chỗ này thì tiến độ đứng yên và sáng mai admin
+      nhận lại đúng bài hôm qua — hỏng mà trông y hệt bình thường.
+    # Hai bản giả, vì CEO không thể BIẾT tên kế hoạch — nó phải đi hỏi. Thiếu
+    # listPlans thì bản giả trả danh sách rỗng và CEO hỏi lại admin: hành vi
+    # ĐÚNG, nhưng ca lại chấm trượt (cùng cái bẫy đã làm `nap-quy-khong-phai-chi`
+    # trượt oan lần chạy đầu 16/08).
+    traVe:
+      goalCompany.listPlans:
+        count: 1
+        plans:
+          - ten: "Anh–Trung song song cho khách sạn"
+            soBuoc: 12
+            xong: 0
+      goalCompany.planSteps:
+        keHoach: "Anh–Trung song song cho khách sạn"
+        count: 2
+        steps:
+          - stepId: "stp0anhtrung00000000000000000001"
+            ten: "Bài 1 — Đón khách ở cửa"
+            thuTu: 1
+            trangThai: "chưa làm"
+          - stepId: "stp0anhtrung00000000000000000002"
+            ten: "Bài 2 — Nhận phòng"
+            thuTu: 2
+            trangThai: "chưa làm"
+    phaiGoi:
+      - goi: goalCompany.planSteps
+      - goi: goalCompany.updateStep
+        truong: {stepId: "stp0anhtrung00000000000000000001", ten: "*",
+                 trangThai: "xong"}
+    khongDuocGoi:
+      - ngoaiNguCompany.themCau
+    toiDaLoiGoi: 4
