@@ -1,8 +1,13 @@
 # Company giữ hồ sơ về admin — thứ CEO cần biết để hiểu ý nhanh hơn qua thời gian.
 #
 # C4 — ranh giới là công việc "nhớ giùm admin những điều về chính admin". Khác
-# journalCompany (nhật ký là chuyện đã xảy ra) ở chỗ hồ sơ là những điều LUÔN
-# đúng: cách admin gọi tên đồ vật, thói quen, bối cảnh sống.
+# journalCompany (nhật ký là chuyện ĐÃ XẢY RA, tra lại khi cần) ở chỗ hồ sơ là
+# những điều ĐANG ĐÚNG, và CEO mang theo chúng ở mọi lượt mà không phải tra.
+#
+# Hai loại, phân biệt bằng `hetHan`:
+#   · không hạn — điều luôn đúng: cách admin gọi tên đồ vật, thói quen, bối cảnh sống.
+#   · có hạn    — điều đúng trong một quãng: đang ốm, đang ở xa, đang gánh một
+#                 việc lớn. Quá ngày thì tự rụng khỏi prompt (xem `hetHan` dưới).
 #
 # Điểm đặc biệt: sản phẩm của company này được NẠP THẲNG vào system prompt của
 # CEO ở mỗi lượt (gateway đọc PROFILE.md). Nên nó nguy hiểm hơn mọi company khác:
@@ -37,7 +42,7 @@ capabilities:
       additionalProperties: false
       properties:
         nhom:
-          enum: [xưng hô, thói quen, từ vựng riêng, bối cảnh, sở thích]
+          enum: [xưng hô, thói quen, từ vựng riêng, bối cảnh, sở thích, trạng thái]
     outputSchema:
       type: object
       additionalProperties: false
@@ -61,10 +66,29 @@ capabilities:
       required: [nhom, noiDung]
       properties:
         nhom:
-          enum: [xưng hô, thói quen, từ vựng riêng, bối cảnh, sở thích]
+          enum: [xưng hô, thói quen, từ vựng riêng, bối cảnh, sở thích, trạng thái]
         # Ngắn có chủ ý: hồ sơ nằm trong system prompt của mọi lượt. Dài dòng
         # thì vừa tốn hạn mức mỗi lần nhắn, vừa loãng những điều thật sự quan trọng.
         noiDung: { type: string, minLength: 3, maxLength: 200 }
+        # HẠN DÙNG — thứ chia hồ sơ làm hai loại.
+        #
+        # Bỏ trống = điều LUÔN ĐÚNG (thói quen, cách xưng hô, bối cảnh sống).
+        # Có ngày  = điều đúng trong MỘT QUÃNG rồi thôi. Quá ngày đó thì company
+        #            không đưa nó cho CEO nữa; nó tự rụng, không ai phải nhớ đi xoá.
+        #
+        # VÌ SAO PHẢI CÓ: trước đây hồ sơ chỉ nhận "điều luôn đúng", nên mọi thứ
+        # đúng-trong-một-quãng đều bị vứt — CEO không có chỗ cất, sang phiên sau
+        # thì trắng. Nhưng cất mà KHÔNG có ngày hết còn tệ hơn: hồ sơ nạp vào MỌI
+        # lượt và không bao giờ tự hết hạn, nên một câu cũ ba tháng vẫn được đọc
+        # như đang đúng. Ngày hết hạn là thứ giữ cho "nhớ" khỏi thành "nhớ nhầm"
+        # — cùng lý lẽ với TOM_TAT_GIO ở gateway: thà trắng còn hơn sai.
+        #
+        # Nhóm "trạng thái" BẮT BUỘC có ngày, company từ chối nếu thiếu. Nhóm
+        # khác thì tuỳ: một bối cảnh cũng có thể là tạm thời.
+        hetHan:
+          type: string
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: "Ngày cuối còn đúng (YYYY-MM-DD, giờ VN, tính cả ngày đó)."
     outputSchema:
       type: object
       additionalProperties: false
@@ -73,6 +97,7 @@ capabilities:
         factId:  { type: string }
         nhom:    { type: string }
         noiDung: { type: string }
+        hetHan:  { type: [string, "null"] }
         tong:    { type: integer }
 
   - name: forgetFact

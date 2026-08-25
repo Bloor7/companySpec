@@ -18,6 +18,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -125,6 +126,19 @@ def validate(value, schema, path="input"):
             errs.append(f"{path}: ngắn hơn {schema['minLength']} ký tự")
         if "maxLength" in schema and len(value) > schema["maxLength"]:
             errs.append(f"{path}: dài hơn {schema['maxLength']} ký tự")
+        # `pattern` — thêm 2026-08-21 cùng lúc với `hetHan` của profileCompany,
+        # người dùng đầu tiên của từ khoá này. Trước đó bộ soát lặng lẽ bỏ qua
+        # `pattern`, nghĩa là một luật khai trong manifest trông như đang được
+        # canh mà thật ra không: `hetHan: "31/10/2026"` đi lọt qua cổng. Một
+        # hàng rào giả thì hại hơn không có hàng rào, vì người đọc manifest sau
+        # này sẽ tin nó. Regex hỏng thì BÁO chứ không nuốt (O10) — im lặng ở đây
+        # lại đúng là cái sai vừa sửa.
+        if "pattern" in schema:
+            try:
+                if not re.search(schema["pattern"], value):
+                    errs.append(f"{path}: không đúng dạng {schema['pattern']}")
+            except re.error as e:
+                errs.append(f"{path}: `pattern` trong manifest hỏng ({e})")
 
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         if "minimum" in schema and value < schema["minimum"]:
