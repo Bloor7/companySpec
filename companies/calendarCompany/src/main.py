@@ -135,8 +135,15 @@ def sach(e: dict) -> dict:
 
 
 def fetch(token, frm: str, to: str, loai=None, limit=100) -> list:
-    conds = [{"property": "Bắt đầu", "date": {"on_or_after": frm}},
-             {"property": "Bắt đầu", "date": {"on_or_before": to}}]
+    # Neo mốc vào giờ VN — bộ lọc ngày của Notion đếm theo UTC, nên mốc trần
+    # "2026-08-25" thật ra cắt vào 07:00 sáng giờ VN. Việc đặt lúc 0h–7h sáng
+    # rơi sang ngày hôm trước: lịch hôm nay thiếu việc, lịch hôm qua thừa việc,
+    # và cả hai đều trông bình thường. Xem chú thích dài ở expenseCompany
+    # (đo được 2026-08-25). Mọi caller đều truyền "%Y-%m-%d" 10 ký tự.
+    conds = [{"property": "Bắt đầu",
+              "date": {"on_or_after": f"{frm}T00:00:00+07:00"}},
+             {"property": "Bắt đầu",
+              "date": {"on_or_before": f"{to}T23:59:59+07:00"}}]
     if loai:
         conds.append({"property": "Loại", "select": {"equals": loai}})
     pages = notion.query_database(

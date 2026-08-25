@@ -118,11 +118,33 @@ def add_expense(token, inp):
 
 
 def _date_filter(inp):
+    """Lọc theo ngày GIỜ VIỆT NAM, không theo ngày UTC.
+
+    Notion so bộ lọc ngày theo UTC. Truyền "2026-08-24" trần thì nó hiểu là
+    2026-08-24T00:00:00Z, nên một khoản ghi lúc 00:55 giờ VN ngày 25 —
+    `2026-08-25T00:55:00+07:00`, tức 17:55Z ngày 24 — rơi vào ngày 24.
+
+    Đo được 2026-08-25: admin nhờ xoá khoản ăn tối 110k "hôm qua". listExpenses
+    ngày 24 TRẢ VỀ nó (lọc theo UTC), CEO gửi `ngay: 2026-08-24`, còn
+    deleteExpense đối chiếu `date[:10]` theo giờ VN nên đọc ra 2026-08-25 và từ
+    chối. Admin bấm duyệt HAI lần, cả hai lần token bị tiêu, khoản vẫn nằm đó,
+    và câu báo lỗi nói về một ngày admin không hề nhắc tới. Lọc ngày 25 thì trả
+    về RỖNG — nên không có đường nào tra ra khoản đó ở đúng ngày của nó.
+
+    Cùng họ với dòng "so chuỗi ngày nguyên bản" trong CLAUDE.md, chỉ sâu hơn một
+    bậc: lần đó hai bên so hai ĐỊNH DẠNG khác nhau, lần này hai bên so hai MÚI
+    GIỜ khác nhau. Cả hai đều làm khoản chi không xoá được, và cả hai đều đổ lỗi
+    ra một câu nói về ngày tháng khiến người đọc đi tìm sai chỗ.
+
+    Neo mốc vào +07:00 là ép Notion đếm cùng một ngày với phần còn lại của hệ.
+    Khoản lưu ngày TRẦN (admin nêu "hôm qua" nên add_expense không bịa giờ) vẫn
+    khớp: Notion đọc nó là 00:00 và mốc đầu ngày ở đây là 17:00Z hôm trước.
+    """
     frm = inp.get("tuNgay") or month_start()
     to = inp.get("denNgay") or today()
     return frm, to, {"and": [
-        {"property": "Ngày", "date": {"on_or_after": frm}},
-        {"property": "Ngày", "date": {"on_or_before": to}},
+        {"property": "Ngày", "date": {"on_or_after": f"{frm}T00:00:00+07:00"}},
+        {"property": "Ngày", "date": {"on_or_before": f"{to}T23:59:59+07:00"}},
     ]}
 
 
@@ -180,7 +202,11 @@ def list_expenses(token, inp):
 
 def sum_expenses(token, inp):
     frm, to, flt = _date_filter(inp)
-    pages = notion.query_database(token, database_id(), filter_=flt, page_size=100)
+    # `fetch_all` — đây là phép CỘNG, nên thiếu một dòng là sai một con số.
+    # Bản cũ lấy tối đa 100 dòng: tháng 8 có 110 khoản nên tổng hụt 363.000đ,
+    # và hụt theo hướng dễ chịu (báo tiêu ít hơn thật). Xem query_database.
+    pages = notion.query_database(token, database_id(), filter_=flt,
+                                  fetch_all=True)
     items = [row_to_expense(p) for p in pages]
 
     by_cat: dict = {}

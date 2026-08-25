@@ -95,11 +95,19 @@ def row_to_income(page: dict) -> dict:
 # ───────────────────────── năng lực ─────────────────────────
 
 def _date_filter(inp):
+    """Lọc theo ngày GIỜ VIỆT NAM — xem chú thích dài ở expenseCompany.
+
+    Bộ lọc ngày của Notion đếm theo UTC, nên mốc trần "2026-08-24" cắt vào lúc
+    07:00 sáng giờ VN chứ không phải nửa đêm. Khoản thu ghi ban đêm rơi sang
+    ngày hôm trước, và báo cáo tối đếm nhầm ngày mà không có dấu hiệu nào.
+    Đo được ở expenseCompany 2026-08-25; ở đây cùng một lỗi, sửa cùng một lần
+    để thu và chi không đếm ngày theo hai kiểu.
+    """
     frm = inp.get("tuNgay") or month_start()
     to = inp.get("denNgay") or today()
     return frm, to, {"and": [
-        {"property": "Ngày", "date": {"on_or_after": frm}},
-        {"property": "Ngày", "date": {"on_or_before": to}},
+        {"property": "Ngày", "date": {"on_or_after": f"{frm}T00:00:00+07:00"}},
+        {"property": "Ngày", "date": {"on_or_before": f"{to}T23:59:59+07:00"}},
     ]}
 
 
@@ -125,7 +133,10 @@ def list_incomes(token, inp):
 
 def sum_incomes(token, inp):
     frm, to, flt = _date_filter(inp)
-    pages = notion.query_database(token, database_id(), filter_=flt, page_size=100)
+    # `fetch_all` — phép cộng thì phải lấy hết, xem chú thích ở
+    # expenseCompany.sum_expenses và lib/notionClient.query_database.
+    pages = notion.query_database(token, database_id(), filter_=flt,
+                                  fetch_all=True)
     items = [row_to_income(p) for p in pages]
 
     by_src: dict = {}

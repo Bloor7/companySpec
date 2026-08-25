@@ -32,6 +32,26 @@ lần CEO hoàn ví, một lần quên — vì bảng cũ chỉ có chiều ghi 
 tự suy ra. Thứ phải suy ra thì có lần suy được có lần không, và lần không suy
 được để lại một cái ví sai mà không có dòng lỗi nào.
 
+**"Theo thứ tự" nghĩa là ĐỢI KẾT QUẢ, không phải bắn liền hai lệnh.** Chỉnh ví
+chỉ được chạy sau khi lệnh xoá (hoặc sửa) trả về `ok`. Nó trả `needsApproval`,
+`needsInput` hay `rejected` thì **dừng tại đó** — đừng chỉnh ví, và nói với
+admin là chưa xoá được.
+
+Vì sao phải viết ra: ví là bản sao của một sự thật nằm chỗ khác. Chỉnh ví trước
+khi biết khoản kia có mất thật hay không là tạo ra một cái sai KHÔNG có dấu vết
+— sổ chi vẫn còn khoản đó, ví thì đã cộng lại, và cả hai đều "chạy ok".
+
+Đo ngày 2026-08-25 trên cùng một khoản, hai lượt cách nhau năm tiếng:
+
+- 05:40 và 05:41 — `deleteExpense` bị từ chối vì lệch ngày. CEO **không** đụng
+  vào ví. Đúng.
+- 10:30:15 — CEO cộng 110.000đ vào ví. 10:30:27 — mới gọi `deleteExpense`.
+  Lần này xoá trót lọt nên không ai thấy gì. Nhưng nếu nó lại lệch như buổi
+  sáng thì ví đã sai 110.000đ, và không dòng nào trong sổ nói điều đó.
+
+Cùng một việc, hai lượt làm hai kiểu, cả hai đều báo xong — nên đây là luật,
+không phải lời khuyên.
+
 **LUÔN điền `ghiChu` bằng ĐÚNG CHỮ admin vừa nói.** Admin nhắn "sửa ổ khoá
 220k ck" thì `ghiChu` là "sửa ổ khoá", không phải để trống. Số tiền và danh mục
 trả lời "bao nhiêu" và "loại gì"; chỉ `ghiChu` mới trả lời **"cái gì"** — và

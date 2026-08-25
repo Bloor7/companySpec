@@ -250,14 +250,53 @@ def read_paragraphs(blocks: list) -> str:
     return "\n\n".join(x for x in out if x)
 
 
+# Trần số vòng phân trang. Con số này neo vào NGÂN SÁCH THỜI GIAN, không phải
+# vào một số tròn cho đẹp: `sumExpenses`/`sumIncomes` khai `maxDurationSec: 20`,
+# một lần gọi Notion đo được trung bình 825ms, nên 10 vòng ≈ 8,3s — còn chừa
+# chỗ cho một lần chập mạng phải thử lại (xem `_request`). Muốn kéo nhiều hơn
+# thì phải nâng `maxDurationSec` trong manifest TRƯỚC, đừng chỉ sửa số ở đây.
+MAX_TRANG = 10
+
+
 def query_database(token: str, database_id: str, filter_: dict | None = None,
-                   sorts: list | None = None, page_size: int = 100) -> list:
-    body: dict = {"page_size": min(page_size, 100)}
+                   sorts: list | None = None, page_size: int = 100,
+                   fetch_all: bool = False) -> list:
+    """Truy vấn một bảng Notion.
+
+    Mặc định trả về TỐI ĐA `page_size` dòng, đúng như trước — đó là thứ mọi lời
+    gọi kiểu "20 khoản gần nhất" đang cần.
+
+    `fetch_all=True` thì lặp con trỏ cho tới hết. Dùng khi kết quả đem đi CỘNG:
+    Notion trả tối đa 100 dòng mỗi lần và báo còn nữa bằng `has_more`, mà bản cũ
+    không hề đọc cờ đó — nên mọi phép cộng vượt 100 dòng đều thiếu, im lặng, và
+    thiếu theo hướng dễ chịu.
+
+    Đo được 2026-08-25: tháng 8 có 110 khoản chi. `sumExpenses` báo 6.788.746đ
+    "qua 100 khoản", trong khi cộng hai nửa tháng ra 7.151.746đ — hụt 363.000đ,
+    và con số hụt lớn dần về cuối tháng. Không cổng nào bắt được vì kết quả vẫn
+    là một con số hợp lệ; chỉ có ai đó ngồi cộng tay mới thấy.
+    """
+    body: dict = {"page_size": 100 if fetch_all else min(page_size, 100)}
     if filter_:
         body["filter"] = filter_
     if sorts:
         body["sorts"] = sorts
-    return _request("POST", f"/databases/{database_id}/query", token, body).get("results", [])
+
+    ket_qua: list = []
+    for _ in range(MAX_TRANG if fetch_all else 1):
+        res = _request("POST", f"/databases/{database_id}/query", token, body)
+        ket_qua.extend(res.get("results", []))
+        if not fetch_all or not res.get("has_more"):
+            return ket_qua
+        body["start_cursor"] = res.get("next_cursor")
+
+    # Chạm trần mà Notion vẫn báo còn nữa: KÊU LÊN, đừng trả về phần đã lấy.
+    # O10 — trả thiếu ở đây thì người gọi cộng ra một con số trông hoàn toàn
+    # bình thường, tức là tái phạm đúng con bug vừa sửa, chỉ ở ngưỡng cao hơn.
+    raise NotionError(
+        f"Bảng có hơn {MAX_TRANG * 100} dòng trong khoảng đang tra — vượt trần "
+        "phân trang nên em không dám cộng, số ra sẽ thiếu. Thu hẹp khoảng ngày "
+        "lại, hoặc nâng MAX_TRANG cùng với maxDurationSec của năng lực.")
 
 
 # ───────────────────────── đọc giá trị ─────────────────────────

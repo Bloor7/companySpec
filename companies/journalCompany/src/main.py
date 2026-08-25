@@ -119,9 +119,13 @@ def add_entry(token, inp):
 def list_entries(token, inp):
     frm = inp.get("tuNgay") or days_ago(30)
     to = inp.get("denNgay") or today()
+    # Neo mốc vào giờ VN: bộ lọc ngày của Notion đếm theo UTC, nên mục viết
+    # lúc 1h sáng rơi vào ngày hôm trước. Xem chú thích dài ở expenseCompany
+    # (đo được 2026-08-25). Nhật ký viết đêm khuya là chuyện thường, nên chỗ
+    # này dính nhiều hơn vẻ ngoài của nó.
     flt = {"and": [
-        {"property": "Ngày", "date": {"on_or_after": frm}},
-        {"property": "Ngày", "date": {"on_or_before": to}},
+        {"property": "Ngày", "date": {"on_or_after": f"{frm}T00:00:00+07:00"}},
+        {"property": "Ngày", "date": {"on_or_before": f"{to}T23:59:59+07:00"}},
     ]}
     if inp.get("chuDe"):
         flt["and"].append({"property": "Chủ đề", "select": {"equals": inp["chuDe"]}})
