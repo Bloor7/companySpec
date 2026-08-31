@@ -94,6 +94,7 @@ Mỗi dòng là một bug đã tốn công lần ra. Trước khi viết mã đ�
 | **Nhiều model đồng thuận ≠ bằng chứng** | Hỏi hội đồng "chiến lược kênh YouTube" thì mấy model tuôn ra "kênh mới cần 90 ngày thoát sandbox", "nghiên cứu Tubics: 73% kênh triệu view dùng giọng AI" — nghe như tri thức, thật ra là văn mẫu. Chúng học từ cùng một mớ chữ nên sai giống nhau, và ba lần đoán biến thành một lần "đồng thuận" | Sự thật chỉ đến từ khối `duKien` mà CEO tra trước rồi đưa sang (P3 cấm company gọi company, nên việc ghép nguồn là của CEO). Mọi khẳng định khác phải về `chuaKiemChung` và phải được nói lại cho admin. Hai lớp: luật trong prompt, VÀ một phép soát bằng code (`_so_khong_nguon` — số nào trong kết luận mà không có trong dữ kiện thì nêu tên). Lớp code tồn tại vì lớp prompt thì model phá lúc nào cũng được mà không ai biết |
 | **Đổi bộ não mà quên đổi phạm vi dữ liệu** | Não phụ nhận y nguyên prompt của Claude: đo thật một lượt đi ra 37.282 byte, trong đó có hồ sơ đời tư (giờ dậy, nghề, nơi ở) và số dư từng ví — sang máy một nhà miễn phí mà admin chưa từng đọc điều khoản | Prompt gửi ra ngoài phải CẮT ĐƯỢC theo khối, nên `brief` tách khỏi `them` (dò chuỗi con thì hỏng lặng lẽ). Mức `nao.riengTu`, mặc định `canTrong`. Cắt khối nào thì phải NÓI với model là đã cắt (`_bao_da_cat`) — không nói thì nó đọc SYSTEM.md thấy dặn "dùng Bức tranh hiện tại", tìm không ra, rồi bịa số. Soi bằng `nao.py xem-goi`, ca thử canh bằng cách bắt gói tin |
 | **Ví dụ trong khối chú thích cũng khớp mẫu** | `profile_block` lọc dòng bằng `lstrip().startswith("- (")`, nên dòng VÍ DỤ `- (id) [đến YYYY-MM-DD] nội dung` nằm trong `<!-- -->` của PROFILE.md bị nạp vào hồ sơ CEO như một sự thật về admin — mỗi lượt, suốt từ 21/08. Không sai schema, không gây lỗi, không ai kêu | Gỡ khối chú thích TRƯỚC khi đọc dòng. File vừa cho người đọc vừa cho máy đọc thì phần dành cho người sẽ có ngày trông giống dữ liệu |
+| **Hẹn giờ mà bộ đọc lọc mất cái vừa tới hạn** | `dsNhac` chỉ trả lời nhắc TƯƠNG LAI, nên cái vừa rơi qua mốc biến mất khỏi danh sách trước khi scheduler kịp thấy. Chuông không bao giờ kêu, và không có dòng lỗi nào — chỉ là im lặng | Thứ đọc theo mốc thời gian phải có CỬA SỔ về quá khứ (`gomDenHan`), vì người đọc cần đúng cái vừa đi qua. Đo bằng cách đặt một cái hẹn thật rồi chờ nó kêu, đừng đo bằng cách đọc mã |
 | **Đường dẫn tương đối cho tiến trình con** | Có nhiều gốc dự án lồng nhau, model chọn nhầm gốc | Luôn dùng đường tuyệt đối |
 
 Sửa xong một bug **thuộc loại đã có ở đây** thì thêm một dòng. Bug mới hoàn
@@ -115,6 +116,7 @@ python3 ops/nao.py trang-thai                         # đang chạy bộ não n
 python3 ops/nao.py kiem                               # hỏi THẬT từng nhà: tên model còn sống không
 python3 ops/nao.py xem-goi "câu thử"                  # prompt SẼ gửi ra nhà ngoài — in ra, không gửi
 python3 ops/evals/nao_thu.py                          # ca khung xương não phụ + hội đồng — 0đ, không cần mạng
+python3 ops/scheduler.py hen                          # soát hẹn giờ: nhắc tới giờ + phiếu hẹn admin đã ký
 ```
 
 Hai lệnh `nao` là cách duy nhất biết tên model trong `registry/models.yaml` còn

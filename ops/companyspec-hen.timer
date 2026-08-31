@@ -1,0 +1,13 @@
+[Unit]
+Description=companySpec — soát hẹn giờ mỗi phút
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+# Systemd mặc định gom các timer lại cho đỡ đánh thức CPU, sai số tới một phút.
+# Với báo thức thì một phút là đúng cái ta đang cố sửa, nên ép nó chính xác.
+AccuracySec=5s
+Unit=companyspec-hen.service
+
+[Install]
+WantedBy=timers.target

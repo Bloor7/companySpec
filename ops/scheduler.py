@@ -708,7 +708,80 @@ SECTIONS = {"agenda": section_agenda, "tienbac": section_tienbac,
 
 # ───────────────────────── chạy ─────────────────────────
 
-def call_company(company_id: str, capability: str, inp: dict) -> dict:
+def nhac_den_han(conn) -> list:
+    """Lời nhắc tới giờ. Trả danh sách câu cần nhắn.
+
+    Trí nhớ "đã nhắc rồi" nằm ở sổ của SCHEDULER, không nằm trong nhacCompany —
+    vì cron chỉ được ĐỌC (S3) nên nó không ghi được vào sổ của company. Cùng
+    cách ngoaiNguCompany giải bài toán này hồi 24/08.
+
+    Không có phần nhớ đó thì mỗi phút một tiếng chuông cho tới khi lời nhắc quá
+    hạn — đúng thứ admin vừa bảo là ĐỪNG làm ("chỉ thông báo một lần thôi").
+    """
+    conn.execute("""CREATE TABLE IF NOT EXISTS nhacDaGui (
+                      nhacId TEXT PRIMARY KEY, guiLuc TEXT NOT NULL)""")
+    kq = call_company("nhacCompany", "dsNhac",
+                      {"gioiHan": 50, "gomDenHan": True})
+    if kq.get("status") != "ok":
+        return []
+    bay_gio = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    tin = []
+    for n in (kq.get("output") or {}).get("cacNhac") or []:
+        # dsNhac chỉ trả lời nhắc CHƯA tới giờ, nên "đến hạn" ở đây là những
+        # cái vừa rơi qua mốc giữa hai lần chạy. Lấy theo `conBaoLau` thì mong
+        # manh; hỏi thẳng giờ VN rồi so là chắc hơn.
+        try:
+            moc = datetime.strptime(n["khiNao"][:16], "%Y-%m-%dT%H:%M").replace(
+                tzinfo=timezone(timedelta(hours=7)))
+        except (ValueError, KeyError):
+            continue
+        if moc > datetime.now(timezone.utc):
+            continue
+        if conn.execute("SELECT 1 FROM nhacDaGui WHERE nhacId=?",
+                        (n["nhacId"],)).fetchone():
+            continue
+        conn.execute("INSERT INTO nhacDaGui (nhacId, guiLuc) VALUES (?,?)",
+                     (n["nhacId"], bay_gio))
+        conn.commit()
+        tin.append(f"⏰ {n['khiNao']} — {n['noiDung']}")
+    return tin
+
+
+def chay_hen_den_han() -> list:
+    """Mở những phiếu HẸN admin đã ký và đã tới giờ. Trả danh sách tin cần gửi.
+
+    ĐÂY LÀ CHỖ DUY NHẤT cron được phép làm việc `write`, và nó không phải một
+    quyền: mỗi lần chạy là mở đúng một chữ ký admin đã đặt sẵn cho đúng một nội
+    dung. Dispatcher vẫn kiểm hash (G4), vẫn dùng một lần, vẫn từ chối nếu chưa
+    tới giờ hoặc quá cửa sổ. Chi tiết vì sao mở khe này: PRINCIPLES.md, S3.
+
+    LUÔN BÁO LẠI, kể cả khi chạy trót lọt. Một việc tự xảy ra lúc admin ngủ mà
+    không để lại tiếng nào thì lần sau admin sẽ không dám hẹn nữa — và tệ hơn,
+    họ không có cách biết nó đã chạy hay chưa.
+    """
+    tin = []
+    for r in approvals.hen_den_han():
+        try:
+            inp = json.loads(r["inputJson"])
+        except ValueError:
+            tin.append(f"Hẹn {r['approvalId']} hỏng: nội dung không đọc được.")
+            continue
+        kq = call_company(r["companyId"], r["capability"], inp,
+                          approval_id=r["approvalId"])
+        ten = f"{r['companyId']}.{r['capability']}"
+        if kq.get("status") == "ok":
+            tin.append(f"Tới giờ hẹn, em đã chạy {ten}. "
+                       + str(kq.get("summary") or "")[:300])
+        else:
+            # Hỏng thì nói TO. Việc hẹn hỏng mà im lặng là kiểu tệ nhất: admin
+            # tưởng đã xong, và chỉ phát hiện khi đi tìm kết quả không có.
+            tin.append(f"Tới giờ hẹn nhưng {ten} KHÔNG chạy được "
+                       f"({kq.get('status')}): {str(kq.get('summary') or '')[:200]}")
+    return tin
+
+
+def call_company(company_id: str, capability: str, inp: dict,
+                 approval_id: str = None) -> dict:
     """S1/S3 — đi qua dispatcher như mọi lời gọi khác, nhưng khai issuedBy là
     scheduledTrigger. Dispatcher tự chặn nếu năng lực đó là write."""
     trace = "trc_cron_" + datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
@@ -716,7 +789,8 @@ def call_company(company_id: str, capability: str, inp: dict) -> dict:
         [sys.executable, os.path.join(ROOT, "ops", "dispatch.py"), "call",
          "--company", company_id, "--capability", capability,
          "--input", json.dumps(inp, ensure_ascii=False),
-         "--trace", trace, "--issued-by", "scheduledTrigger"],
+         "--trace", trace, "--issued-by", "scheduledTrigger"]
+        + (["--approval-id", approval_id] if approval_id else []),
         capture_output=True, text=True, cwd=ROOT, timeout=300)
     try:
         return json.loads(proc.stdout)
@@ -794,6 +868,15 @@ def cmd_run(args):
     now = now_local()
     ran = 0
 
+    # Hẹn giờ KHÔNG chạy ở đây — nó có timer riêng nhịp 1 phút (`scheduler.py
+    # hen`). Để chung thì cái hẹn 3h sáng kêu lúc 3h14, mà đó đúng là thứ cần
+    # sửa. Vẫn gọi một lần ở đây làm lưới đỡ: timer 1 phút chết thì ít nhất
+    # mỗi 15 phút còn có người mở phiếu hẹn ra xem.
+    for loi_nhan in nhac_den_han(conn) + chay_hen_den_han():
+        res = telegram.send_message(admin, loi_nhan)
+        ran += 1
+        print(("gửi được: " if res.get("ok") else "gửi HỎNG: ") + loi_nhan[:80])
+
     for sched in load_schedules():
         sid = sched["scheduleId"]
         if args.force and sid != args.force:
@@ -847,6 +930,30 @@ def cmd_run(args):
     return 0
 
 
+def cmd_hen(args):
+    """Chỉ lo HẸN GIỜ: lời nhắc tới giờ, và phiếu hẹn admin đã ký.
+
+    Tách khỏi `run` để chạy được ở nhịp DÀY hơn (1 phút thay vì 15). Cả hai
+    việc ở đây chỉ đọc sqlite trên máy — không hỏi Notion, không gọi model —
+    nên chạy 1.440 lần mỗi ngày vẫn gần như 0đ. Nhập chung vào `run` thì hoặc
+    lịch định kỳ bị chạy dày lên vô ích, hoặc cái hẹn 3h sáng kêu lúc 3h14.
+    """
+    admin = os.environ.get("COMPANYSPEC_ADMIN_CHAT_ID", "")
+    if not admin:
+        print("Thiếu COMPANYSPEC_ADMIN_CHAT_ID (F6).", file=sys.stderr)
+        return 1
+    conn = store()
+    gui = 0
+    for loi_nhan in nhac_den_han(conn) + chay_hen_den_han():
+        res = telegram.send_message(admin, loi_nhan)
+        gui += 1
+        print(("gửi được: " if res.get("ok") else "gửi HỎNG: ") + loi_nhan[:80])
+    conn.close()
+    if not gui:
+        print("không có hẹn nào tới giờ")
+    return 0
+
+
 def cmd_list(args):
     conn = store()
     now = now_local()
@@ -870,6 +977,7 @@ def main() -> int:
     r.add_argument("--force", help="chạy thẳng một scheduleId, bỏ qua kiểm tới hạn")
     r.set_defaults(fn=cmd_run)
     sub.add_parser("list").set_defaults(fn=cmd_list)
+    sub.add_parser("hen").set_defaults(fn=cmd_hen)
     args = ap.parse_args()
     return args.fn(args)
 

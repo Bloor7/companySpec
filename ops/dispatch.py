@@ -351,10 +351,24 @@ def cmd_call(args) -> dict:
     # Kiểm ở đây chứ không tin registry/schedules.yaml: lịch là dữ liệu, dispatcher
     # là luật. Khai nhầm một lịch thành write thì bị chặn ở đây, không phải chạy
     # rồi mới biết.
-    if args.issued_by == "scheduledTrigger" and risk != "read":
+    # NGOẠI LỆ DUY NHẤT, mở 2026-08-31: lời gọi mang theo PHIẾU HẸN mà admin đã
+    # ký sẵn. Đó không phải "cho cron quyền ghi" — cron vẫn không có quyền gì;
+    # nó chỉ mở một chữ ký của admin đúng vào giờ đã hẹn. Phiếu khoá vào đúng
+    # một nội dung bằng payloadHash (G4), dùng ĐÚNG MỘT LẦN, và `consume()` từ
+    # chối nếu chưa tới giờ hoặc đã quá cửa sổ. Sai thì sai đúng một lần, không
+    # thành vòng lặp lúc 3h sáng.
+    #
+    # Whitelist thì VẪN không nâng được S3: nó là quyền đứng, không gắn với một
+    # nội dung nào, nên nó mở ra một cánh cửa rộng chứ không phải một khe.
+    hen_ok = False
+    if args.issued_by == "scheduledTrigger" and args.approval_id:
+        phieu = approvals.get(args.approval_id)
+        hen_ok = bool(phieu and phieu["henLuc"])
+    if args.issued_by == "scheduledTrigger" and risk != "read" and not hen_ok:
         return bail(
             f"S3 — việc định kỳ chỉ được phép ĐỌC. '{args.capability}' là "
-            f"'{risk}'. Cron quan sát và chuẩn bị; muốn hành động thì chờ admin.")
+            f"'{risk}'. Cron quan sát và chuẩn bị; muốn hành động thì chờ admin, "
+            "hoặc dùng phiếu hẹn admin đã ký trước.")
 
     # KHÔNG CÒN CẦU DAO HẠN MỨC Ở ĐÂY — gỡ ngày 2026-08-16, admin quyết.
     #
@@ -432,6 +446,13 @@ def cmd_call(args) -> dict:
             ok, msg = approvals.consume(args.approval_id, fingerprint)
             granted, why = ok, msg
 
+        # HẸN GIỜ: không bao giờ chạy ngay, kể cả khi whitelist đã cho phép.
+        # Whitelist trả lời câu "được làm không"; hẹn giờ trả lời câu "làm lúc
+        # nào". Cho whitelist nuốt luôn cái hẹn thì việc chạy ngay lập tức —
+        # đúng thứ admin vừa bảo là đừng làm.
+        if args.hen_luc:
+            granted, why = False, f"hẹn tới {args.hen_luc}"
+
         if not granted:
             # G5 — nói hậu quả. Với việc tốn tiền thật thì GIÁ chính là hậu quả
             # admin cần thấy trước khi bấm, đặt lên đầu câu chứ không giấu ở
@@ -446,9 +467,12 @@ def cmd_call(args) -> dict:
             consequence = (f"{tien}{spec['displayName']} · {cap['description']} "
                            f"Nội dung: {canonical(inp)[:160]}")
             session_id = args.session or os.environ.get("COMPANYSPEC_SESSION_ID")
+            if args.hen_luc:
+                consequence = (f"[HẸN {args.hen_luc}] " + consequence
+                               + " — admin ký bây giờ, hệ chạy đúng giờ đã hẹn.")
             approval_id = approvals.create_request(
                 trace_id, session_id, args.company, args.capability, inp,
-                fingerprint, risk, consequence,
+                fingerprint, risk, consequence, hen_luc=args.hen_luc,
             )
             return bail(
                 f"Cần admin duyệt trước khi thực hiện ({risk})."
@@ -677,6 +701,10 @@ def main() -> int:
     p.add_argument("--trace", help="traceId; bỏ trống thì sinh mới")
     p.add_argument("--intent", help="tóm tắt ý admin, để company hiểu bối cảnh")
     p.add_argument("--approval-id", help="approvalId admin đã bấm duyệt trên Telegram")
+    p.add_argument("--hen-luc", help="ISO UTC, ví dụ 2026-09-01T20:40:00Z. Có cờ "
+                                     "này thì KHÔNG chạy ngay: sinh một phiếu "
+                                     "HẸN để admin ký trước, tới giờ scheduler "
+                                     "mới mở khoá và chạy")
     p.add_argument("--session", help="sessionId của CEO, để gắn yêu cầu duyệt về đúng phiên")
     p.add_argument("--dry-run", action="store_true", help="in việc định làm, không làm (W2)")
     p.add_argument("--allow-internal", action="store_true",

@@ -1,0 +1,102 @@
+# Company giữ những lời hẹn NHẮC — tới giờ thì bot nhắn admin một tiếng.
+#
+# C4 — ranh giới là "chọc admin đúng giờ", khác hẳn "quản lý lịch":
+#   · calendarCompany trả lời "lúc nào có việc gì" — lịch hẹn với thế giới,
+#     lưu trên Notion để admin mở ra xem được.
+#   · company này trả lời "lúc nào chọc tôi" — một tiếng chuông, không phải
+#     một sự kiện. Không ai mở Notion ra để xem mình đã đặt bao nhiêu chuông.
+#
+# VÌ SAO SỔ RIÊNG CHỨ KHÔNG DÙNG NOTION: cái chuông phải được hỏi MỖI PHÚT thì
+# mới kêu đúng giờ. Hỏi Notion 1.440 lần mỗi ngày thì vừa chậm vừa mong manh
+# (đã có chùm 6 tiếng Notion không bắt tay nổi SSL, đo 15/08). Một bảng sqlite
+# trên máy thì đọc gần như 0đ và không bao giờ mất mạng.
+#
+# NÓ KHÔNG LÀM VIỆC, NÓ CHỈ NHẮC. Muốn tới giờ hệ TỰ LÀM một việc thì đó là
+# phiếu hẹn của dispatcher (`--hen-luc`), không phải chỗ này — xem S3 trong
+# PRINCIPLES.md. Tách hai thứ ra có chủ ý: một cái chỉ phát ra tiếng động, một
+# cái đụng vào sổ sách của admin, và chúng không được dùng chung cửa.
+
+companyId: nhacCompany
+displayName: "Phòng nhắc giờ"
+version: 0.1.0
+
+runtime: code
+entrypoint: ./src/main.py
+runtimeReason: >
+  Không gọi model nào. Đọc ghi một bảng sqlite, hết. Đây là loại company rẻ
+  nhất trong hệ và nên giữ nguyên như vậy.
+
+dataStore: ./store.sqlite
+secrets: []
+env: []
+canBeCalledBy: [ceo]              # P3
+canCall: []                       # P3
+owner: admin
+
+capabilities:
+  - name: datNhac
+    description: >
+      Hẹn giờ để bot nhắn nhắc admin MỘT tiếng. Dùng khi admin nói "nhắc anh
+      lúc X", "tới giờ đó gọi anh", "đừng để anh quên". Chỉ nhắn, KHÔNG tự làm
+      việc gì — muốn tới giờ hệ tự làm thì đó là việc khác.
+      `khiNao` là giờ Việt Nam, dạng 2026-09-01T03:00 (không có múi giờ ở
+      cuối). Quá khứ thì bị từ chối, đừng đoán ngày.
+    riskTier: write
+    maxDurationSec: 20
+    whitelistScope: []            # G12 — cho phép admin bấm "luôn cho phép"
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [khiNao, noiDung]
+      properties:
+        khiNao:  { type: string, minLength: 16, maxLength: 19 }
+        noiDung: { type: string, minLength: 2, maxLength: 500 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [nhacId, khiNao]
+      properties:
+        nhacId:  { type: string }
+        khiNao:  { type: string }
+        conBaoLau: { type: string }
+
+  - name: dsNhac
+    description: >
+      Liệt kê những lời nhắc còn treo, gần nhất trước. Dùng khi admin hỏi
+      "anh đặt nhắc gì rồi", hoặc trước khi đặt thêm để khỏi trùng.
+    riskTier: read
+    maxDurationSec: 20
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        gioiHan: { type: integer, minimum: 1, maximum: 50 }
+        # Gồm cả lời nhắc VỪA tới giờ trong một tiếng qua. Scheduler dùng cờ
+        # này; CEO thì đừng — admin hỏi "đặt nhắc gì rồi" là hỏi cái còn treo.
+        gomDenHan: { type: boolean }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [cacNhac, tong]
+      properties:
+        cacNhac: { type: array }
+        tong:    { type: integer }
+
+  - name: huyNhac
+    description: >
+      Bỏ một lời nhắc đã đặt. Lấy `nhacId` từ dsNhac, đừng đoán.
+    riskTier: write
+    maxDurationSec: 20
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [nhacId]
+      properties:
+        nhacId: { type: string, minLength: 4, maxLength: 40 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [daHuy]
+      properties:
+        daHuy:   { type: boolean }
+        noiDung: { type: string }

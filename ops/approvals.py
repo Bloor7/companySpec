@@ -30,6 +30,12 @@ GATEWAY_YAML = os.path.join(ROOT, "registry", "gateway.yaml")
 GATEWAY_LOCAL = os.path.join(ROOT, "registry", "gateway.local.yaml")
 
 
+# Cửa sổ còn chạy được sau giờ hẹn. Timer chạy mỗi phút, nhưng máy có thể ngủ
+# hoặc mất điện — 60 phút là đủ rộng để bù, và đủ hẹp để không đánh thức một
+# việc hẹn từ đêm qua.
+HEN_CUA_SO_PHUT = 60
+
+
 def now_dt():
     return datetime.now(timezone.utc)
 
@@ -87,13 +93,21 @@ def store():
         );
         """
     )
+    # HẸN GIỜ (thêm 2026-08-31). Phiếu có `henLuc` là phiếu admin ký TRƯỚC cho
+    # một việc sẽ chạy SAU — nó nằm im tới đúng giờ đó rồi mới dùng được.
+    # Thêm cột bằng ALTER vì bảng đã tồn tại; chạy lần hai báo trùng, nuốt đúng
+    # lỗi đó (cùng cách với ceoRunLog).
+    try:
+        conn.execute("ALTER TABLE approvalRequest ADD COLUMN henLuc TEXT")
+    except sqlite3.OperationalError:
+        pass
     return conn
 
 
 # ───────────────────────── yêu cầu duyệt ─────────────────────────
 
 def create_request(trace_id, session_id, company_id, capability, inp,
-                   payload_hash, risk_tier, consequence) -> str:
+                   payload_hash, risk_tier, consequence, hen_luc=None) -> str:
     """Tạo yêu cầu duyệt. Đã có phiếu y hệt đang treo thì DÙNG LẠI phiếu đó.
 
     VÌ SAO: trước đây hàm này luôn INSERT dòng mới. CEO gọi lại cùng một việc —
@@ -111,10 +125,14 @@ def create_request(trace_id, session_id, company_id, capability, inp,
     cfg = config()
     conn = store()
     cu = conn.execute(
+        # `henLuc IS ?` chứ không `=?`: sqlite so NULL bằng `=` luôn ra false,
+        # nên phiếu thường (henLuc NULL) sẽ không bao giờ gộp được với chính
+        # nó. Và phiếu hẹn 3h sáng KHÔNG được gộp với phiếu hẹn 5h chiều dù
+        # nội dung y hệt — giờ hẹn là một phần của việc, không phải chú thích.
         "SELECT approvalId FROM approvalRequest WHERE companyId=? AND capability=? "
         "AND payloadHash=? AND status='pending' AND requestExpiresAt > ? "
-        "ORDER BY rowid DESC LIMIT 1",
-        (company_id, capability, payload_hash, now()),
+        "AND henLuc IS ? ORDER BY rowid DESC LIMIT 1",
+        (company_id, capability, payload_hash, now(), hen_luc),
     ).fetchone()
     if cu:
         # Gộp phiếu, nhưng phải KÉO NÓ SANG lượt đang hỏi.
@@ -142,17 +160,42 @@ def create_request(trace_id, session_id, company_id, capability, inp,
 
     approval_id = new_id("apr")
     expires = now_dt() + timedelta(hours=cfg["approval"]["requestTtlHours"])
+    # Phiếu HẸN phải sống tới qua giờ hẹn. Để nguyên 12 tiếng thì một cái hẹn
+    # cho tuần sau sẽ chết trước khi admin kịp bấm — mà lúc đó không có dòng
+    # lỗi nào, chỉ là im lặng không xảy ra gì.
+    if hen_luc:
+        expires = max(expires, parse(hen_luc) + timedelta(minutes=HEN_CUA_SO_PHUT))
     conn.execute(
         "INSERT INTO approvalRequest (approvalId, traceId, sessionId, companyId, "
         "capability, inputJson, payloadHash, riskTier, consequence, status, "
-        "requestExpiresAt, createdAt) VALUES (?,?,?,?,?,?,?,?,?,'pending',?,?)",
+        "requestExpiresAt, createdAt, henLuc) "
+        "VALUES (?,?,?,?,?,?,?,?,?,'pending',?,?,?)",
         (approval_id, trace_id, session_id, company_id, capability,
          json.dumps(inp, ensure_ascii=False), payload_hash, risk_tier,
-         consequence, expires.strftime("%Y-%m-%dT%H:%M:%SZ"), now()),
+         consequence, expires.strftime("%Y-%m-%dT%H:%M:%SZ"), now(), hen_luc),
     )
     conn.commit()
     conn.close()
     return approval_id
+
+
+def hen_den_han() -> list:
+    """Phiếu HẸN đã được admin duyệt và đã tới giờ. Scheduler đọc hàm này.
+
+    Chỉ trả phiếu `approved` — phiếu chưa bấm thì không có gì để chạy, và đó
+    đúng là điều ta muốn: hẹn giờ KHÔNG phải là quyền tự làm, nó là một chữ ký
+    của admin được mở khoá đúng lúc.
+
+    Không lọc cửa sổ trên ở đây: `consume()` mới là chỗ chặn phiếu quá cũ, và
+    để đúng một chỗ chặn thì không bao giờ có hai luật lệch nhau.
+    """
+    conn = store()
+    rows = list(conn.execute(
+        "SELECT * FROM approvalRequest WHERE henLuc IS NOT NULL "
+        "AND status='approved' AND henLuc <= ? ORDER BY henLuc",
+        (now(),)))
+    conn.close()
+    return rows
 
 
 def quet_het_han() -> int:
@@ -205,7 +248,15 @@ def decide(approval_id: str, decision: str):
     if decision == "always" and row["riskTier"] != "write":
         return False, "Việc không hoàn tác được thì không có 'luôn cho phép' (G2).", row
 
-    token_exp = now_dt() + timedelta(minutes=cfg["approval"]["tokenTtlMinutes"])
+    # Token thường sống 10 phút. PHIẾU HẸN thì phải sống tới qua giờ hẹn —
+    # nếu không, admin bấm duyệt lúc tối cho việc 3h sáng thì tới nơi token đã
+    # chết, và cái hẹn im lặng không chạy. Cho thêm một cửa sổ để lỡ máy ngủ
+    # hoặc timer trễ thì vẫn còn kịp; quá cửa sổ đó thì THÔI, đừng chạy một
+    # việc hẹn từ hôm kia.
+    if row["henLuc"]:
+        token_exp = parse(row["henLuc"]) + timedelta(minutes=HEN_CUA_SO_PHUT)
+    else:
+        token_exp = now_dt() + timedelta(minutes=cfg["approval"]["tokenTtlMinutes"])
     _set(approval_id, status="approved", decidedAt=now(),
          tokenExpiresAt=token_exp.strftime("%Y-%m-%dT%H:%M:%SZ"))
     return True, "Đã duyệt.", get(approval_id)
@@ -254,6 +305,10 @@ def consume(approval_id: str, payload_hash: str):
     if parse(row["tokenExpiresAt"]) < now_dt():
         _set(approval_id, status="expired")
         return False, "token đã quá hạn 10 phút — xin duyệt lại"
+    # CHƯA TỚI GIỜ thì phiếu hẹn chưa mở. Không có phép kiểm này thì "hẹn giờ"
+    # chỉ là một cái nhãn: ai cầm được mã duyệt là chạy được ngay lập tức.
+    if row["henLuc"] and parse(row["henLuc"]) > now_dt():
+        return False, f"phiếu này hẹn tới {row['henLuc']}, chưa tới giờ"
     if row["payloadHash"] != payload_hash:
         # G4 — xin duyệt việc vô hại rồi đổi nội dung thành việc khác
         return False, ("nội dung đã bị đổi sau khi admin duyệt — token vô hiệu")

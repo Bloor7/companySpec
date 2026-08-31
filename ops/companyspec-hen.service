@@ -1,0 +1,25 @@
+# HẸN GIỜ — nhịp dày, việc nhẹ.
+#
+#   cp ops/companyspec-hen.{service,timer} ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now companyspec-hen.timer
+#
+# Xem:  systemctl --user list-timers companyspec-hen.timer
+# Log:  journalctl --user -u companyspec-hen -f
+#
+# VÌ SAO TÁCH KHỎI scheduler.timer: cái kia chạy 15 phút một lần vì việc của nó
+# nặng (hỏi Notion, dựng báo cáo). Hẹn giờ thì phải đúng phút — hẹn 3h sáng mà
+# kêu lúc 3h14 là hỏng đúng thứ admin cần. Việc ở đây chỉ đọc sqlite trên máy
+# nên chạy mỗi phút vẫn gần như không tốn gì.
+
+[Unit]
+Description=companySpec — lời nhắc và phiếu hẹn tới giờ
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/companySpec
+EnvironmentFile=%h/companySpec/ops/.env
+Environment=PATH=%h/.nvm/versions/node/v22.22.3/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/python3 %h/companySpec/ops/scheduler.py hen
+NoNewPrivileges=true
