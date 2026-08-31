@@ -58,11 +58,18 @@ CASES = os.path.join(HERE, "cases.yaml")
 
 sys.path.insert(0, os.path.join(ROOT, "ops"))
 import gateway  # noqa: E402  — dùng ĐÚNG hàm dựng prompt của bản chạy thật
+import nao  # noqa: E402  — để đo được cả bộ não dự phòng, không chỉ Claude
 
 # Secret phải biến mất khỏi phiên ca thử. Lớp chặn số 2 (xem docstring của
 # shim): kể cả có ai chạy được company thật thì nó cũng không đăng nhập nổi.
 SECRETS = ["NOTION_TOKEN", "TELEGRAM_BOT_TOKEN", "SUPABASE_KEY",
-           "SUPABASE_SERVICE_KEY", "GITHUB_TOKEN", "ANTHROPIC_API_KEY"]
+           "SUPABASE_SERVICE_KEY", "GITHUB_TOKEN", "ANTHROPIC_API_KEY",
+           # Khoá model: tiến trình con (dispatcher giả) không cần, và không
+           # được cầm. Nhưng tiến trình CHA thì cần khi đo bộ não dự phòng —
+           # nó gọi nhà cung cấp ngay trong process này, xem `nap_khoa_nao`.
+           "GEMINI_API_KEY", "GROQ_API_KEY", "CEREBRAS_API_KEY",
+           "OPENROUTER_API_KEY", "MISTRAL_API_KEY", "XAI_API_KEY",
+           "OPENAI_API_KEY"]
 
 
 def system_prompt(co_profile: bool) -> str:
@@ -120,8 +127,15 @@ def ghi_so(sid: str, data: dict) -> None:
 
 
 def mot_luot(cmd_base: list, loi_nhac: str, stub: dict, log_path: str,
-             sid: str) -> dict:
-    """Chạy đúng một lượt và trả về những gì lượt đó bắn ra."""
+             sid: str, nao_phu: dict = None) -> dict:
+    """Chạy đúng một lượt và trả về những gì lượt đó bắn ra.
+
+    `nao_phu` khác None thì lượt này chạy trên BỘ NÃO DỰ PHÒNG thay vì
+    `claude -p`. Vì sao phải đo được cả hai: bản đầu của bộ ca thử tự dựng lệnh
+    `claude -p`, nên nó chỉ biết đo đúng một bộ não — mà câu hỏi đáng tiền nhất
+    lại là "não phụ làm được việc tới đâu so với Claude". Bộ đo mà không với
+    tới thứ cần đo thì nó đang tự khen chính đường nó đi.
+    """
     open(log_path, "w").close()          # log sạch để calls thuộc đúng lượt này
     env = {k: v for k, v in os.environ.items() if k not in SECRETS}
     env.update({
@@ -133,6 +147,37 @@ def mot_luot(cmd_base: list, loi_nhac: str, stub: dict, log_path: str,
     # nối sổ tay vào tin nhắn (không vào system prompt) để giữ cache, nên ở đây
     # cũng phải nối vào tin nhắn — khác một chỗ là đo nhầm chỗ đó.
     sach, ten_sach = gateway.so_tay_block(loi_nhac)
+
+    if nao_phu is not None:
+        # Dispatcher GIẢ truyền bằng THAM SỐ, không bằng biến môi trường: một
+        # biến đổi được cổng ra thì sớm muộn thành lỗ hổng thật ở đường chạy.
+        kq = nao.chay(
+            loi_nhac + sach, system_prompt=nao_phu["system_prompt"],
+            lich_su=nao_phu["lich_su"], trace_id=f"evl_{sid[:8]}",
+            session_id=sid, timeout=300,
+            dispatch_py=os.path.join(SANDBOX, "ops", "dispatch.py"),
+            cwd=SANDBOX, env_them={k: env[k] for k in env
+                                   if k.startswith("COMPANYSPEC_EVAL")})
+        calls = []
+        with open(log_path, encoding="utf-8") as fh:
+            for dong in fh:
+                if dong.strip():
+                    calls.append(json.loads(dong))
+        ghi_so(sid, kq)
+        # Trí nhớ giữa các lượt: Claude dùng --resume, não phụ thì phải tự
+        # mang lịch sử theo. Không mang thì ca nhiều lượt đo nhầm — nó thành
+        # hai ca một lượt đứng cạnh nhau.
+        nao_phu["lich_su"] = (nao_phu["lich_su"]
+                              + [{"vaiTro": "admin", "noiDung": loi_nhac},
+                                 {"vaiTro": "bot",
+                                  "noiDung": (kq.get("result") or "")[:1200]}])
+        return {"calls": calls,
+                "loiPhien": (kq.get("result") or "")[:300]
+                            if kq.get("is_error") else None,
+                "traLoi": (kq.get("result") or "")[:3000],
+                "chiPhi": 0.0, "tienVnd": kq.get("tienVnd", 0.0),
+                "soTay": ten_sach}
+
     proc = subprocess.run(cmd_base, cwd=SANDBOX, capture_output=True, text=True,
                           input=loi_nhac + sach, timeout=600, env=env)
     calls = []
@@ -159,7 +204,7 @@ def mot_luot(cmd_base: list, loi_nhac: str, stub: dict, log_path: str,
     }
 
 
-def chay_mot_ca(ca: dict, co_profile: bool) -> list:
+def chay_mot_ca(ca: dict, co_profile: bool, nao_phu: dict = None) -> list:
     """Chạy hết các lượt của một ca trong CÙNG một phiên. Trả kết quả từng lượt."""
     log = tempfile.NamedTemporaryFile(
         mode="w", suffix=".jsonl", delete=False, encoding="utf-8")
@@ -182,7 +227,8 @@ def chay_mot_ca(ca: dict, co_profile: bool) -> list:
         # đúng cái cũ đã đo, chỉ tốn tiền hơn.
         cmd += ["--session-id", sid] if i == 0 else ["--resume", sid]
         kq = mot_luot(cmd, luot["cauAdmin"],
-                      luot.get("traVe") or ca.get("traVe") or {}, log.name, sid)
+                      luot.get("traVe") or ca.get("traVe") or {}, log.name, sid,
+                      nao_phu)
         kq["cauAdmin"] = luot["cauAdmin"]
         kq["mong"] = luot
         ket_qua.append(kq)
@@ -275,6 +321,10 @@ def cham(ca: dict, calls: list) -> list:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", help="chỉ chạy ca có id này; nhiều ca thì ngăn bằng dấu phẩy")
+    ap.add_argument("--nao", choices=("claude", "phu"), default="claude",
+                    help="bộ não đem ra đo. phu = chuỗi dự phòng trong "
+                         "registry/models.yaml (TỐN TIỀN THẬT nếu chuỗi có "
+                         "nhà tính tiền), claude = tốn hạn mức gói Pro")
     ap.add_argument("--liet-ke", action="store_true", help="xem danh sách ca, không chạy")
     ap.add_argument("--khong-profile", action="store_true",
                     help="chạy không nạp PROFILE.md (mặc định có, cho giống thật)")
@@ -306,7 +356,20 @@ def main() -> int:
         nhan = f" ({len(luot)} lượt)" if len(luot) > 1 else ""
         print(f"\n[{i}/{len(cases)}] {ca['id']}{nhan}", flush=True)
 
-        ket_qua = chay_mot_ca(ca, co_profile=not args.khong_profile)
+        # Mỗi ca một `lich_su` MỚI: các lượt trong một ca chia chung phiên,
+        # nhưng hai ca khác nhau thì phải trắng trí nhớ của nhau, y như hai
+        # cuộc trò chuyện khác nhau ngoài đời.
+        # Nạp ops/.env vào tiến trình CHA — não phụ gọi nhà cung cấp ngay
+        # trong process này. Không nạp thì mọi ca "hỏng phiên: chưa có
+        # GEMINI_API_KEY", và bộ đo sẽ báo 0/6 vì thiếu khoá chứ không phải vì
+        # model kém: một con số sai theo hướng CHÊ, khó ngờ y như sai theo
+        # hướng khen. Tiến trình con vẫn bị tước sạch khoá (xem SECRETS).
+        if args.nao == "phu":
+            gateway.nap_env()
+        nao_phu = ({"system_prompt": system_prompt(not args.khong_profile),
+                    "lich_su": []} if args.nao == "phu" else None)
+        ket_qua = chay_mot_ca(ca, co_profile=not args.khong_profile,
+                              nao_phu=nao_phu)
         loi_ca, hong = [], False
         for n, kq in enumerate(ket_qua, 1):
             tong_chi += kq["chiPhi"]

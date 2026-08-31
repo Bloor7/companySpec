@@ -131,6 +131,7 @@ cuộc đã xảy ra chuyện gì"* và *"bộ chọn sổ tay có bỏ sót kh�
 python3 ops/evals/run.py --liet-ke      # xem có ca nào, không tốn gì
 python3 ops/evals/run.py --only chi-ck  # một ca ≈ $0,02–0,10
 python3 ops/evals/run.py                # cả bộ — tốn tiền thật, xem trước bằng --liet-ke
+python3 ops/evals/run.py --nao phu      # đo BỘ NÃO DỰ PHÒNG thay vì Claude
 ```
 
 Nó đo **chuỗi lời gọi CEO bắn ra**, thứ không nhìn bằng mắt được. Từ 18/08 đo

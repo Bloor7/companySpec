@@ -214,9 +214,13 @@ nao:
   chuoi:
     - { nha: gemini, model: gemini-3.1-flash-lite }
     - { nha: gemini, model: gemini-3.5-flash }
-    # Muốn có thêm một lớp đỡ MIỄN PHÍ khi Gemini sập cả nhà thì mở dòng này —
-    # đổi lại là những lượt đó chạy trên model yếu hơn hẳn.
-    # - { nha: groq, model: "openai/gpt-oss-120b" }
+    # LỚP ĐỠ CUỐI, miễn phí. Bật 31/08 sau khi ĐO: chạy bộ ca thử trên não
+    # phụ, ca thứ tư chết vì CẢ HAI model Gemini cùng trả 503 "high demand"
+    # trong một lần gọi. Chuỗi chỉ có một nhà thì "dự phòng" vẫn là một điểm
+    # hỏng đơn — mà nó chỉ chạy đúng lúc Claude đã câm, tức là lúc không còn ai
+    # đỡ nữa. Nhà miễn phí vốn dành cho bàn họp, nhưng một ghế cuối hàng chạy
+    # model yếu hơn vẫn hơn hẳn một CEO chết hẳn.
+    - { nha: groq, model: "openai/gpt-oss-120b" }
 
   # BẬT, vì chuỗi trên là nhà tính tiền. Đây là lúc L8 được nới có chủ ý: não
   # phụ chạy giữa lượt nhắn tin nên không có nút duyệt nào chen vào được.

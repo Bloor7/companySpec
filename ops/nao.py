@@ -20,10 +20,22 @@ qua shell. Không có đường nào để một câu chữ biến thành lệnh
 nguyên: vẫn đúng một cổng `ops/dispatch.py`, vẫn đủ kiểm tra schema, riskTier,
 phê duyệt, loop guard.
 
-CHƯA ĐO. Viết 2026-08-27, chưa có số liệu thật nào về chất lượng não phụ so với
-Claude. Kỳ vọng hợp lý: nó làm được việc một-lời-gọi (ghi chi, tra lịch), và
-kém hẳn ở việc nhiều bước hoặc cần suy luận vòng vèo. Muốn biết chắc thì chạy
-`python3 ops/evals/run.py` với chế độ phụ rồi so.
+ĐÃ ĐO 2026-08-31 (`python3 ops/evals/run.py --nao phu`), và kết quả đúng như dự
+đoán ban đầu — nhưng cụ thể hơn nhiều:
+
+  · Việc MỘT LƯỢT: làm được. 3/4 ca đạt, kể cả chuỗi tiền hai vế (ghi chi rồi
+    trừ ví) và mảng object lồng nhau. Ca thứ tư chết vì cả hai model Gemini
+    cùng trả 503, tức hỏng vì nhà cung cấp chứ không phải vì model kém.
+  · Việc NHIỀU LƯỢT: kém, và kém theo hướng NGUY HIỂM. Ban đầu 1/3 ca đạt.
+    Admin hỏi "em ghi chưa đấy" thì nó GHI LẠI LẦN HAI rồi nói "em ghi ngay
+    lúc đại ca nhắn rồi ạ" — sổ đôi, ví trừ hai lần, và câu nói khiến không ai
+    đi kiểm. Thêm luật vào KHOI_DAN thì ca đó chuyển sang đạt.
+  · CÒN LẠI MỘT LỖI CHƯA CHỮA ĐƯỢC BẰNG LỜI DẶN: xoá khoản chi mà quên hoàn
+    tiền vào ví. Chạy lại BA lần, cả ba đều quên, dù luật đã nằm trong prompt.
+    Nên gateway nhắc admin soát tay mỗi khi não phụ có động vào sổ.
+
+Kết luận dùng được: não phụ đỡ được những quãng Claude câm cho việc thường
+ngày, nhưng đừng giao cho nó việc sửa/xoá dây chuyền rồi tin là xong.
 """
 import argparse
 import json
@@ -137,9 +149,29 @@ vẫn không được bịa. Không viết câu lệnh bash, không nói "để 
 
 Bạn yếu hơn bộ não chính, nên giữ ba điều này cho chặt:
 · Làm ÍT lời gọi thôi. Xong việc admin nhờ thì dừng và trả lời.
-· Không chắc tên trường thì đọc lại Danh mục company, đừng đoán.
+· Không chắc tên trường thì đọc lại Danh mục công ty, đừng đoán.
 · Việc dài nhiều bước mà thấy rối thì nói thẳng là nên đợi bộ não chính, đừng
   làm nửa vời rồi báo đã xong.
+
+## HAI LỖI BẠN ĐÃ MẮC THẬT — đọc kỹ, đây không phải lời dặn chung chung
+
+Đo ngày 2026-08-31 trên bộ ca thử, chạy đúng bộ não này:
+
+1. ĐỪNG GHI LẠI THỨ ĐÃ GHI. Admin nhắn "50k ck ăn sáng", bạn ghi đúng. Lượt
+   sau admin hỏi "em ghi chưa đấy" — và bạn GHI LẠI LẦN NỮA, rồi nói với admin
+   "em đã ghi ngay sau khi đại ca nhắn rồi ạ". Sổ chi của admin có hai khoản,
+   ví bị trừ hai lần, và câu bạn nói khiến không ai đi kiểm.
+   Câu hỏi "em ghi chưa", "xong chưa", "làm chưa" là CÂU HỎI, không phải lệnh
+   làm lại. Nhìn lại các lượt trước trong cuộc trò chuyện: đã gọi rồi thì trả
+   lời là đã gọi rồi, kèm những gì đã ghi. Không gọi lại.
+
+2. VIỆC VỀ TIỀN CÓ HAI VẾ, ĐỪNG BỎ VẾ SAU. Bạn xoá một khoản chi mà quên hoàn
+   tiền lại vào ví. Ghi chi thì trừ ví; xoá khoản chi thì CỘNG LẠI vào ví; ghi
+   thu thì cộng ví. Làm vế đầu rồi dừng là để lại sổ sai mà không dòng lỗi nào
+   báo lên.
+   Và làm THEO THỨ TỰ, đợi kết quả: lệnh đầu trả về rejected hay needsApproval
+   thì DỪNG, đừng chạy vế sau — chỉnh ví trước khi biết sổ có đổi không là tạo
+   ra một cái sai không có dấu vết.
 """
 
 TOOLS = [{
@@ -192,8 +224,9 @@ def _doc_goi_trong_chu(chu: str):
 
 # ───────────────────── gọi company ─────────────────────
 
-def goi_company(tham: dict, *, trace_id: str, session_id: str,
-                timeout: int) -> str:
+def goi_company(tham: dict, *, trace_id: str, session_id: str, timeout: int,
+                dispatch_py: str = "", cwd: str = "",
+                env_them: dict = None) -> str:
     """Chạy đúng một lời gọi qua dispatcher. Trả về chữ để nhét lại vào model.
 
     KHÔNG QUA SHELL. argv dựng bằng tay từ các trường đã tách, nên dù model có
@@ -210,7 +243,11 @@ def goi_company(tham: dict, *, trace_id: str, session_id: str,
                            "thiếu company/capability/input, hoặc input không "
                            "phải object"}, ensure_ascii=False)
 
-    argv = [sys.executable, DISPATCH, "call", "--company", cid,
+    # `dispatch_py`/`cwd` là THAM SỐ, cố ý không phải biến môi trường: chỉ bộ
+    # ca thử truyền chúng (để trỏ vào dispatcher giả), và tham số thì model
+    # không có đường nào chạm tới. Một biến môi trường đổi được cổng ra thì
+    # sớm muộn thành lỗ hổng — T2 phải do code giữ, không do môi trường giữ.
+    argv = [sys.executable, dispatch_py or DISPATCH, "call", "--company", cid,
             "--capability", cap, "--input",
             json.dumps(inp, ensure_ascii=False)]
     if tham.get("approvalId"):
@@ -218,10 +255,11 @@ def goi_company(tham: dict, *, trace_id: str, session_id: str,
 
     env = {**os.environ,
            "COMPANYSPEC_SESSION_ID": session_id,
-           "COMPANYSPEC_TRACE_ID": trace_id}
+           "COMPANYSPEC_TRACE_ID": trace_id,
+           **(env_them or {})}
     try:
-        proc = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True,
-                              timeout=timeout, env=env)
+        proc = subprocess.run(argv, cwd=cwd or ROOT, capture_output=True,
+                              text=True, timeout=timeout, env=env)
     except subprocess.TimeoutExpired:
         # O8 — không để lỗi này làm sập vòng lặp. Model cần đọc được câu này để
         # còn báo lại admin cho tử tế.
@@ -325,7 +363,8 @@ def _con_tra_tien_duoc() -> tuple:
 
 def chay(message: str, *, system_prompt: str, lich_su: list = None,
          trace_id: str = "", session_id: str = "", cfg: dict = None,
-         timeout: int = 300) -> dict:
+         timeout: int = 300, dispatch_py: str = "", cwd: str = "",
+         env_them: dict = None) -> dict:
     """Chạy một lượt CEO trên não phụ. Trả về ĐÚNG hình dáng mà run_ceo trả.
 
     Cùng hình dáng là điều kiện để gateway không phải biết nó đang chạy bộ não
@@ -362,6 +401,8 @@ def chay(message: str, *, system_prompt: str, lich_su: list = None,
     tin.append({"role": "user", "content": message})
 
     tien, tokens_vao, tokens_ra, luot = 0.0, 0, 0, 0
+    so_loi_goi = 0          # lượt này có động vào sổ không — xem cuối hàm
+    so_loi_goi = 0
     mo_ta_nao, tra_loi, da_thu = "", "", []
 
     while luot < luot_toi_da:
@@ -422,7 +463,11 @@ def chay(message: str, *, system_prompt: str, lich_su: list = None,
                 con_lai = int(han_chot - time.monotonic())
                 ket = goi_company(g["thamSo"], trace_id=trace_id,
                                   session_id=session_id,
-                                  timeout=max(20, min(900, con_lai - 10)))
+                                  timeout=max(20, min(900, con_lai - 10)),
+                                  dispatch_py=dispatch_py, cwd=cwd,
+                                  env_them=env_them)
+            so_loi_goi += 1
+            so_loi_goi += 1
             tin.append({"role": "tool", "tool_call_id": g["id"],
                         "name": g["ten"], "content": ket})
         tra_loi = ""      # đã gọi tool thì câu chữ lượt trước không phải câu trả lời
@@ -450,7 +495,10 @@ def chay(message: str, *, system_prompt: str, lich_su: list = None,
             "usage": {"input_tokens": tokens_vao, "output_tokens": tokens_ra},
             "total_cost_usd": 0.0, "num_turns": luot,
             "duration_ms": _ms(bat_dau), "nao": "phu", "moTaNao": mo_ta_nao,
-            "tienVnd": round(tien, 2), "daThu": da_thu}
+            "tienVnd": round(tien, 2), "daThu": da_thu,
+            # Lượt này có ĐỘNG VÀO SỔ hay không. Gateway dùng nó để nhắc admin
+            # soát lại — xem `_chay_phu`.
+            "soLoiGoi": so_loi_goi}
 
 
 def _ms(bat_dau: float) -> int:

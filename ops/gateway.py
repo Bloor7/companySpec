@@ -1440,7 +1440,16 @@ def _chay_phu(message: str, session_id: str, system_prompt: str,
     # khi thật ra em bị cấm đọc — hai chuyện đó cần hai phản ứng khác nhau.
     if muc != "dayDu":
         ghi_chu += f"; chế độ riêng tư {muc}: {RIENG_TU[muc]}"
-    data["result"] = (data.get("result") or "") + "\n\n" + ghi_chu + ".)"
+    ghi_chu += ".)"
+    # ĐỘNG VÀO SỔ thì nhắc admin soát tay. Đo 2026-08-31 trên bộ ca thử: não
+    # phụ xoá một khoản chi rồi QUÊN hoàn tiền vào ví — chạy lại BA lần, cả ba
+    # đều quên, dù luật đã nằm sẵn trong prompt của nó. Lời dặn chữa không nổi
+    # chỗ này. Thay vì giả vờ đã chữa, hệ nói thẳng cho người còn kiểm được —
+    # cùng một lý lẽ với `chuaKiemChung` của hội đồng.
+    if data.get("soLoiGoi"):
+        ghi_chu += (" Bộ não này hay quên vế sau của việc nhiều bước, nên đại "
+                    "ca soát lại ví và sổ giúp em.")
+    data["result"] = (data.get("result") or "") + "\n\n" + ghi_chu
     return data
 
 
