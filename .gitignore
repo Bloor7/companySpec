@@ -50,3 +50,18 @@ backOffice/snapshots/
 backOffice/media/
 # Sổ ghi những lần đọc ảnh hỏng — dấu vết lúc chạy, không phải đặc tả (F4).
 backOffice/media-loi.jsonl
+
+# Skill của người ngoài (bộ mattpocock). Nội dung thật ở .agents/, còn
+# .claude/skills/ chỉ là symlink trỏ sang.
+#
+# KHÔNG theo dõi trong git — F4 cùng một lý lẽ với .venv: repo là đặc tả,
+# không phải môi trường. 792K mã của người khác không thuộc về đặc tả của một
+# trợ lý cá nhân, và chúng KHÔNG chạm được vào CEO (đo 31/08: CEO chạy
+# `--tools Bash` nên tool Skill còn không được nạp).
+#
+# Phiên bản vẫn được GHIM, chỉ là ghim ở chỗ khác: `skills-lock.json` được
+# theo dõi và giữ `computedHash` của từng skill. Dựng lại bằng:
+#     npx skills@latest add vinvcn/mattpocock-skills-zh-CN
+# Kết quả soát từng skill nằm ở .claude/README.md (file đó VẪN theo dõi).
+.agents/
+.claude/skills/

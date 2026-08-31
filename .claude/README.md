@@ -40,6 +40,22 @@ Ba lớp đang giữ, xếp từ trong ra:
 3. `ceo/hooks/guard.py` — chặn mọi thứ trừ `python3 ops/dispatch.py list|call`.
    Đây là lớp đã đo ở trên, và là lớp không đi vòng được.
 
+## Skill KHÔNG nằm trong git — dựng lại thế nào
+
+`.agents/` và `.claude/skills/` bị `.gitignore` chặn (admin chốt 31/08). Clone
+repo về thì **không có skill nào**; dựng lại bằng:
+
+```bash
+npx skills@latest add vinvcn/mattpocock-skills-zh-CN
+```
+
+Phiên bản vẫn được ghim, chỉ ghim ở chỗ khác: `skills-lock.json` ĐƯỢC theo dõi
+và giữ `computedHash` của từng skill, nên đối chiếu được bản mới với bản đã
+soát. Cùng một lý lẽ với `.venv` (F4): repo là đặc tả, không phải môi trường.
+
+Trang này thì VẪN nằm trong git — kết quả soát dưới đây là thứ đáng giữ, không
+phải mã của người khác.
+
 ## ĐÃ SOÁT — bộ `mattpocock-skills-zh-CN`, cài 2026-08-31
 
 35 skill, nội dung thật nằm ở `.agents/skills/`, `.claude/skills/*` chỉ là
