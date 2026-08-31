@@ -28,6 +28,7 @@ import yaml
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import approvals  # noqa: E402
 import media  # noqa: E402
+import nao  # noqa: E402
 import stt  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -405,6 +406,26 @@ GOI_NGOAI_NGU = (
 KY_TU_KHO = ("'", "`", "$", "|", ";", ">", "<", "&", "\n", "\\")
 
 
+def goi_hop(text: str) -> bool:
+    """Admin có đang gọi họp hội đồng không.
+
+    KHÔNG dùng chuỗi con "hop" như mọi từ khoá khác trong file này, và đây là
+    ngoại lệ có lý do: bỏ dấu xong thì "họp" và "hợp" thành cùng một chữ, mà
+    "hợp" nằm trong "phù hợp", "hợp đồng", "trường hợp", "thích hợp" — toàn
+    những chữ admin dùng hằng ngày. Đo trên sổ tin nhắn thật 2026-08-27: chuỗi
+    con "hop" dính 1 câu về một giấc mơ, luật chặt dưới đây dính 0 câu oan.
+    Chỗ khác thì nạp thừa một sổ là rẻ; ở đây nạp thừa nghĩa là mời CEO đi mở
+    một cuộc họp tốn tiền cho một câu admin không hề nhờ.
+
+    Nên: bắt đầu bằng "họp" (dấu hay không dấu đều được — admin gõ vội trên
+    điện thoại), hoặc có nguyên cụm "hội đồng" / "thảo luận".
+    """
+    goc = (text or "").strip().lower()
+    if goc.startswith("họp") or goc.startswith("hop ") or goc == "hop":
+        return True
+    return any(k in bo_dau(text) for k in ("hoi dong", "thao luan"))
+
+
 def bo_dau(s: str) -> str:
     """Bỏ dấu tiếng Việt để so từ khoá.
 
@@ -471,6 +492,8 @@ def chon_so_tay(text: str, co_tom_tat: bool = False) -> list:
     # không ai hiểu, tức là câu đó vô dụng mà vẫn nằm trong sổ như đã học.
     if any(k in t for k in GOI_NGOAI_NGU):
         chon.append("ngoai-ngu")
+    if goi_hop(text):
+        chon.append("hoi-dong")
     return chon
 
 
@@ -770,11 +793,56 @@ def run_backoffice(*argv) -> str:
     return (proc.stdout or proc.stderr).strip()[:3500]
 
 
+def run_nao(*argv) -> str:
+    """Chạy ops/nao.py trong tiến trình riêng rồi lấy chữ nó in ra.
+
+    Tiến trình riêng chứ không gọi hàm: `kiem` phải nói chuyện với 4 nhà cung
+    cấp và có thể mất cả phút. Treo trong tiến trình gateway thì cả cửa vào
+    đứng lại, mà lúc đó admin không nhắn được gì nữa kể cả /stop.
+    """
+    script = os.path.join(ROOT, "ops", "nao.py")
+    try:
+        proc = subprocess.run([sys.executable, script, *argv],
+                              capture_output=True, text=True, cwd=ROOT,
+                              timeout=180)
+    except subprocess.TimeoutExpired:      # O8 — không để lệnh tra cứu làm sập
+        return ("Lệnh nao chạy quá 3 phút nên em cắt. Nhà cung cấp nào đó đang "
+                "treo — chạy python3 ops/nao.py kiem trên máy để xem cái nào.")
+    return (proc.stdout or proc.stderr).strip()[:3500]
+
+
+def cmd_nao(args: list) -> str:
+    """/nao — xem đang chạy bộ não nào, đổi nó, hoặc kiểm xem model còn sống.
+
+    Đổi bộ não là việc admin phải làm ĐƯỢC TỪ TELEGRAM. Đúng lúc cần nó nhất —
+    Claude hết hạn mức lúc nửa đêm — thì admin đang cầm điện thoại, không ngồi
+    trước máy để sửa yaml.
+    """
+    if not args:
+        return run_nao("trang-thai") + (
+            "\n\nĐổi bằng: /nao tu (claude trước, hỏng thì chuyển) · "
+            "/nao phu (chỉ não phụ) · /nao claude (chỉ claude) · "
+            "/nao kiem (hỏi thật xem nhà nào còn sống)")
+    lenh = args[0].lower()
+    if lenh in nao.CHE_DO:
+        return run_nao("dat", lenh) + "\n\n" + run_nao("trang-thai")
+    if lenh in ("kiem", "kiểm"):
+        return run_nao("kiem")
+    return ("Em chỉ hiểu: /nao · /nao claude · /nao tu · /nao phu · /nao kiem")
+
+
 def stop_everything() -> str:
     """L6 — phanh tay. Giết mọi việc đang chạy, không hỏi lại.
 
     Phải chạy được kể cả khi CEO đang treo, nên nó không đi qua CEO.
     """
+    # Bộ não DỰ PHÒNG không nằm trong danh sách này, và đó là chỗ phanh tay
+    # còn hụt: nó chạy TRONG chính tiến trình gateway đang xử lý tin nhắn, nên
+    # muốn giết nó thì phải giết gateway — mà lệnh /stop này cũng đang chạy
+    # trong một gateway khác, pkill theo tên sẽ giết luôn cả nó.
+    # Phần NGUY HIỂM thì vẫn dừng được: mọi tác động ra ngoài đều đi qua
+    # `ops/dispatch.py` ở tiến trình con, và mẫu dưới đây bắt đúng nó. Cái còn
+    # chạy tiếp chỉ là một lời gọi HTTP tới nhà cung cấp model.
     killed = []
     for pattern in ("claude -p", "ops/dispatch.py"):
         proc = subprocess.run(["pkill", "-f", pattern], capture_output=True)
@@ -840,8 +908,11 @@ COMMANDS = {
         "  /baocao  — hoạt động 7 ngày qua\n"
         "  /duyet   — việc đang chờ đại ca duyệt, kèm nút\n"
         "  /quyen   — các quyền tự chạy đang có\n"
+        "  /nao     — đang chạy bộ não nào; /nao phu để khỏi tốn hạn mức Claude\n"
         "  /stop    — dừng mọi việc đang chạy\n"
         "  /moi     — mở luồng hội thoại mới\n\n"
+        "Nhắn mở đầu bằng \"họp\" thì em mời hội đồng nhiều model cùng bàn "
+        "rồi Claude chốt — ví dụ: họp chiến lược kênh youtube view ngoại.\n\n"
         "Còn lại cứ nhắn bình thường, em hiểu."),
 }
 
@@ -865,7 +936,13 @@ def loi_chao(text: str):
 
 
 def try_command(text: str):
-    cmd = text.strip().split()[0].lower() if text.strip() else ""
+    phan = text.strip().split()
+    cmd = phan[0].lower() if phan else ""
+    # /nao là lệnh DUY NHẤT có tham số, nên tách riêng thay vì nhét vào bảng
+    # COMMANDS (bảng đó khai hàm không tham số, và giữ nguyên như thế thì đọc
+    # bảng là biết ngay lệnh nào làm gì).
+    if cmd == "/nao":
+        return cmd_nao(phan[1:])
     fn = COMMANDS.get(cmd)
     return fn() if fn else None
 
@@ -975,6 +1052,14 @@ def profile_block() -> str:
     # file, không qua dispatcher, nên một bộ lọc nằm trong company sẽ không bao
     # giờ chạy trên đường này. Chỉ ĐỌC và bỏ qua — không sửa file, việc dọn dẹp
     # là của profileCompany.
+    # GỠ KHỐI CHÚ THÍCH TRƯỚC KHI ĐỌC DÒNG. Phần <!-- --> đầu file là hướng dẫn
+    # cho người, và từ 21/08 nó có một dòng VÍ DỤ đúng dạng `- (id) …`. Bộ đọc
+    # cũ dùng `lstrip()` nên nuốt luôn dòng ví dụ đó và nhét nó vào hồ sơ như
+    # một sự thật về admin — mỗi lượt một lần, ngay trên đầu nhóm đầu tiên.
+    # Bắt được 27/08 lúc soi gói tin gửi ra ngoài, chứ không ai kêu: nó không
+    # sai schema, không gây lỗi, chỉ dạy CEO một điều vô nghĩa mãi mãi.
+    noi_dung = re.sub(r"<!--.*?-->", "", noi_dung, flags=re.S)
+
     nay = datetime.now(TZ_VN).strftime("%Y-%m-%d")
     dong = []
     for l in noi_dung.splitlines():
@@ -1193,7 +1278,18 @@ def danh_muc_block() -> str:
             "và mất 9 phút, nên KHÔNG BAO GIỜ tự chọn nó. Chỉ gọi khi admin nói rõ là "
             "muốn nghiên cứu sâu. `traNhanh` trả lời chưa đủ thì nói thẳng là "
             "chưa đủ rồi HỎI admin có muốn nghiên cứu sâu không — hỏi xong chờ "
-            "admin trả lời, đừng tự đi làm.\n\n" + "\n".join(dong))
+            "admin trả lời, đừng tự đi làm.\n\n"
+            # CÂU NEO cho sổ tay "hoi-dong" (router bật khi admin gõ "họp").
+            # Luật đầy đủ nằm trong ceo/playbooks/hoi-dong.md; ở đây chỉ giữ
+            # đúng một câu, để lượt nào router trượt thì CEO vẫn biết là có
+            # thứ đó và biết nó KHÔNG phải chỗ tra cứu — hỏng nhẹ đi một bậc
+            # thay vì hỏng câm.
+            "**`hoiDongCompany.hoiY` chỉ dùng khi admin gọi họp** — nó hỏi "
+            "nhiều model khác nhà rồi chốt, dành cho câu có ĐÁNH ĐỔI. Câu tra "
+            "được thì dùng searchCompany; số liệu thì hỏi company giữ sổ. "
+            "Đừng chép chuyện riêng hay số tiền của admin vào câu hỏi: nó đi "
+            "ra máy nhà ngoài.\n\n"
+            + "\n".join(dong))
 
 
 # Trần thời gian chờ một phiên CEO.
@@ -1234,10 +1330,168 @@ def _ceo_treo() -> dict:
             "is_error": True, "usage": {}, "total_cost_usd": 0.0, "num_turns": 0}
 
 
+def _lich_su_gan(session_id: str, message: str, n: int = 6) -> list:
+    """Vài lượt gần nhất của phiên, để bộ não dự phòng có trí nhớ.
+
+    Claude CLI nhớ bằng `--resume`; não phụ không có phiên nào bên nhà cung cấp
+    cả, nên trí nhớ phải do ta đưa. May là gateway đã lưu sẵn từng tin vào bảng
+    `message` (7 ngày) — không phải hỏi model, không tốn đồng nào.
+
+    BỎ TIN CUỐI NẾU NÓ CHÍNH LÀ CÂU ĐANG HỎI: handle_message gọi `luu_tin`
+    TRƯỚC `run_ceo`, nên câu admin vừa gõ đã nằm trong sổ. Nạp cả nó thì model
+    thấy admin hỏi hai lần và hay trả lời kiểu "như em vừa nói".
+    """
+    try:
+        conn = ceo_store()
+        rows = list(conn.execute(
+            "SELECT m.vaiTro, m.noiDung FROM message m "
+            "JOIN thread t ON t.threadId = m.threadId "
+            "WHERE t.sessionId = ? ORDER BY m.id DESC LIMIT ?",
+            (session_id, n + 1)))
+        conn.close()
+    except sqlite3.Error as exc:
+        print(f"[gateway] không đọc được trí nhớ cho não phụ: {exc}",
+              file=sys.stderr)
+        return []
+    ds = [{"vaiTro": r["vaiTro"], "noiDung": r["noiDung"]}
+          for r in reversed(rows)]
+    if ds and ds[-1]["vaiTro"] == "admin" and ds[-1]["noiDung"] == message[:2000]:
+        ds.pop()
+    return ds[-n:]
+
+
+# Não phụ gửi prompt sang MÁY NGƯỜI KHÁC. Mức nào thì gửi những gì.
+#
+# ĐO THẬT 2026-08-27 bằng cách bắt gói tin: một lượt hỏi "tháng này tiêu bao
+# nhiêu" đi ra 37.282 byte, trong đó 28.443 ký tự là system prompt — gồm cả hồ
+# sơ đời tư của admin (giờ dậy, nghề, nơi ở, việc đang làm) và bức tranh hiện
+# tại (số dư từng ví, kế hoạch, lịch hôm nay). Với Claude thì admin đã chấp
+# nhận điều đó khi mua gói; với một nhà miễn phí thì đó là một quyết định KHÁC,
+# và phải do admin đặt chứ không phải do mã mặc định giùm.
+#
+# `canTrong` là mặc định vì nó giữ được đúng thứ não phụ sinh ra để làm — ghi
+# chi tiêu, tra sổ, đặt lịch đều chỉ cần DANH MỤC company — mà không đem đời
+# sống của admin ra ngoài. Cái mất: CEO sẽ hỏi lại "ví nào" thay vì tự biết
+# quy ước, và không tự nhắc được chuyện ví sắp cạn.
+RIENG_TU = {
+    "dayDu": "gửi mọi thứ y như gửi cho Claude",
+    "canTrong": "không gửi hồ sơ và bức tranh; vẫn gửi vài tin gần đây",
+    "toiThieu": "chỉ gửi danh mục company và câu đang hỏi",
+}
+
+
+def _bao_da_cat(muc: str) -> str:
+    """Cắt khối khỏi prompt thì phải NÓI với model là đã cắt.
+
+    Bắt được 27/08 ngay khi viết ca thử: lõi SYSTEM.md có hẳn một mục dạy CEO
+    rằng "cuối prompt có Bức tranh hiện tại — dùng nó". Cắt khối đó đi mà không
+    nói gì thì model đọc lời dạy ấy, tìm không thấy, và làm đúng cái tệ nhất —
+    bịa ra một con số nghe hợp lý, hoặc bảo admin là hệ hỏng. Thà nói thẳng là
+    "kỳ này bạn không có nó, muốn số thì đi hỏi company".
+    """
+    return (
+        "\n\n## Kỳ này bạn đang chạy ở chế độ riêng tư\n\n"
+        f"Mức: {muc} — {RIENG_TU[muc]}.\n"
+        "Nghĩa là HAI khối nói ở trên KHÔNG có trong prompt lần này: hồ sơ "
+        "admin và Bức tranh hiện tại. Đừng đi tìm chúng, và tuyệt đối đừng "
+        "đoán nội dung của chúng.\n"
+        "· Cần số dư ví, kế hoạch, lịch, hạn mức → GỌI company để tra, đừng "
+        "nói ra một con số nào từ trí nhớ.\n"
+        "· Không biết một quy ước của admin (ví mặc định, cách gọi tên một "
+        "thứ) → HỎI LẠI một câu ngắn, đừng tự chọn.\n"
+        "· Admin hỏi vì sao lần này bạn không nhớ gì về họ → nói thật: đại ca "
+        "đang để chế độ riêng tư nên hồ sơ không được gửi ra bộ não dự phòng.")
+
+
+def _muc_rieng_tu(cfg=None) -> str:
+    try:
+        muc = ((cfg or llmClient_nap()).get("nao") or {}).get("riengTu")
+    except Exception as exc:
+        print(f"[gateway] không đọc được nao.riengTu: {exc}", file=sys.stderr)
+        muc = None
+    return muc if muc in RIENG_TU else "canTrong"
+
+
+def llmClient_nap():
+    """Đọc registry/models.yaml qua đúng bộ đọc của lib, khỏi hai bản luật."""
+    sys.path.insert(0, os.path.join(ROOT, "lib"))
+    import llmClient
+    return llmClient.nap()
+
+
+def _chay_phu(message: str, session_id: str, system_prompt: str,
+              vi_sao: str = "") -> dict:
+    """Chạy lượt này bằng bộ não dự phòng, và NÓI RA rằng đang chạy bằng nó.
+
+    Giấu chuyện này đi là kiểu hỏng tệ nhất mà hệ có thể chọn: admin sẽ đọc một
+    câu trả lời yếu hơn hẳn mà tưởng đó là mức tốt nhất của hệ, rồi kết luận
+    sai về việc mình tin được nó tới đâu. Câu ghi chú ở CUỐI, sau kết quả —
+    nói kết quả trước, chi tiết sau.
+    """
+    muc = _muc_rieng_tu()
+    # Trí nhớ hội thoại cũng là chữ của admin — mức `toiThieu` thì cắt luôn.
+    lich_su = [] if muc == "toiThieu" else _lich_su_gan(session_id, message)
+    data = nao.chay(message, system_prompt=system_prompt, lich_su=lich_su,
+                    trace_id=trace_of(session_id), session_id=session_id,
+                    timeout=TREO_GIAY - 60)
+    ghi_chu = f"(Em đang chạy bằng bộ não dự phòng {data.get('moTaNao') or '?'}"
+    ghi_chu += f", vì {vi_sao}" if vi_sao else ""
+    # NÓI RA mức riêng tư. Không nói thì admin sẽ tưởng em quên hồ sơ, trong
+    # khi thật ra em bị cấm đọc — hai chuyện đó cần hai phản ứng khác nhau.
+    if muc != "dayDu":
+        ghi_chu += f"; chế độ riêng tư {muc}: {RIENG_TU[muc]}"
+    data["result"] = (data.get("result") or "") + "\n\n" + ghi_chu + ".)"
+    return data
+
+
 def run_ceo(message: str, session_id: str, resume: bool,
-            them: str = "") -> dict:
+            them: str = "", brief: str = "") -> dict:
+    """Một lượt CEO. Chọn bộ não, chạy, và nếu cần thì chuyển sang bản dự phòng.
+
+    BA CHẾ ĐỘ, xem `python3 ops/nao.py trang-thai`. Chế độ `tu` là thứ đáng nói:
+    nó chỉ chuyển não khi Claude hỏng theo kiểu CHẮC CHẮN CHƯA LÀM GÌ — thiếu
+    lệnh `claude`, hết hạn mức, hết phiên đăng nhập. Ba lỗi đó xảy ra trước khi
+    một lời gọi company nào kịp chạy.
+
+    KHÔNG chuyển não khi phiên TREO hay chạm trần lượt. Lúc đó việc có thể đã
+    làm xong một nửa — một khoản chi đã ghi, một lịch đã đặt — và cho một bộ
+    não khác chạy lại từ đầu là ghi hai lần vào sổ của admin. Cùng một luật với
+    `_ceo_treo`: không chắc thì coi như CHƯA XONG và để admin đi kiểm, chứ đừng
+    tự làm lại.
+    """
+    # `brief` tách khỏi `them` từ 27/08 CHỈ vì một lẽ: prompt của não phụ đi ra
+    # máy người khác, nên phải cắt được từng khối. Trộn chung một chuỗi thì
+    # muốn bỏ "bức tranh hiện tại" ra khỏi gói tin lại phải đi dò chuỗi con —
+    # cách đó sẽ lặng lẽ hỏng đúng hôm ai đó sửa câu tiêu đề của khối.
     with open(SYSTEM_PROMPT, encoding="utf-8") as fh:
-        system_prompt = fh.read() + danh_muc_block() + profile_block() + them
+        loi = fh.read()
+    danh_muc = danh_muc_block()
+    system_prompt = loi + danh_muc + profile_block() + brief + them
+
+    che, _ = nao.che_do()
+    muc = _muc_rieng_tu()
+    prompt_phu = {"dayDu": system_prompt,
+                  "canTrong": loi + danh_muc + them + _bao_da_cat(muc),
+                  "toiThieu": loi + danh_muc + _bao_da_cat(muc)}[muc]
+
+    if che == "phu":
+        return _chay_phu(message, session_id, prompt_phu,
+                         "đại ca đang để chế độ chỉ dùng não phụ")
+
+    data = _chay_claude(message, session_id, resume, system_prompt)
+    chua_chay = data.pop("_chuaChay", False)
+    if che == "tu" and chua_chay:
+        phu = _chay_phu(message, session_id, prompt_phu,
+                        cat_gon(str(data.get("result") or "bộ não chính hỏng"), 160))
+        # Giữ lại lý do Claude chết trong sổ, dù lượt này đã có câu trả lời:
+        # không giữ thì "hôm nay hết hạn mức lúc mấy giờ" không tra lại được.
+        phu["loiNaoChinh"] = str(data.get("result") or "")[:300]
+        return phu
+    return data
+
+
+def _chay_claude(message: str, session_id: str, resume: bool,
+                 system_prompt: str) -> dict:
     cmd = [
         # Nội dung tin nhắn đi qua STDIN, KHÔNG làm tham số của -p.
         #
@@ -1284,6 +1538,14 @@ def run_ceo(message: str, session_id: str, resume: bool,
                               input=message, timeout=TREO_GIAY, env=env)
     except subprocess.TimeoutExpired:
         return _ceo_treo()
+    except FileNotFoundError:
+        # Không có lệnh `claude` trên máy. Trước đây lỗi này ném thẳng ra ngoài
+        # và làm SẬP cả gateway (O8 — cửa vào không được phép sập): admin nhận
+        # một traceback thay vì một câu. Nay nó là lý do chuyển não rõ ràng
+        # nhất: chưa có gì chạy cả.
+        return {"result": "không thấy lệnh claude trên máy",
+                "is_error": True, "usage": {}, "total_cost_usd": 0.0,
+                "num_turns": 0, "_chuaChay": True}
 
     # Phiên cũ không còn thì MỞ PHIÊN MỚI, đừng bắt admin gõ lại.
     #
@@ -1307,8 +1569,43 @@ def run_ceo(message: str, session_id: str, resume: bool,
     if proc.returncode != 0:
         return {"result": f"CEO không chạy được (mã {proc.returncode}). "
                           f"{_ly_do_chet(proc)}",
-                "is_error": True, "usage": {}, "total_cost_usd": 0.0, "num_turns": 0}
-    return json.loads(proc.stdout)
+                "is_error": True, "usage": {}, "total_cost_usd": 0.0,
+                "num_turns": 0, "_chuaChay": _hong_truoc_khi_chay(proc)}
+    try:
+        return json.loads(proc.stdout)
+    except ValueError:
+        # CLI thoát mã 0 mà in ra thứ không đọc được. Chưa gặp lần nào, nhưng
+        # nếu gặp thì bung ra đây là sập cửa vào (O8) — mà lúc đó việc ĐÃ chạy
+        # rồi, nên tuyệt đối không được coi là "chưa chạy" để đi làm lại.
+        return {"result": "CEO chạy xong nhưng trả về thứ em không đọc được: "
+                          + (proc.stdout or "")[-300:],
+                "is_error": True, "usage": {}, "total_cost_usd": 0.0,
+                "num_turns": 0}
+
+
+def _hong_truoc_khi_chay(proc) -> bool:
+    """Claude chết theo kiểu CHẮC CHẮN chưa gọi company nào chưa?
+
+    Chỉ ba loại: hết hạn mức, hết phiên đăng nhập, và lỗi xác thực. Cả ba đều
+    xảy ra ở lượt bắt tay đầu tiên, trước khi model kịp sinh ra một lời gọi nào.
+    Chỉ khi đó mới được cho bộ não khác chạy lại cùng một câu.
+
+    Mọi lỗi khác — treo, chạm trần lượt, API nghẽn giữa chừng — đều có thể đã
+    để lại tác động ra ngoài, và chạy lại là ghi hai lần vào sổ của admin.
+    Nghi ngờ thì trả False: chậm một lượt còn hơn sai một khoản chi.
+    """
+    ly_do, ma_loi = "", None
+    try:
+        kq = json.loads(proc.stdout)
+        ly_do = str(kq.get("result") or "")
+        ma_loi = kq.get("api_error_status")
+    except (ValueError, AttributeError):
+        pass
+    ly_do = (ly_do + " " + (proc.stderr or ""))[:2000].lower()
+    if quotaSignal.phat_hien(ly_do, ma_loi):
+        return True
+    return any(x in ly_do for x in ("authenticate", "oauth", "unauthorized",
+                                    "invalid api key", "command not found"))
 
 
 def record_run(trace_id, session_id, data):
@@ -1327,25 +1624,41 @@ def record_run(trace_id, session_id, data):
           runId INTEGER PRIMARY KEY AUTOINCREMENT, traceId TEXT NOT NULL,
           sessionId TEXT, numTurns INTEGER, durationMs INTEGER,
           cacheCreationTokens INTEGER, cacheReadTokens INTEGER,
-          costUsd REAL, isError INTEGER, createdAt TEXT NOT NULL, loi TEXT)"""
+          costUsd REAL, isError INTEGER, createdAt TEXT NOT NULL, loi TEXT,
+          nao TEXT, tienVnd REAL)"""
     )
     # Sổ đã tồn tại từ trước thì CREATE TABLE ở trên không đụng tới nó — phải
     # thêm cột bằng tay. Chạy lần thứ hai sẽ báo trùng cột, nuốt đúng lỗi đó.
-    try:
-        conn.execute("ALTER TABLE ceoRunLog ADD COLUMN loi TEXT")
-    except sqlite3.OperationalError:
-        pass
+    #
+    # `nao` và `tienVnd` thêm 2026-08-27 cùng bộ não dự phòng. Không có cột
+    # `nao` thì mọi so sánh "não phụ làm được việc gì" đều phải đoán, và
+    # `costUsd` = 0 của một lượt não phụ trông y hệt một lượt Claude hỏng.
+    for cau in ("ALTER TABLE ceoRunLog ADD COLUMN loi TEXT",
+                "ALTER TABLE ceoRunLog ADD COLUMN nao TEXT",
+                "ALTER TABLE ceoRunLog ADD COLUMN tienVnd REAL"):
+        try:
+            conn.execute(cau)          # câu viết cứng, không ghép chuỗi (soat_sql)
+        except sqlite3.OperationalError:
+            pass
 
     u = data.get("usage") or {}
     loi = (str(data.get("result") or "")[:400]
            if data.get("is_error") else None)
+    # `nao` — bộ não đã trả lời lượt này. "claude" hoặc "phu · groq/llama-…".
+    # Lượt chạy não phụ SAU KHI Claude chết thì giữ cả lý do chết trong `loi`,
+    # dù lượt đó có câu trả lời: không giữ thì đến lúc hỏi "hôm qua hết hạn mức
+    # lúc nào" lại phải đoán.
+    ten_nao = ("phu · " + (data.get("moTaNao") or "?")
+               if data.get("nao") == "phu" else "claude")
+    loi = loi or (data.get("loiNaoChinh") or None)
     conn.execute(
         "INSERT INTO ceoRunLog (traceId, sessionId, numTurns, durationMs, "
-        "cacheCreationTokens, cacheReadTokens, costUsd, isError, createdAt, loi) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?)",
+        "cacheCreationTokens, cacheReadTokens, costUsd, isError, createdAt, loi, "
+        "nao, tienVnd) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
         (trace_id, session_id, data.get("num_turns", 0), data.get("duration_ms", 0),
          u.get("cache_creation_input_tokens", 0), u.get("cache_read_input_tokens", 0),
-         data.get("total_cost_usd", 0.0), int(bool(data.get("is_error"))), now(), loi),
+         data.get("total_cost_usd", 0.0), int(bool(data.get("is_error"))), now(), loi,
+         ten_nao, data.get("tienVnd", 0.0)),
     )
     conn.commit()
     conn.close()
@@ -1543,7 +1856,8 @@ def handle_message(update, cfg):
     # từ ngoài vào (P2: dữ liệu, không phải mệnh lệnh). Đặt luật sau dữ liệu là
     # mời model đọc dữ liệu như thể nó cũng có thẩm quyền ngang luật.
     sach, ten_sach = so_tay_block(text, co_tom_tat="### Phiên trước" in nho)
-    them = brief_block(conn) + nho + sach + khoi_reply(msg) + khoi_anh
+    brief = brief_block(conn)
+    them = nho + sach + khoi_reply(msg) + khoi_anh
     # Ghi cả lượt KHÔNG nạp sổ nào — đó mới là dòng đáng soi khi đi tìm chỗ
     # router bỏ sót. Chỉ ghi lượt có nạp thì bảng này tự khen chính nó.
     conn.execute(
@@ -1552,7 +1866,7 @@ def handle_message(update, cfg):
     luu_tin(conn, thread_id, "admin", text)
 
     since = now()
-    data = run_ceo(text, session_id, resume, them)
+    data = run_ceo(text, session_id, resume, them, brief)
     trace_id = trace_of(session_id)
     record_run(trace_id, session_id, data)
     # 1200 chứ không phải 800: câu này còn bị cắt lần nữa lúc nạp lại (CAT_BOT),

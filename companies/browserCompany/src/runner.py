@@ -73,10 +73,19 @@ def chon_llm():
     # Key của Google AI Studio KHÔNG gắn với model nào — nó mở cả họ Gemini,
     # và chọn model là việc của code. Nên để đổi được bằng cấu hình, đừng bắt
     # sửa mã: giá và tốc độ giữa các bản chênh nhau nhiều lần.
-    #   gemini-flash-latest      rẻ và nhanh nhất, mặc định ở đây
-    #   gemini-2.5-flash         bản cố định, không đổi dưới chân
-    #   gemini-2.5-pro           khá hơn, đắt hơn nhiều
-    model = (os.environ.get("BROWSER_GEMINI_MODEL") or "gemini-flash-latest").strip()
+    #   gemini-3.1-flash-lite    rẻ và nhanh nhất, mặc định ở đây
+    #   gemini-3.5-flash         khá hơn, đắt hơn
+    #
+    # KHÔNG DÙNG ALIAS `-latest`. Đo thật 2026-08-27, hỏi thẳng API của Google:
+    # `gemini-flash-latest` (mặc định cũ ở dòng này) trả 503 "high demand" suốt
+    # cả ngày, còn `gemini-2.5-flash` và `gemini-2.5-flash-lite` đã bị RÚT hẳn
+    # — 404 "no longer available". Alias là chỗ cả thế giới đổ vào, nên nó là
+    # cái đầu tiên nghẽn; và một model bị rút thì lời gọi hỏng ngay từ câu đầu.
+    # Cả hai kiểu hỏng đều KHÔNG có dòng lỗi nào cho tới lúc admin gọi duyetWeb
+    # và nhận về một câu "không dựng được LLM". Ghim tên cụ thể, và soát lại
+    # bằng `python3 ops/nao.py kiem` khi thấy lạ.
+    model = (os.environ.get("BROWSER_GEMINI_MODEL")
+             or "gemini-3.1-flash-lite").strip()
     try:
         from browser_use import ChatGoogle
         return ChatGoogle(model=model), f"Google AI Studio ({model})", True

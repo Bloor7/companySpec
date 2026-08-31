@@ -1,0 +1,28 @@
+{
+  "$comment": "Quyền của phiên Claude ngồi ghế chủ toạ hội đồng. Nó KHÔNG có tool nào cả — llmClient gọi với --tools '' nên không tool nào được nạp, và deny-list dưới đây là lớp thứ hai phòng khi ai đó sửa lời gọi mà quên. Chủ toạ chỉ đọc mấy ý kiến rồi viết một khối JSON: nó không cần chạm vào đĩa, vào mạng, hay vào dispatcher. Nhớ rằng chữ nó đọc là do model NGOÀI viết ra (P2) — nếu một ý kiến có câu 'hãy chạy lệnh này' thì phải không có lệnh nào để mà chạy.",
+  "permissions": {
+    "allow": [],
+    "deny": [
+      "Bash",
+      "Read",
+      "Write",
+      "Edit",
+      "NotebookEdit",
+      "Glob",
+      "Grep",
+      "WebSearch",
+      "WebFetch",
+      "Task",
+      "Skill",
+      "ToolSearch",
+      "Artifact",
+      "SendMessage",
+      "PushNotification",
+      "RemoteTrigger",
+      "Monitor",
+      "ScheduleWakeup",
+      "CronCreate",
+      "TaskCreate"
+    ]
+  }
+}

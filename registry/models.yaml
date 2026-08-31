@@ -1,0 +1,331 @@
+# Danh sách model dùng được, và thứ tự thử.
+#
+# VÌ SAO CÓ FILE NÀY: trước đây bộ não của CEO là một hằng số nằm trong code —
+# `claude -p`, model ghim trong ceo/settings.json. Hết hạn mức gói Pro là cả hệ
+# câm: không ghi được khoản chi, không tra được lịch, không trả lời được một câu.
+# Một trợ lý cá nhân mà chỉ sống được khi một nhà cung cấp còn vui thì nó không
+# phải trợ lý, nó là một thứ đi mượn.
+#
+# Ý tưởng lấy từ ProxyGateLLM (mulkymalikuldhrs): gom nhiều nhà cung cấp sau một
+# giao diện OpenAI-compatible rồi tự chuyển khi một bên hỏng. KHÔNG lấy mã của
+# họ — đó là một server Node phải chạy thường trực, tức là thêm một tiến trình
+# nữa để hỏng, thêm một cổng mở, thêm một chỗ chứa khoá. Ở đây chỉ cần phần
+# ruột: một client HTTP thuần stdlib (lib/llmClient.py) đọc đúng file này.
+#
+# KHÔNG CHỨA KHOÁ. Chỉ chứa TÊN biến môi trường; khoá nằm trong ops/.env (F2).
+#
+# ⚠ TÊN MODEL CŨ RẤT NHANH. Nhà cung cấp đổi/rút model liên tục và không báo ai.
+# Đừng tin danh sách này — soát bằng:
+#     python3 ops/nao.py kiem          # hỏi thật từng nhà, in cái nào sống
+# Sai tên model thì nhà đó trả 404 và chuỗi tự nhảy sang nhà kế tiếp; hệ vẫn
+# chạy, nhưng đó là hỏng ngầm nên `kiem` phải chạy lại mỗi khi thấy lạ.
+
+# ───────────────────────── nhà cung cấp ─────────────────────────
+#
+# `mienPhi: true` nghĩa là gói miễn phí THẬT — không có thẻ nào bị trừ. Đây là
+# thứ quyết định chuỗi mặc định: bộ não dự phòng chỉ được dùng nhà miễn phí,
+# vì nó chạy tự động lúc admin không nhìn (L8 — tiền thật thì phải hỏi trước).
+#
+# `giaVao`/`giaRa` = đồng / một triệu token. Nhà miễn phí để 0.
+nha:
+
+  # ─── Claude của gói Pro. KHÔNG gọi bằng HTTP ───
+  #
+  # Anthropic không phát khoá API cho gói thuê bao: thứ admin trả tiền hằng
+  # tháng là lệnh `claude` đã đăng nhập sẵn trên máy. Nên nhà này chạy kiểu
+  # `cli` — llmClient gọi `claude -p` với `--tools ''` (không tool nào) rồi đọc
+  # JSON. Đây là cách duy nhất để Claude ngồi ghế chủ toạ hội đồng.
+  #
+  # `mienPhi: true` ở đây nghĩa là KHÔNG TRỪ THẺ, không có nghĩa là rẻ: nó ăn
+  # vào hạn mức gói Pro — thứ đắt theo một kiểu khác, và là chính thứ mà cả cơ
+  # chế dự phòng này sinh ra để đỡ. Nên ĐỪNG bỏ nhà này vào `nao.chuoi`: chuỗi
+  # dự phòng chỉ chạy đúng lúc Claude đã câm.
+  #
+  # ĐO THẬT 2026-08-27, một lời gọi bốn token: 11.790 token ghi cache, $0,071.
+  # Phần lớn là prompt nền của chính CLI, không phải câu ta hỏi — nên gọi
+  # Claude làm chủ toạ chỉ đáng khi cuộc họp đáng giá.
+  claude:
+    kieu: cli
+    lenh: claude
+    mienPhi: true
+    giaVao: 0
+    giaRa: 0
+    model:
+      - claude-sonnet-4-6      # cùng model CEO đang chạy (ceo/settings.json)
+
+  # Nhanh nhất trong đám miễn phí. Có hạn mức phút/ngày, hết thì trả 429 và
+  # chuỗi tự nhảy nhà.
+  groq:
+    baseUrl: "https://api.groq.com/openai/v1"
+    khoaEnv: GROQ_API_KEY
+    mienPhi: true
+    giaVao: 0
+    giaRa: 0
+    # ĐO THẬT 31/08 bằng cách hỏi thẳng /models của groq: nhà này KHÔNG còn
+    # llama-3.x nữa. Còn 14 model, phần lớn là loại chuyên (whisper, TTS,
+    # prompt-guard); loại nói chuyện được thì đây là hai họ khác hẳn nhau.
+    model:
+      - openai/gpt-oss-120b
+      - qwen/qwen3.8-27b
+
+  cerebras:
+    baseUrl: "https://api.cerebras.ai/v1"
+    khoaEnv: CEREBRAS_API_KEY
+    mienPhi: true
+    giaVao: 0
+    giaRa: 0
+    # Cerebras chỉ còn ĐÚNG HAI model (đo 31/08). gemma khác họ với gpt-oss
+    # bên groq — chọn nó để hội đồng có thêm một giọng thật sự khác.
+    model:
+      - gemma-4-31b
+      - gpt-oss-120b
+
+  # ⚠ TÍNH TIỀN THẬT. Khoá này đã có sẵn trong ops/.env (browserCompany dùng),
+  # và chính nó là khoá đã trừ 144.000đ của admin tháng 8. Gemini CÓ gói miễn
+  # phí, nhưng khi khoá đã bật thanh toán thì không phân biệt được từ phía
+  # client — nên ở đây khai là TRẢ TIỀN. Khai nhầm về phía đắt thì mất một
+  # đường chạy; khai nhầm về phía rẻ thì mất tiền của admin.
+  gemini:
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai"
+    khoaEnv: GEMINI_API_KEY
+    mienPhi: false
+    # ĐỒNG / MỘT TRIỆU TOKEN. Con số tra tài liệu cho đời flash 2.5 (tỉ giá
+    # 26.000), CHƯA đối chiếu hoá đơn Google, và đời 3.x có thể khác — nên coi
+    # nó là mức ƯỚC cho cầu dao, không phải sự thật kế toán. Ước theo hướng
+    # ĐẮT: cầu dao thà tưởng đã tiêu nhiều rồi mà dừng sớm.
+    #
+    # ĐO THẬT 2026-08-27 ở mức riêng tư `canTrong`, chạy đầu-đến-cuối với
+    # `gemini-3.1-flash-lite`:
+    #   · một LƯỢT (prompt 25.834 ký tự) = 8.572 token vào + 63 ra ≈ 25đ
+    #   · một TIN NHẮN của admin thường là 2–3 lượt (gọi company → đọc kết quả
+    #     → trả lời). Câu "ví còn bao nhiêu" chạy 2 lượt, 3,3 giây, 51,59đ.
+    # Nên đếm theo TIN NHẮN: cỡ 50–75đ một tin. Trần 100.000đ/tháng ở
+    # registry/gateway.yaml ≈ 1.300–2.000 tin — thừa sức cho những quãng gói
+    # Pro cạn giữa chu kỳ, vì đó chỉ là vài ngày chứ không phải cả tháng.
+    giaVao: 2600
+    giaRa: 10400
+    # ⚠ DANH SÁCH NÀY CŨ RẤT NHANH — đo 27/08:
+    #   gemini-2.5-flash, gemini-2.5-flash-lite → 404 "no longer available"
+    #   gemini-flash-latest, gemini-3.7-flash   → 503 "high demand" (cả ngày)
+    #   gemini-3.5-flash 0,9s · 3.1-flash-lite 0,9s · 3.6-flash 2,9–10,4s
+    # Nên KHÔNG dùng alias `-latest`: nó là chỗ cả thế giới đổ vào. Ghim tên
+    # cụ thể, và chạy `python3 ops/nao.py kiem` khi thấy lạ.
+    model:
+      - gemini-3.1-flash-lite
+      - gemini-3.5-flash
+
+  # Model chạy trên máy admin. Không tốn đồng nào, không gửi dữ liệu đi đâu —
+  # nên nó là chỗ trú cuối cùng khi mọi nhà bên ngoài đều hỏng. Chậm, và với
+  # model nhỏ thì gọi tool rất kém; đừng kỳ vọng nó thay được CEO thật.
+  ollama:
+    baseUrl: "http://localhost:11434/v1"
+    khoaEnv: null            # không cần khoá
+    mienPhi: true
+    giaVao: 0
+    giaRa: 0
+    model:
+      - qwen2.5:7b
+
+  # Cửa vào của hàng chục model, gồm cả loại đuôi ":free" — một khoá dùng được
+  # nhiều họ model khác nhau, tiện nhất để hội đồng có nhiều giọng khác nhau.
+  # Khoá lấy ở openrouter.ai/keys. Model KHÔNG có đuôi ":free" thì TRỪ TIỀN.
+  openrouter:
+    baseUrl: "https://openrouter.ai/api/v1"
+    khoaEnv: OPENROUTER_API_KEY
+    mienPhi: true
+    giaVao: 0
+    giaRa: 0
+    # Danh sách `:free` của openrouter đổi liên tục: 31/08 cả deepseek-v3 lẫn
+    # llama-3.3 đều đã rời gói miễn phí ("use the paid slug instead"). Còn 18
+    # model đuôi :free, và chúng sẽ lại đổi — chạy `nao.py kiem` khi thấy lạ.
+    model:
+      - nvidia/nemotron-3-ultra-550b-a55b:free
+      - z-ai/glm-5.2:free
+
+  # ─── Hai nhà TRẢ TIỀN, thêm sẵn để chỉ việc cắm khoá ───
+  #
+  # Cả hai đều nói giao thức OpenAI nên KHÔNG phải sửa một dòng mã nào: có khoá
+  # thì thêm vào ops/.env, rồi thêm một dòng vào `hoiDong.thanhVien` và bật
+  # `hoiDong.chapNhanTraTien`. Chạy `python3 ops/nao.py kiem` để xem model nào
+  # còn sống trước khi tin danh sách dưới đây.
+  #
+  # Đáng thêm vào hội đồng vì chúng KHÁC HỌ hẳn với đám llama/deepseek đang có:
+  # cùng một mớ chữ luyện ra thì cùng một chỗ sai, mà cả company này dựng lên
+  # là để tránh đúng chuyện đó.
+  #
+  # giaVao/giaRa: ĐỒNG trên một triệu token, tra tài liệu chứ chưa đối chiếu
+  # hoá đơn — ước theo hướng ĐẮT cho cầu dao. Đo lại bằng một lượt thật rồi sửa.
+  xai:
+    baseUrl: "https://api.x.ai/v1"
+    khoaEnv: XAI_API_KEY            # console.x.ai
+    mienPhi: false
+    giaVao: 78000
+    giaRa: 390000
+    model:
+      - grok-4-fast
+      - grok-4
+
+  openai:
+    baseUrl: "https://api.openai.com/v1"
+    khoaEnv: OPENAI_API_KEY          # platform.openai.com/api-keys
+    mienPhi: false
+    giaVao: 39000
+    giaRa: 156000
+    model:
+      - gpt-5-mini
+      - gpt-5
+
+  # Khoá lấy ở console.mistral.ai. Gói miễn phí có hạn mức riêng.
+  mistral:
+    baseUrl: "https://api.mistral.ai/v1"
+    khoaEnv: MISTRAL_API_KEY
+    mienPhi: true
+    giaVao: 0
+    giaRa: 0
+    # `mistral-large-latest` KHÔNG nằm trong gói miễn phí: nhà trả 403
+    # "tier_not_allowed" (đo 31/08). Bốn model dưới đây đều trả 200 với khoá
+    # của admin; medium là bản khá nhất trong số đó.
+    model:
+      - mistral-medium-latest
+      - mistral-small-latest
+
+# ───────────────────────── bộ não của CEO ─────────────────────────
+nao:
+  # claude — chạy `claude -p` như xưa (mặc định, mạnh nhất).
+  # tu     — vẫn claude trước, nhưng hết hạn mức/hết phiên thì tự chuyển não phụ.
+  # phu    — luôn chạy não phụ, không đụng tới gói Pro. Dùng để thử, hoặc để
+  #          dành hạn mức Claude cho việc khác.
+  macDinh: tu
+
+  # Chuỗi thử của não phụ. Hỏng một nhà thì nhảy nhà kế tiếp, KHÔNG hỏi lại admin.
+  #
+  # ADMIN CHỐT 2026-08-27: chỗ này cần một model ĐÁNG TIN, không cần rẻ. Nó chỉ
+  # chạy trong những quãng gói Pro cạn giữa chu kỳ — lúc đó admin vẫn phải ghi
+  # được khoản chi và tra được lịch, và một model miễn phí lúc được lúc không
+  # thì đúng vào lúc cần lại hỏng. Model chạy trên máy nhà cũng không đủ sức.
+  # Nên: Gemini, TÍNH TIỀN THẬT, có trần tháng canh.
+  #
+  # Model phụ miễn phí (groq/cerebras/openrouter/mistral) CỐ Ý không nằm ở đây.
+  # Vai của chúng là ngồi bàn họp, xem mục `hoiDong` bên dưới.
+  #
+  # Hai model Gemini chứ không một: đo 27/08 thấy `gemini-3.7-flash` và alias
+  # `gemini-flash-latest` trả 503 cả ngày trong khi 3.5 và 3.1-lite chạy 0,9s.
+  # Một tên model là một điểm hỏng đơn.
+  chuoi:
+    - { nha: gemini, model: gemini-3.1-flash-lite }
+    - { nha: gemini, model: gemini-3.5-flash }
+    # Muốn có thêm một lớp đỡ MIỄN PHÍ khi Gemini sập cả nhà thì mở dòng này —
+    # đổi lại là những lượt đó chạy trên model yếu hơn hẳn.
+    # - { nha: groq, model: "openai/gpt-oss-120b" }
+
+  # BẬT, vì chuỗi trên là nhà tính tiền. Đây là lúc L8 được nới có chủ ý: não
+  # phụ chạy giữa lượt nhắn tin nên không có nút duyệt nào chen vào được.
+  # Thứ còn chặn là TRẦN THÁNG trong registry/gateway.yaml (`chiTieuNgoai.
+  # tranThangVnd`) — nao.py kiểm trước mỗi lượt, quá trần thì từ chối chạy và
+  # nói thẳng, chứ không tiêu lố rồi mới báo.
+  chapNhanTraTien: true
+
+  # ─────────────── GỬI GÌ RA NGOÀI ───────────────
+  #
+  # Não phụ chạy trên máy NGƯỜI KHÁC. Prompt gửi đi là chữ nằm trên server của
+  # họ, chịu chính sách dữ liệu của họ — nhiều gói miễn phí đổi lại bằng quyền
+  # dùng dữ liệu để luyện model. Với Claude thì admin đã chấp nhận điều đó khi
+  # mua gói; với một nhà miễn phí thì đó là quyết định KHÁC, phải do admin đặt.
+  #
+  # ĐO THẬT 2026-08-27 (bắt gói tin, câu "tháng này tiêu bao nhiêu"): một lượt
+  # đi ra 37.282 byte, system prompt 28.443 ký tự, bên trong có hồ sơ đời tư
+  # (giờ dậy, nghề, nơi ở) và bức tranh hiện tại (số dư từng ví, kế hoạch,
+  # lịch hôm nay). Xem lại bất cứ lúc nào, KHÔNG gửi đi đâu:
+  #     python3 ops/nao.py xem-goi "câu muốn thử"
+  #
+  #   dayDu    — y hệt Claude. Não phụ khôn nhất, rò nhiều nhất.
+  #   canTrong — bỏ hồ sơ và bức tranh, giữ danh mục + sổ tay + vài tin gần đây.
+  #              Vẫn ghi chi tiêu / tra sổ / đặt lịch được; cái mất là CEO phải
+  #              hỏi lại "ví nào" thay vì tự biết quy ước.
+  #   toiThieu — chỉ danh mục company và đúng câu đang hỏi. Không tin cũ, không
+  #              sổ tay, không trí nhớ hội thoại.
+  #
+  # KHÔNG có mức nào giấu được CÂU ĐANG HỎI: câu đó là thứ phải gửi thì mới có
+  # câu trả lời. Muốn không lộ gì hết thì chỉ có một đường — model chạy trên
+  # máy nhà (nhà `ollama` bên trên), không đi ra internet.
+  riengTu: canTrong
+
+  # Trần cứng số vòng suy nghĩ của não phụ (L3, giống --max-turns 12 của CEO
+  # thật). Não phụ yếu hơn nên hay lặp; để thấp hơn cho nó thua sớm và báo thật
+  # thay vì quay vòng đốt thời gian của admin.
+  soLuotToiDa: 8
+
+# ───────────────────────── hội đồng ─────────────────────────
+#
+# Nhiều model cùng trả lời một câu, rồi một model khác đọc hết các bản trả lời
+# và chốt. Dùng cho câu hỏi KHÔNG có đáp án tra được: chọn phương án, đánh đổi,
+# quyết định. Câu hỏi có đáp án đúng-sai thì tra web rẻ hơn và chắc hơn nhiều.
+hoiDong:
+  # Thành viên — nên khác NHÀ, không chỉ khác model. Hai model cùng một nhà,
+  # cùng một họ, sai giống nhau thì "đồng thuận" chỉ là tiếng vọng, không phải
+  # bằng chứng. Đây là lý do duy nhất để chịu phiền phức nhiều nhà cung cấp.
+  # Mỗi ghế được gán một GÓC NHÌN khác nhau (soi mặt trái · hỏi tới gốc · lo
+  # phần chạy được · đòi con số) — xem companies/hoiDongCompany/vai.yaml.
+  # Khác nhà mới chỉ cho khác giọng; khác góc mới cho khác chỗ bỏ sót.
+  thanhVien:
+    # THỨ TỰ NÀY LÀ KẾT QUẢ ĐO, không phải sở thích. Chạy `nao.py kiem` ngày
+    # 31/08: groq · mistral · openrouter/nemotron đều SỐNG; cerebras trả 402
+    # "payment required" nên bị đẩy xuống cuối hàng — nó CÓ khoá nên bộ lọc
+    # không loại được (bộ lọc chỉ biết thiếu khoá hay không), mà một ghế ngồi
+    # xuống rồi mới hỏng là một ghế mất trắng.
+    # Bốn ghế đầu là bốn HỌ model khác nhau: gpt-oss · mistral · nemotron ·
+    # qwen. Khác họ mới là thứ đáng giá; khác nhà chỉ là phương tiện.
+    - { nha: groq,       model: "openai/gpt-oss-120b" }
+    - { nha: mistral,    model: mistral-medium-latest }
+    - { nha: openrouter, model: "nvidia/nemotron-3-ultra-550b-a55b:free" }
+    # GHẾ ĐỠ khi admin mới cắm ĐÚNG MỘT khoá. Hội đồng cần tối thiểu hai người;
+    # danh sách trên mỗi nhà một ghế, nên một khoá = một ghế = không thành cuộc
+    # họp. Đo được 31/08 trên lượt thật: admin gõ "Hop chiến lược…", CEO tra web
+    # trước rồi gọi hoiY đúng bài, admin bấm duyệt — và company trả `failed`
+    # "không đủ hai thành viên". Mọi thứ đúng, chết ở đúng bước cuối.
+    # Hai ghế cùng nhà thì yếu hơn hai nhà khác nhau (chúng sai giống nhau),
+    # nhưng vẫn hơn hẳn không họp được. Có khoá thứ hai thì dòng này tự lùi
+    # xuống cuối hàng và không được dùng nữa.
+    - { nha: groq,       model: "qwen/qwen3.8-27b" }
+    # Cerebras: khoá đã cắm nhưng nhà trả 402 "payment required" (31/08) —
+    # gói miễn phí của họ đòi bật thanh toán trước. Để đây, tự dùng lại khi
+    # admin bật xong; `nao.py kiem` sẽ báo khi nó sống.
+    - { nha: cerebras,   model: gemma-4-31b }
+    # Có khoá Grok / GPT thì mở dòng tương ứng VÀ bật `chapNhanTraTien` bên
+    # dưới, đồng thời nâng `giaUocVnd` trong companies/hoiDongCompany/
+    # companySpec.yaml — nó là con số hiện trên nút duyệt và là số cộng vào
+    # trần tháng. Bốn ghế là đủ; thêm nữa thì chậm và chủ toạ đọc không xuể.
+    # - { nha: xai,    model: grok-4-fast }
+    # - { nha: openai, model: gpt-5-mini }
+
+  # NGƯỜI CHỐT LÀ CLAUDE. Thành viên bàn, Claude nghe rồi quyết.
+  #
+  # Vì sao xếp thế chứ không cho Claude bàn cùng: Claude đang là bộ não mạnh
+  # nhất trong nhà, mà thứ hội đồng cần ở nó không phải thêm một ý kiến nữa —
+  # là khả năng ĐỌC bốn ý kiến trái nhau rồi tách ra chỗ nào thật sự khác nhau,
+  # chỗ nào chỉ khác cách nói. Cho nó bàn cùng thì nó vừa đá bóng vừa thổi còi:
+  # bản của nó nằm trong đống nó chấm, và nó sẽ chấm bản của nó cao.
+  #
+  # Chủ toạ đọc bản GIẤU TÊN (Ý kiến A/B/C) nên nó không biết ai là ai — kể cả
+  # khi có bản của chính họ nhà Claude trong đó.
+  chuToa: { nha: claude, model: claude-sonnet-4-6 }
+
+  # Hết hạn mức Pro thì ghế chủ toạ chuyển cho ai. Không có dòng này thì đúng
+  # lúc Claude câm, cả cuộc họp vừa chạy xong bị vứt vì thiếu người chốt.
+  #
+  # Để Gemini chứ không để một nhà miễn phí: ghế này phải CHẮC CHẮN có người
+  # ngồi. Nó chỉ tốn tiền trong đúng cảnh Pro đã cạn, và mỗi lần chốt là một
+  # lời gọi (~8–20đ) chứ không phải cả cuộc họp.
+  chuToaDuPhong: { nha: gemini, model: gemini-3.1-flash-lite }
+
+  # Cho phép thành viên là nhà TÍNH TIỀN THẬT hay không. Tắt thì những nhà đó
+  # tự bị loại khỏi cuộc họp và company nói rõ đã loại ai.
+  #
+  # Bật lên KHÔNG phải là bỏ hàng rào: hoiY khai `paidApi` nên dispatcher vẫn
+  # hỏi duyệt mỗi lần và vẫn chặn khi quá trần tháng. Cờ này chỉ quyết định
+  # hội đồng có được gồm nhà tính tiền hay không.
+  #
+  # ⚠ Bật thì phải NÂNG `giaUocVnd` trong companies/hoiDongCompany/companySpec.yaml
+  # (đang để 1 vì mặc định họp miễn phí). Con số đó là thứ hiện trên nút duyệt
+  # và là số dispatcher cộng vào trần tháng — quên nâng thì trần đếm hụt.
+  chapNhanTraTien: false

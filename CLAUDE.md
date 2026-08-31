@@ -87,6 +87,13 @@ Mỗi dòng là một bug đã tốn công lần ra. Trước khi viết mã đ�
 | **Trí nhớ chỉ có ngăn cho điều VĨNH VIỄN** | Admin nói một hoàn cảnh đang diễn ra (đang yêu, đang trông khách sạn thay người) — không phải cảm giác một ngày, cũng không phải điều luôn đúng. Hồ sơ từ chối, phiên sau CEO trắng và bắt admin kể lại | Thứ đúng-trong-một-quãng phải có ngăn riêng KÈM ngày rụng (`nhom: trạng thái` + `hetHan`). Cất mà không hẹn ngày hết thì tệ hơn không cất: hồ sơ nạp vào mọi lượt và không tự hết hạn |
 | **Cộng trên trang đầu, quên hỏi còn nữa không** | Notion trả tối đa 100 dòng và báo còn nữa bằng `has_more` — `query_database` chưa từng đọc cờ đó. Tháng 8 có 110 khoản: `sumExpenses` báo 6.788.746đ "qua 100 khoản", cộng hai nửa tháng ra 7.151.746đ. Hụt 363.000đ, hụt lớn dần về cuối tháng, và sai theo hướng TRẤN AN | Kết quả đem đi CỘNG thì phải lấy hết (`fetch_all=True`). Trần vòng lặp neo vào `maxDurationSec` của năng lực, không phải một số tròn; chạm trần thì ném lỗi chứ đừng trả phần đã lấy. Cách bắt: cộng hai nửa khoảng rồi so với cả khoảng — lệch nghĩa là có dòng nằm ngoài |
 | **Chỉnh sổ phụ trước khi biết sổ chính có đổi không** | CEO cộng 110.000đ vào ví lúc 10:30:15 rồi mới gọi `deleteExpense` lúc 10:30:27. Lần đó xoá trót lọt nên không ai thấy gì — nhưng hai lượt trước đó cùng khoản ấy đều bị từ chối, và nếu lặp lại thì ví sai 110.000đ trong khi sổ chi vẫn còn nguyên khoản, cả hai đều "chạy ok" | "Theo thứ tự" nghĩa là ĐỢI KẾT QUẢ. Lệnh trả `needsApproval`/`needsInput`/`rejected` thì dừng, đừng chạy vế sau (`ceo/playbooks/tien.md`). Ví là bản sao của một sự thật nằm chỗ khác; chỉnh bản sao trước là tạo cái sai không có dấu vết |
+| **Cả hệ treo vào một bộ não** | Hết hạn mức gói Pro, hết phiên `claude /login`, hoặc máy chưa có lệnh `claude` → không ghi nổi một khoản chi, dù mọi company vẫn chạy tốt: chúng là code cứng, chỉ là người gọi đã chết. Riêng ca thiếu lệnh còn ném `FileNotFoundError` không ai bắt, sập luôn cửa vào (O8, cùng họ với vụ `TimeoutExpired`) | Bộ não phải THAY ĐƯỢC: `/nao tu` tự chuyển khi Claude câm, `/nao phu` để khỏi đụng gói Pro. Chỉ chuyển khi Claude hỏng kiểu CHẮC CHẮN CHƯA CHẠY GÌ (thiếu lệnh, hết hạn mức, hết phiên); treo hay chạm trần lượt thì KHÔNG — việc có thể đã làm một nửa, chạy lại là ghi hai lần |
+| **403 tưởng là sai khoá, thật ra là thiếu User-Agent** | groq và cerebras trả `HTTP 403 — error code: 1010`. Mã đó là của Cloudflare: chặn theo chữ ký trình khách, vì `urllib` mặc định tự xưng `Python-urllib/3.10`. Đi tạo lại khoá mấy lần cũng không khỏi | Client tự khai `User-Agent` (`lib/llmClient.py`). Thêm một dòng header thì cùng lời gọi đó trả về lỗi THẬT ("model không tồn tại") — tức là khoá vẫn tốt từ đầu |
+| **Tên model cũ đi trong vài ngày** | Viết `registry/models.yaml` ngày 27/08, tới 31/08 thì groq không còn llama-3.x nào, openrouter đẩy deepseek-v3 khỏi gói free, `mistral-large` rời tier miễn phí. Không nhà nào báo ai | Đừng chép tên model từ tài liệu hay trí nhớ — hỏi thẳng `/models` của nhà đó. `python3 ops/nao.py kiem` chạy đúng phép hỏi ấy, rẻ, và là cách duy nhất biết chuỗi dự phòng còn sống |
+| **Có khoá nhưng nhà từ chối** | cerebras trả `402 payment required`: khoá đúng, tài khoản chưa bật thanh toán. Bộ lọc thành viên chỉ biết *thiếu khoá hay không* nên vẫn xếp nó vào ghế, và ghế đó hỏng lúc cuộc họp đã bắt đầu | Ghế ngồi xuống rồi mới hỏng là ghế mất trắng. Xếp thứ tự thành viên theo kết quả `kiem` ĐO ĐƯỢC, đẩy nhà đang hỏng xuống cuối hàng |
+| **Nhiều model đồng thuận ≠ bằng chứng** | Hỏi hội đồng "chiến lược kênh YouTube" thì mấy model tuôn ra "kênh mới cần 90 ngày thoát sandbox", "nghiên cứu Tubics: 73% kênh triệu view dùng giọng AI" — nghe như tri thức, thật ra là văn mẫu. Chúng học từ cùng một mớ chữ nên sai giống nhau, và ba lần đoán biến thành một lần "đồng thuận" | Sự thật chỉ đến từ khối `duKien` mà CEO tra trước rồi đưa sang (P3 cấm company gọi company, nên việc ghép nguồn là của CEO). Mọi khẳng định khác phải về `chuaKiemChung` và phải được nói lại cho admin. Hai lớp: luật trong prompt, VÀ một phép soát bằng code (`_so_khong_nguon` — số nào trong kết luận mà không có trong dữ kiện thì nêu tên). Lớp code tồn tại vì lớp prompt thì model phá lúc nào cũng được mà không ai biết |
+| **Đổi bộ não mà quên đổi phạm vi dữ liệu** | Não phụ nhận y nguyên prompt của Claude: đo thật một lượt đi ra 37.282 byte, trong đó có hồ sơ đời tư (giờ dậy, nghề, nơi ở) và số dư từng ví — sang máy một nhà miễn phí mà admin chưa từng đọc điều khoản | Prompt gửi ra ngoài phải CẮT ĐƯỢC theo khối, nên `brief` tách khỏi `them` (dò chuỗi con thì hỏng lặng lẽ). Mức `nao.riengTu`, mặc định `canTrong`. Cắt khối nào thì phải NÓI với model là đã cắt (`_bao_da_cat`) — không nói thì nó đọc SYSTEM.md thấy dặn "dùng Bức tranh hiện tại", tìm không ra, rồi bịa số. Soi bằng `nao.py xem-goi`, ca thử canh bằng cách bắt gói tin |
+| **Ví dụ trong khối chú thích cũng khớp mẫu** | `profile_block` lọc dòng bằng `lstrip().startswith("- (")`, nên dòng VÍ DỤ `- (id) [đến YYYY-MM-DD] nội dung` nằm trong `<!-- -->` của PROFILE.md bị nạp vào hồ sơ CEO như một sự thật về admin — mỗi lượt, suốt từ 21/08. Không sai schema, không gây lỗi, không ai kêu | Gỡ khối chú thích TRƯỚC khi đọc dòng. File vừa cho người đọc vừa cho máy đọc thì phần dành cho người sẽ có ngày trông giống dữ liệu |
 | **Đường dẫn tương đối cho tiến trình con** | Có nhiều gốc dự án lồng nhau, model chọn nhầm gốc | Luôn dùng đường tuyệt đối |
 
 Sửa xong một bug **thuộc loại đã có ở đây** thì thêm một dòng. Bug mới hoàn
@@ -104,7 +111,15 @@ python3 backOffice/src/backoffice.py report --days 3   # lỗi gần đây, kèm
 python3 backOffice/src/backoffice.py trace            # liệt kê phiên gần đây
 python3 backOffice/src/backoffice.py trace 102        # phát lại MỘT phiên: nói gì, gọi gì, đổi gì
 python3 ops/gateway.py soat-so-tay --thieu            # lượt nào router KHÔNG nạp sổ tay nào
+python3 ops/nao.py trang-thai                         # đang chạy bộ não nào, chuỗi dự phòng ra sao
+python3 ops/nao.py kiem                               # hỏi THẬT từng nhà: tên model còn sống không
+python3 ops/nao.py xem-goi "câu thử"                  # prompt SẼ gửi ra nhà ngoài — in ra, không gửi
+python3 ops/evals/nao_thu.py                          # ca khung xương não phụ + hội đồng — 0đ, không cần mạng
 ```
+
+Hai lệnh `nao` là cách duy nhất biết tên model trong `registry/models.yaml` còn
+sống: nhà cung cấp rút model mà không báo ai, và chuỗi dự phòng thì tự nhảy
+sang nhà sau nên hệ vẫn chạy — hỏng NGẦM, không có dòng lỗi nào.
 
 Hai lệnh cuối là để trả lời hai câu hỏi mà trước đây phải đoán: *"lượt đó rốt
 cuộc đã xảy ra chuyện gì"* và *"bộ chọn sổ tay có bỏ sót không"*. Cả hai chỉ
@@ -194,7 +209,10 @@ dùng `ops/snapshot.py` (W7), đó là cơ chế riêng.
 - **CEO không có tool `Read`, `WebFetch`, `WebSearch`, `Write`.** Mở ra là nó
   đọc được `ops/.env`. Ảnh do `ops/media.py` đọc hộ bằng tiến trình riêng;
   tệp chữ bóc thẻ bằng regex; web do `searchCompany`/`researchCompany` đi.
-- **`dispatch.py` là cổng duy nhất** ra mọi company (T2). Không có đường vòng.
+- **`dispatch.py` là cổng duy nhất** ra mọi company (T2). Không có đường vòng —
+  kể cả bộ não dự phòng (`ops/nao.py`), vốn chỉ có đúng một công cụ `goiCompany`
+  và dựng argv bằng tay, KHÔNG qua shell. Chỗ đó hẹp hơn Claude CLI chứ không
+  rộng hơn; nới nó ra là nới đúng thứ P2 đang giữ.
 - **Không API tính phí nếu chưa hỏi admin.** Bản miễn phí trước. Buộc phải
   dùng thì khai `paidApi` trong manifest (**L8**) — dispatcher sẽ hỏi duyệt mỗi
   lần kể cả `read`, cấm whitelist, và chặn khi quá trần tháng ở
@@ -207,3 +225,9 @@ dùng `ops/snapshot.py` (W7), đó là cơ chế riêng.
   trước khi nới bất cứ thứ gì ở đó.
 - **Không công khai repo này** (§11 luật 11) — nó có quyền ghi vào Notion, ví
   tiền và lịch của admin.
+- **`.claude/` của repo nằm trong tầm đọc của phiên CEO** (`--setting-sources
+  project`, cwd là gốc repo). Cài skill/plugin vào đó thì đọc
+  [.claude/README.md](.claude/README.md) trước. Đo 31/08: `permissions.allow`
+  mở toang ở project VẪN bị `ceo/hooks/guard.py` chặn, nên hàng rào đứng —
+  nhưng đó là kết quả của một phép đo, không phải một điều hiển nhiên, và nó
+  chỉ đúng chừng nào hook còn nguyên.

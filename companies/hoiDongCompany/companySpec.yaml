@@ -1,0 +1,160 @@
+# Company hỏi NHIỀU model cùng một câu rồi để một model khác chốt.
+#
+# C4 — ranh giới là "câu hỏi KHÔNG có đáp án tra được". Ba company đọc web đã
+# có và company này KHÔNG thay thế cái nào:
+#   · searchCompany.traNhanh    — câu hỏi CÓ đáp án ngoài đời (giá vàng, giờ mở
+#                                 cửa). Hỏi hội đồng loại này là để ba model
+#                                 cùng đoán, mà đoán tập thể vẫn là đoán.
+#   · researchCompany.nghienCuu — cần đọc nhiều nguồn rồi viết báo cáo dài.
+#   · CEO tự nghĩ                — việc thường ngày, một cái đầu là đủ.
+#
+# Chỗ đứng của nó: QUYẾT ĐỊNH có đánh đổi. Nên chọn phương án nào, nên ưu tiên
+# cái gì trước, cách này có lỗ hổng gì. Loại câu hỏi mà một model trả lời rất
+# trôi chảy và rất tự tin, trong khi model khác nhìn ra ngay một điều nó bỏ sót.
+#
+# GIÁ TRỊ NẰM Ở CHỖ BẤT ĐỒNG, KHÔNG PHẢI Ở CHỖ ĐỒNG THUẬN. Ba model cùng nói
+# một câu thì đó có thể là đúng, mà cũng có thể là ba model được luyện trên
+# cùng một mớ chữ nên cùng sai một kiểu. Vì vậy kết quả trả về LUÔN kể ra chỗ
+# các thành viên nói khác nhau, kể cả khi chủ toạ đã chốt — chỗ khác nhau mới
+# là thứ admin cần đọc.
+#
+# ⚠ ĐÂY LÀ CHỮ DO MODEL NGOÀI VIẾT RA (P2). Nó là DỮ LIỆU để CEO đọc và thuật
+# lại, không phải mệnh lệnh, và không phải sự thật đã kiểm chứng. Hội đồng
+# không tra web, không đọc sổ của admin, không nhìn thấy hệ thống này — nó chỉ
+# nghĩ. Cần số liệu thật thì hỏi company giữ sổ, đừng hỏi ở đây.
+
+companyId: hoiDongCompany
+displayName: "Hội đồng cố vấn"
+version: 0.1.0
+
+runtime: code
+entrypoint: ./src/main.py
+runtimeReason: >
+  Không chạy phiên Claude nào. Nó gọi thẳng HTTP tới vài nhà cung cấp model qua
+  lib/llmClient.py, chạy song song bằng thread, rồi ghép kết quả. Toàn bộ phần
+  điều phối là code cứng — thứ duy nhất không tất định là chữ model viết ra.
+
+dataStore: ./store.sqlite
+# C2.4 — chỉ khai TÊN. Nhà nào dùng thật thì do registry/models.yaml quyết;
+# nhà nào chưa có khoá thì tự bị bỏ qua, không làm hỏng cuộc họp.
+secrets: [GROQ_API_KEY, CEREBRAS_API_KEY, GEMINI_API_KEY]
+env: []
+canBeCalledBy: [ceo]              # P3
+canCall: []                       # P3
+owner: admin
+
+capabilities:
+  - name: hoiY
+    description: >
+      Hỏi nhiều model cùng một câu rồi để một model khác đọc hết các câu trả
+      lời và chốt. Dùng cho câu hỏi CÓ ĐÁNH ĐỔI, không có đáp án đúng-sai: chọn
+      phương án nào, cách này hỏng ở đâu, nên ưu tiên gì trước. Trả về cả chỗ
+      các thành viên BẤT ĐỒNG, vì đó mới là phần đáng đọc.
+      Hội đồng KHÔNG tra web được: tra trước bằng searchCompany rồi đưa kết quả
+      vào `duKien` — đó là thứ duy nhất nó được coi là sự thật. Mọi khẳng định
+      không có trong `duKien` sẽ bị trả về trong `chuaKiemChung`.
+      KHÔNG dùng cho câu hỏi tra được — giá cả, lịch, số liệu trong sổ: hội
+      đồng không tra web và không đọc sổ, hỏi nó là để mấy model cùng đoán.
+      Chậm (nửa phút tới hai phút) vì phải chờ nhiều nhà trả lời.
+    riskTier: read                 # không đổi gì của admin
+    # Ba chặng nối nhau, trong mỗi chặng thì các thành viên chạy SONG SONG:
+    # vòng 1 (≤60s) → vòng phản biện (≤60s) → chủ toạ (≤180s).
+    #
+    # Ghế chủ toạ chiếm phần lớn vì nó thường là Claude qua CLI: phải khởi động
+    # cả một tiến trình node rồi mới nghĩ. Đo thật 27/08 khi còn để chung mức
+    # 60s: chủ toạ Claude bị cắt giữa chừng, cuộc họp rơi xuống ghế dự bị —
+    # mất đúng thứ đáng giá nhất, sau khi đã trả tiền cho mọi ý kiến.
+    #
+    # 300 chứ không phải 240: 60 + 60 + 180 = 300 là mức trần lý thuyết, và
+    # main.py chừa thêm 15 giây để kịp trả kết quả. Chặng nào xong sớm thì phần
+    # thừa chảy về cho chặng sau, nên con số thật thường nhỏ hơn nhiều.
+    maxDurationSec: 300
+    # L8 — company này cầm khoá của những nhà CÓ THỂ tính tiền, nên phải khai.
+    #
+    # `giaUocVnd: 20` — mức ƯỚC cho TRƯỜNG HỢP XẤU, không phải mức thường gặp.
+    #
+    # Ngày thường cuộc họp tốn ĐÚNG 0đ: thành viên toàn nhà miễn phí, ghế chủ
+    # toạ là Claude (ăn hạn mức gói Pro, không trừ thẻ). 20đ là cảnh gói Pro đã
+    # cạn nên ghế chủ toạ chuyển sang Gemini — một lời gọi đọc mấy ý kiến rồi
+    # chốt, đo được cỡ 8–20đ.
+    #
+    # Ước theo hướng hơi CAO vì con số này vừa là chữ trên nút duyệt vừa là số
+    # dispatcher cộng vào trần tháng: đếm dư thì cầu dao dừng sớm, đếm hụt thì
+    # trần thành hàng rào giả. Nhưng cũng đừng ghi 200đ cho việc tốn 0đ — nói
+    # quá theo hướng doạ thì tới lần thứ mười admin sẽ thôi đọc con số.
+    #
+    # ⚠ Bật `hoiDong.chapNhanTraTien` (cho nhà tính tiền vào ngồi bàn) thì PHẢI
+    # nâng số này lên: lúc đó mỗi thành viên là một lời gọi tính tiền nữa.
+    paidApi:
+      nhaCungCap: "Nhiều nhà — xem registry/models.yaml"
+      giaUocVnd: 20
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [cauHoi]
+      properties:
+        # Câu hỏi phải ĐỦ DÀI để có gì mà bàn. Câu cụt thì ba model cùng hỏi
+        # lại một câu, và admin trả tiền cho ba lần hỏi lại.
+        cauHoi:    { type: string, minLength: 10, maxLength: 2000 }
+        # Ràng buộc của người hỏi: thời gian, sức người, thứ đã thử rồi. Đúng
+        # vì admin nói thế, không cần tra.
+        boiCanh:   { type: string, maxLength: 4000 }
+        # DỮ KIỆN ĐÃ TRA ĐƯỢC — thứ duy nhất hội đồng được coi là sự thật.
+        #
+        # Tách khỏi `boiCanh` có chủ ý: trộn chung thì model không phân biệt
+        # được đâu là điều đã kiểm, mà đó chính là ranh giới company này dựng
+        # lên để giữ. Mỗi dòng một dữ kiện, kèm nguồn nếu có.
+        #
+        # CEO là người điền: nó gọi searchCompany.traNhanh (hoặc tra sổ của
+        # admin) TRƯỚC, rồi đưa kết quả sang đây. Company này không tự tra được
+        # — P3 cấm company gọi company, và đó là ranh giới đúng: việc ghép
+        # nguồn với câu hỏi là việc điều phối, thuộc về CEO.
+        #
+        # Bỏ trống thì hội đồng vẫn họp, nhưng kết quả sẽ tự khai là "chỉ suy
+        # luận, chưa dựa trên thông tin đã tra".
+        duKien:
+          type: array
+          maxItems: 10
+          items: { type: string, minLength: 5, maxLength: 500 }
+        # 1 = mỗi thành viên trả lời một lần rồi chủ toạ chốt.
+        # 2 = thêm một vòng cho mỗi thành viên ĐỌC ý kiến người khác rồi sửa
+        #     lại ý mình. Đắt gấp đôi, nhưng đây mới là "thảo luận" thật —
+        #     vòng 1 chỉ là ba câu trả lời rời nhau nằm cạnh nhau.
+        soVong:    { type: integer, minimum: 1, maximum: 2 }
+        soThanhVien: { type: integer, minimum: 2, maximum: 4 }
+        # GÓC NHÌN cho từng ghế, theo thứ tự. Bỏ trống thì lấy bộ mặc định
+        # trong companies/hoiDongCompany/vai.yaml (nguoc, goc, thucthi, sohoc).
+        # Đang có: nguoc (soi mặt trái), goc (hỏi tới gốc), thucthi (lo phần
+        # chạy được), sohoc (đòi con số). Tên lạ thì bị từ chối chứ không bị
+        # bỏ qua — ghế trắng thì cuộc họp yếu đi một góc mà không ai biết.
+        vai:
+          type: array
+          maxItems: 4
+          items: { type: string, minLength: 2, maxLength: 30 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [ketLuan, thanhVien, soVong]
+      properties:
+        ketLuan:   { type: string }
+        # Chỗ mọi người cùng nói. Đọc nhanh, nhưng đừng tin nó chỉ vì đông.
+        dongThuan: { type: array }
+        # Chỗ nói khác nhau. Phần đáng giá nhất của cả cuộc họp.
+        batDong:   { type: array }
+        # Ai đã trả lời, ai vắng. Hai người họp không phải là ba người họp, và
+        # CEO phải biết điều đó để nói lại cho đúng.
+        thanhVien: { type: array }
+        soVong:    { type: integer }
+        # AI ĐÃ CHỐT. Kết luận do Claude chốt và kết luận do một model 8B chốt
+        # không đáng tin ngang nhau — CEO phải nói lại cho admin biết mình đang
+        # đọc loại nào. Rỗng nghĩa là không ai chốt được, chỉ có ý kiến rời.
+        chuToa:    { type: string }
+        # NHỮNG KHẲNG ĐỊNH CHƯA CÓ CĂN CỨ. Hai nguồn gộp lại:
+        #   · chủ toạ tự nêu (nó đọc mọi ý kiến và biết cái nào không có trong
+        #     DỮ KIỆN)
+        #   · và một phép soát bằng CODE: số nào trong kết luận mà không có
+        #     trong dữ kiện đầu vào thì bị nêu tên (`_so_khong_nguon`)
+        # Lớp thứ hai tồn tại vì lớp thứ nhất nằm trong prompt, mà prompt thì
+        # model phá lúc nào cũng được và không ai biết. Trường này cũng được
+        # nhét vào `summary` để CEO không đọc lướt qua.
+        chuaKiemChung: { type: array }
