@@ -25,7 +25,10 @@ capabilities:
   - name: progressReport
     description: "Báo cáo tiến độ 100 video: đã đăng bao nhiêu, đang kẹt ở khâu nào, tách theo giai đoạn."
     riskTier: read
-    maxDurationSec: 25
+    # Nâng 25 → 35 ngày 31/08 cùng lý do với calendarCompany.upcomingEvents:
+    # chuỗi thử lại của notionClient dài 16,5s, nên 25 vẫn chưa phải "nhỏ hơn
+    # HẲN". Xem số đo trong companies/calendarCompany/companySpec.yaml.
+    maxDurationSec: 35
     inputSchema:
       type: object
       additionalProperties: false

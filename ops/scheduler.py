@@ -841,8 +841,16 @@ def run_one(sched: dict, conn) -> tuple[str, str]:
             # sẽ ngừng đọc, và lúc có việc thật cũng không ai để ý (S7).
             anything = bool(res.get("summary", "").strip())
         else:
-            parts.append(f"Không chạy được {sched['companyId']}."
-                         f"{sched['capability']}: {res.get('summary', '')[:150]}")
+            # NÓI BẰNG TIẾNG NGƯỜI, không bằng tiếng dispatcher. Admin nhận
+            # tin này lúc 11 giờ đêm và không sửa được gì cho tới sáng; câu
+            # "Quá 20s — cắt" chỉ làm họ lo mà không cho biết có mất gì không.
+            # Đo 31/08: 15/508 lần chạy lịch canh hỏng, tất cả đều là Notion ì
+            # trong chốc lát và tự khỏi ở lần chạy sau 15 phút.
+            ly_do = str(res.get("summary", ""))[:150]
+            if res.get("status") == "budgetExceeded" or "Quá" in ly_do:
+                ly_do = ("Notion trả lời chậm quá nên em cắt. Không mất gì, "
+                         "15 phút nữa em thử lại.")
+            parts.append(f"Chưa đọc được {sched['displayName'].lower()}: {ly_do}")
             # Trả 'failed' chứ không phải 'ok': cmd_run cần phân biệt được "lịch
             # có tin cho admin" với "lịch hỏng", để không nhắn lại cùng một sự
             # cố mỗi 15 phút. Trước đây cả hai đều là 'ok' nên trong sổ nhìn

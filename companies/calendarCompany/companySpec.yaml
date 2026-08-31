@@ -66,7 +66,16 @@ capabilities:
       Sự kiện sắp bắt đầu trong N phút tới. Đây là năng lực lịch nhắc gọi mỗi 15
       phút; mỗi sự kiện chỉ nhắc đúng một lần trừ khi bị dời giờ.
     riskTier: read
-    maxDurationSec: 20
+    # ĐO 31/08 trên 508 lần chạy thật của lịch canh: 493 lần ok, TRUNG BÌNH
+    # 1.517 ms. Nhưng 11 lần `failed` ở ~16.870 ms và 4 lần `budgetExceeded` ở
+    # đúng 20.040 ms — tức là khi Notion chập, notionClient thử hai lần
+    # (8s + 0,5s + 8s = 16,5s) rồi mới báo lỗi, mà ngân sách 20s chỉ chừa 3,5s.
+    # Khởi động tiến trình ăn hết chỗ đó, nên dispatcher GIẾT trước khi company
+    # kịp nói lý do — admin nhận "Quá 20s — cắt" lúc 11 giờ đêm thay vì "Notion
+    # đang chậm". Đúng bẫy "timeout phải nhỏ hơn HẲN ngân sách" trong CLAUDE.md.
+    # 35 cho chuỗi 16,5s là hơn gấp đôi — nâng ngân sách KHÔNG làm Notion nhanh
+    # lên, nó chỉ đổi một cái chết câm thành một câu lỗi đọc được.
+    maxDurationSec: 35
     inputSchema:
       type: object
       additionalProperties: false
