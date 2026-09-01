@@ -876,6 +876,11 @@ def cmd_run(args):
     now = now_local()
     ran = 0
 
+    # Dọn ở nhịp 15 phút, không ở nhịp 1 phút: `hen` phải nhẹ hết mức.
+    don = don_dong_cron()
+    if don:
+        print(f"đã dọn {don} dòng thăm dò cũ của cron")
+
     # Hẹn giờ KHÔNG chạy ở đây — nó có timer riêng nhịp 1 phút (`scheduler.py
     # hen`). Để chung thì cái hẹn 3h sáng kêu lúc 3h14, mà đó đúng là thứ cần
     # sửa. Vẫn gọi một lần ở đây làm lưới đỡ: timer 1 phút chết thì ít nhất
@@ -936,6 +941,42 @@ def cmd_run(args):
     if ran == 0:
         print("[scheduler] không có lịch nào tới hạn")
     return 0
+
+
+# Dòng thăm dò của cron giữ bao nhiêu ngày. Đủ lâu để `backoffice report`
+# nhìn lại vài ngày, đủ ngắn để sổ không phình mãi.
+GIU_NGAY_CRON = 7
+
+
+def don_dong_cron() -> int:
+    """Dọn dòng taskLog của cron: CHỈ loại `ok`, CHỈ cũ hơn GIU_NGAY_CRON ngày.
+
+    VÌ SAO CẦN: timer hẹn giờ chạy mỗi phút, mỗi lần để lại một dòng. Đo 01/09
+    — mới một ngày mà cron đã chiếm 3.336/5.453 dòng (61%), và cứ thế +1.440
+    dòng mỗi ngày. Không tốn token, nhưng làm nhiễu mọi câu truy vấn và phình
+    sổ vô hạn.
+
+    BA HÀNG RÀO, mỗi cái chặn một cách hỏng:
+    · chỉ `traceId LIKE 'trc_cron_%'` — trí nhớ của CEO đọc taskLog theo trace
+      của PHIÊN nó (`gateway.viec_da_lam`), tiền tố khác hẳn. Đo 01/09: số dòng
+      cron nằm trong trace của một phiên CEO là 0. Dọn ở đây không chạm được
+      vào trí nhớ CEO dù có muốn.
+    · chỉ `status='ok'` — dòng HỎNG là thứ đáng giữ nhất, đó là bằng chứng lúc
+      đi tìm nguyên nhân. 88 dòng hỏng thì giữ mãi cũng không phình.
+    · chỉ cũ hơn 7 ngày — `backoffice report --days 3` vẫn còn đủ dữ liệu.
+
+    Trả về số dòng đã xoá, để chỗ gọi còn IN RA. Dọn im lặng thì có ngày nó
+    dọn nhầm mà không ai biết.
+    """
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=GIU_NGAY_CRON)
+              ).strftime("%Y-%m-%dT%H:%M:%SZ")
+    c = db.connect(os.path.join(ROOT, "backOffice", "store.sqlite"))
+    n = c.execute(
+        "DELETE FROM taskLog WHERE traceId LIKE 'trc_cron_%' "
+        "AND status = 'ok' AND startedAt < ?", (cutoff,)).rowcount
+    c.commit()
+    c.close()
+    return n
 
 
 def cmd_hen(args):

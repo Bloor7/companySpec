@@ -129,6 +129,12 @@ def dat_nhac(inp: dict) -> tuple:
     cutoff = (datetime.now(timezone.utc) - timedelta(days=DON_SAU_NGAY)
               ).strftime("%Y-%m-%dT%H:%M:%SZ")
     conn.execute("DELETE FROM nhac WHERE khiNaoUtc < ?", (cutoff,))
+    # Và dọn cả sổ việc của CHÍNH MÌNH. Scheduler hỏi `dsNhac` mỗi phút nên
+    # taskLog ở đây phình 1.440 dòng/ngày — nhanh hơn cả sổ chính. Company tự
+    # dọn nhà mình: ops không được thò tay vào ruột company (C2), và đây là
+    # đường ghi duy nhất company có. Giữ lại dòng HỎNG để còn chẩn được.
+    conn.execute("DELETE FROM taskLog WHERE capability='dsNhac' "
+                 "AND status='ok' AND startedAt < ?", (cutoff,))
 
     nhac_id = "nhac_" + os.urandom(6).hex()
     utc = moc.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
