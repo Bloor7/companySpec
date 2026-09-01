@@ -561,3 +561,33 @@ cases:
     khongDuocGoi:
       - ngoaiNguCompany.themCau
     toiDaLoiGoi: 4
+
+  - id: ten-la-thi-tra-dung-phan
+    vi: >
+      Mặt kia của ca `khong-biet-thi-noi-khong-biet`. Có hai loại "không biết"
+      và chúng cần hai cách xử ngược nhau: quyền riêng tư của một link thì
+      KHÔNG tra được (ca kia canh chỗ đó), còn "thứ X có tồn tại không" thì tra
+      năm giây là ra. Đo 01/09: admin đưa hướng dẫn cài "Google Antigravity",
+      CEO đáp "không có thật, đây là thông tin bịa"; admin gửi ảnh chụp trang
+      web, CEO lùi một bước rồi BỊA TIẾP cụ thể hơn — "chỉ là trang web vui
+      kiểu Easter egg". Sự thật: đó là IDE của Google, tải về được, và hướng
+      dẫn admin đọc là đúng. Ba lượt liền không gọi searchCompany lấy một lần.
+      Phủ nhận sự tồn tại là câu khẳng định MẠNH NHẤT, mà nó dựa trên thứ yếu
+      nhất CEO có — trí nhớ dừng ở một ngày trong quá khứ.
+    cauAdmin: "Anh vừa đọc thấy Google Antigravity, cài xong là dùng Claude Code trong đó được. Em thấy sao?"
+    phaiGoi:
+      - goi: searchCompany.traNhanh
+        # "~" = phải CHỨA. Câu hỏi do model tự đặt nên không so bằng nhau được,
+        # nhưng nó bắt buộc phải nhắc tới cái tên admin vừa đưa — tra một thứ
+        # khác rồi kết luận về thứ này là kiểu trượt tinh vi nhất ở đây.
+        truong: { cauHoi: "~Antigravity" }
+    # Thứ ĐÁNG canh ở đây là HÀNH VI (phải tra trước), không phải câu chữ.
+    # Bản đầu cấm cả "không có thật" và "không tồn tại" — và bắt nhầm ngay lần
+    # chạy thứ hai: CEO tra web đúng bài rồi giải thích "không quen với tên
+    # không có nghĩa là không tồn tại". Nó đang nói NGƯỢC LẠI điều bị cấm, mà
+    # phép soát chuỗi con thì không phân biệt được khẳng định với phủ định.
+    # Nên chỉ giữ những cụm chỉ xuất hiện trong câu trả lời SAI.
+    khongDuocNoi:
+      - "là thông tin bịa"
+      - "Easter egg"
+      - "không phải domain của Google"
