@@ -87,6 +87,25 @@ def _doc_gio(chuoi: str) -> datetime:
     raise ValueError(f"khiNao không đọc được: {s!r}. Dạng đúng: 2026-09-01T03:00")
 
 
+THU = ("thứ Hai", "thứ Ba", "thứ Tư", "thứ Năm", "thứ Sáu", "thứ Bảy",
+       "Chủ nhật")
+
+
+def _ten_ngay(moc: datetime) -> str:
+    """"thứ Tư 02/09" — THỨ và NGÀY, luôn luôn, không bao giờ chỉ giờ.
+
+    ĐO 01/09: admin nhắn lúc 00:14 "mai 5h30 gọi anh dậy". CEO tính "mai" theo
+    lịch ra 02/09, trong khi người thức lúc 0 giờ nói "mai 5h30" là chỉ sáng
+    hôm ấy, 5 tiếng sau. Lời nhắc vào sổ đúng quy trình — phiếu duyệt, timer,
+    tất cả chạy — chỉ sai đúng một ngày, và im lặng.
+    Câu xác nhận của CEO lúc đó là "5h30 sáng mai hệ sẽ gọi dậy": nó LẶP LẠI
+    chữ mơ hồ của admin nên không ai bắt được. Từ nay company trả về thứ và
+    ngày, để câu xác nhận không thể mơ hồ dù CEO có muốn.
+    """
+    m = moc.astimezone(TZ_VN)
+    return f"{THU[m.weekday()]} {m:%d/%m}"
+
+
 def _con_bao_lau(moc: datetime) -> str:
     giay = (moc - datetime.now(timezone.utc)).total_seconds()
     if giay < 0:
@@ -120,8 +139,12 @@ def dat_nhac(inp: dict) -> tuple:
     conn.commit()
     conn.close()
     con = _con_bao_lau(moc)
-    return ({"nhacId": nhac_id, "khiNao": inp["khiNao"], "conBaoLau": con},
-            f"Đã đặt nhắc lúc {inp['khiNao']} ({con}): {inp['noiDung'][:80]}",
+    ngay = _ten_ngay(moc)
+    return ({"nhacId": nhac_id, "khiNao": inp["khiNao"], "conBaoLau": con,
+             "ngay": ngay},
+            f"Đã đặt nhắc {moc.astimezone(TZ_VN):%H:%M} {ngay} "
+            f"({con}): {inp['noiDung'][:80]}. "
+            f"NÓI LẠI CHO ADMIN CẢ THỨ VÀ NGÀY, đừng nói 'mai'.",
             [{"type": "reminder.set", "target": nhac_id,
               "idempotencyKey": f"nhac|{inp['khiNao']}|{inp['noiDung'][:40]}",
               "reversible": True}])
@@ -146,14 +169,20 @@ def ds_nhac(inp: dict) -> tuple:
         "WHERE khiNaoUtc >= ? ORDER BY khiNaoUtc LIMIT ?",
         (moc, int(inp.get("gioiHan") or 20))))
     conn.close()
-    ds = [{"nhacId": r["nhacId"], "noiDung": r["noiDung"], "khiNao": r["khiNao"],
-           "conBaoLau": _con_bao_lau(
-               datetime.strptime(r["khiNaoUtc"], "%Y-%m-%dT%H:%M:%SZ")
-               .replace(tzinfo=timezone.utc))} for r in rows]
+    ds = []
+    for r in rows:
+        moc = datetime.strptime(r["khiNaoUtc"], "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=timezone.utc)
+        ds.append({"nhacId": r["nhacId"], "noiDung": r["noiDung"],
+                   "khiNao": r["khiNao"], "ngay": _ten_ngay(moc),
+                   "conBaoLau": _con_bao_lau(moc)})
     if not ds:
         return {"cacNhac": [], "tong": 0}, "Không có lời nhắc nào đang treo.", []
-    dong = "\n".join(f"{d['khiNao']} ({d['conBaoLau']}) — {d['noiDung'][:60]}"
-                     for d in ds)
+    # THỨ + NGÀY + GIỜ, không phải chuỗi ISO thô. Danh sách này là thứ admin
+    # đọc để soát xem có đặt nhầm ngày không — mà "2026-09-02T05:30:00" thì
+    # không ai soát bằng mắt được, còn "thứ Tư 02/09 05:30" thì thấy ngay.
+    dong = "\n".join(f"{d['ngay']} {d['khiNao'][11:16]} ({d['conBaoLau']}) "
+                     f"— {d['noiDung'][:60]}" for d in ds)
     return ({"cacNhac": ds, "tong": len(ds)},
             f"{len(ds)} lời nhắc đang treo:\n{dong}", [])
 

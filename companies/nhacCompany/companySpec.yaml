@@ -41,6 +41,12 @@ capabilities:
       việc gì — muốn tới giờ hệ tự làm thì đó là việc khác.
       `khiNao` là giờ Việt Nam, dạng 2026-09-01T03:00 (không có múi giờ ở
       cuối). Quá khứ thì bị từ chối, đừng đoán ngày.
+      ⚠ "MAI" SAU NỬA ĐÊM LÀ SÁNG HÔM ẤY, không phải hôm sau nữa. Admin thức
+      lúc 0–4 giờ mà nói "mai 5h30" là họ nói về buổi sáng sắp tới, cách đó vài
+      tiếng. Đo 01/09: đặt nhầm sang ngày kia, chuông không kêu, và không ai
+      biết vì câu xác nhận cũng nói "mai". Không chắc thì HỎI LẠI một câu.
+      Xác nhận với admin thì phải nói THỨ VÀ NGÀY ("5h30 thứ Tư 02/09"), tuyệt
+      đối đừng nói lại chữ "mai" — lặp lại chữ mơ hồ là giấu mất cái sai.
     riskTier: write
     maxDurationSec: 20
     whitelistScope: []            # G12 — cho phép admin bấm "luôn cho phép"
@@ -58,6 +64,8 @@ capabilities:
       properties:
         nhacId:  { type: string }
         khiNao:  { type: string }
+        # "thứ Tư 02/09" — CEO PHẢI nói lại cả cụm này cho admin.
+        ngay:      { type: string }
         conBaoLau: { type: string }
 
   - name: dsNhac
