@@ -1134,7 +1134,15 @@ def _ly_do_chet(proc) -> str:
         return quotaSignal.cau_bao_admin(hit)
 
     if "authenticate" in ly_do.lower() or "oauth" in ly_do.lower():
-        return "Phiên đăng nhập Claude hết hạn. Chạy `claude /login` rồi nhắn lại."
+        # KHÔNG dùng backtick: Telegram hiện nó ra thành ký tự thô giữa câu
+        # (cùng luật với SYSTEM.md). Và phải nói RÕ đây KHÔNG phải hết hạn
+        # mức — đo 2026-09-11: admin đọc câu cũ "Phiên đăng nhập Claude hết
+        # hạn" rồi hiểu thành hết hạn mức, ngồi chờ nó tự hồi. Hai sự cố này
+        # cần hai phản ứng ngược nhau: hạn mức thì CHỜ vài tiếng là xong, còn
+        # hết phiên thì chờ bao lâu cũng không tự khỏi, phải đăng nhập lại.
+        return ("Hết phiên đăng nhập Claude — KHÔNG phải hết hạn mức, nên chờ "
+                "không tự khỏi. Đại ca mở terminal, chạy: claude /login. "
+                "Trong lúc đó em vẫn làm việc bằng bộ não dự phòng.")
     return ly_do[:200] or "CLI không nói gì thêm."
 
 
@@ -1581,7 +1589,7 @@ def _chay_claude(message: str, session_id: str, resume: bool,
                 "is_error": True, "usage": {}, "total_cost_usd": 0.0,
                 "num_turns": 0, "_chuaChay": _hong_truoc_khi_chay(proc)}
     try:
-        return json.loads(proc.stdout)
+        data = json.loads(proc.stdout)
     except ValueError:
         # CLI thoát mã 0 mà in ra thứ không đọc được. Chưa gặp lần nào, nhưng
         # nếu gặp thì bung ra đây là sập cửa vào (O8) — mà lúc đó việc ĐÃ chạy
@@ -1590,6 +1598,23 @@ def _chay_claude(message: str, session_id: str, resume: bool,
                           + (proc.stdout or "")[-300:],
                 "is_error": True, "usage": {}, "total_cost_usd": 0.0,
                 "num_turns": 0}
+
+    # MÃ THOÁT 0 KHÔNG CÓ NGHĨA LÀ CHẠY ĐƯỢC. Đo 2026-09-11: phiên OAuth hết
+    # hạn, CLI trả `{"is_error": true, "result": "Failed to authenticate:
+    # OAuth session expired and could not be refreshed"}` — và thoát MÃ 0.
+    # Cùng sự cố đó hôm trước lại thoát mã 1; hai hình cho một nguyên nhân.
+    #
+    # Bản cũ chỉ soi mã thoát, nên nhánh mã-0 đi thẳng qua đây: admin nhận
+    # nguyên một câu tiếng Anh làm "câu trả lời của CEO", và não phụ KHÔNG hề
+    # nhảy vào — đúng lúc nó sinh ra để đỡ. Cửa dự phòng mà chỉ mở với một
+    # trong hai hình của cùng một sự cố thì nó là cửa hờ.
+    if data.get("is_error"):
+        return {"result": f"CEO không chạy được. {_ly_do_chet(proc)}",
+                "is_error": True, "usage": data.get("usage") or {},
+                "total_cost_usd": data.get("total_cost_usd") or 0.0,
+                "num_turns": data.get("num_turns", 0),
+                "_chuaChay": _hong_truoc_khi_chay(proc)}
+    return data
 
 
 def _hong_truoc_khi_chay(proc) -> bool:

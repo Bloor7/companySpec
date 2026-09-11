@@ -33,7 +33,20 @@ MAU_QUOTA = re.compile(
     # Thứ tự chữ đảo lại vẫn phải bắt được: "reached your 5-hour limit" từng
     # lọt lưới vì mẫu trên chỉ khớp đúng cụm "limit reached".
     r"reached your[^.]{0,40}limit|\d+[- ]?hour limit|weekly limit|"
-    r"out of (?:usage|credit)",
+    r"out of (?:usage|credit)|"
+    # MẪU THẬT, chép nguyên văn 2026-09-11 từ sổ `quotaHit` — ba lần giống hệt
+    # (18/08, 19/08, 31/08): "You've hit your session limit · resets 3:40am
+    # (Asia/Bangkok)". Không mẫu nào ở trên khớp nó: nó nói "hit your" chứ
+    # không "reached your", và "session limit" chứ không "usage limit".
+    #
+    # Tức là suốt từ đầu, việc nhận ra hết hạn mức SỐNG NHỜ MÃ 429 đi kèm —
+    # nhánh dự phòng cuối cùng — chứ câu chữ chưa bao giờ khớp. Hôm nào
+    # Anthropic đổi mã hoặc CLI không phơi `api_error_status` ra (đo 11/09:
+    # trường đó là None trong một lỗi khác) thì hết hạn mức sẽ đi qua lặng lẽ,
+    # CEO không chuyển não, và admin nhận một câu tiếng Anh làm câu trả lời.
+    # Docstring trên đã dặn "bắt được mẫu thật thì chép vào" — bắt ba lần rồi
+    # mà không ai chép, vì mọi lần đều đã có 429 đỡ hộ.
+    r"hit your[^.]{0,40}limit|session limit",
     re.I)
 # "resets at 3pm", "will reset at 15:00", "reset lúc 3pm"
 MAU_RESET = re.compile(

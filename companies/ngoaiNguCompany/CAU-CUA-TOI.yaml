@@ -8,7 +8,7 @@
 #
 # trangThai: "đang học" (còn được gửi mỗi sáng) | "thuộc" (nằm lại để tra).
 
-soDaCap: 2
+soDaCap: 3
 cau:
 - id: c2
   vi: Đây là mật khẩu wifi ạ
@@ -20,3 +20,14 @@ cau:
   nhom: nhận phòng
   trangThai: đang học
   themLuc: '2026-08-24'
+- id: c3
+  vi: Tôi có thể xem hộ chiếu của bạn không? Tôi cần kiểm tra hạn lưu trú.
+  en: May I see your passport? I need to check your permitted stay.
+  enDoc: mây ai xi dơ pát-xpót? ai nít tu chéc dơ pơ-mít-tịt stây
+  zh: 我能看一下您的护照吗？我需要确认您的入境期限。
+  py: Wǒ néng kàn yīxià nín de hùzhào ma? Wǒ xūyào quèrèn nín de rùjìng qīxiàn.
+  zhDoc: ngộ năng khan y-xà nín đơ hù-chào ma? ngộ xuy-yào chuyề-rèn nín đơ rù-chỉnh chí-xiền
+  nhom: nhận phòng
+  trangThai: đang học
+  themLuc: '2026-09-02'
+  khi: khách check-in, cần kiểm tra hạn lưu trú
