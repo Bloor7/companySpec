@@ -1,0 +1,278 @@
+#!/usr/bin/env python3
+"""Events + Autonomy — tự phát hiện mà không tự cấp quyền."""
+import os
+import sqlite3
+import sys
+import tempfile
+import unittest
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(os.path.dirname(HERE))
+sys.path.insert(0, REPO_ROOT)
+
+from core.autonomy import (  # noqa: E402
+    MIN_RUNS_FOR_PROMOTION, TrackRecord, describeLevel, earnedAutonomy,
+    explainAutonomy, maxAutonomyFor, mayActWithoutAsking, mayRetryAfterFailure,
+    recordFromAuditRows, requiresVerification,
+)
+from core.contracts import (  # noqa: E402
+    Event, EventKind, IssuedBy, RiskTier, TaskStatus,
+)
+from core.events import (  # noqa: E402
+    EventBus, NotificationThrottle, Rule, TaskProposal, defaultRules,
+    proposalsAreReadOnly, record, openStore, recentEvents,
+    silenceIsAnIncident,
+)
+
+
+class TestEventBus(unittest.TestCase):
+
+    def testRuleFailureDoesNotKillTheBus(self):
+        """Một luật viết ẩu KHÔNG được làm câm cả khả năng tự phát hiện.
+
+        Cùng họ với O8: cửa vào không được sập. Ở đây cửa là khả năng nhìn
+        thấy vấn đề, và mất nó thì mất trong im lặng.
+        """
+        bus = EventBus()
+
+        def explode(event):
+            raise RuntimeError("luật này hỏng")
+
+        bus.register(Rule("hong", EventKind.buildFailed, explode))
+        bus.register(Rule("tot", EventKind.buildFailed,
+                          lambda e: (TaskProposal("", "", {}, "vẫn chạy"),)))
+
+        proposals = bus.dispatch(Event(kind=EventKind.buildFailed))
+        reasons = [p.reason for p in proposals]
+        self.assertTrue(any("vẫn chạy" in r for r in reasons))
+        self.assertTrue(any("HỎNG" in r for r in reasons))
+
+    def testOnlyMatchingRulesRun(self):
+        bus = EventBus()
+        bus.register(Rule("a", EventKind.buildFailed,
+                          lambda e: (TaskProposal("", "", {}, "build"),)))
+        bus.register(Rule("b", EventKind.quotaHit,
+                          lambda e: (TaskProposal("", "", {}, "quota"),)))
+        proposals = bus.dispatch(Event(kind=EventKind.quotaHit))
+        self.assertEqual([p.reason for p in proposals], ["quota"])
+
+    def testProposalCarriesEventTriggerIdentity(self):
+        """Đề xuất phải mang danh tính `eventTrigger`, để Policy nhận ra nó."""
+        proposal = TaskProposal("x", "y", {}, "vì sao")
+        self.assertIs(proposal.issuedBy, IssuedBy.eventTrigger)
+
+
+class TestEventsProposeButNeverGrant(unittest.TestCase):
+    """EV-1 bằng CODE, không bằng lời dặn."""
+
+    def testDefaultRulesProposeNoWrites(self):
+        writeRisk = {("x", "ghiGiDo"): RiskTier.write}
+        proposals = (TaskProposal("x", "ghiGiDo", {}, "thử"),)
+        offenders = proposalsAreReadOnly(
+            proposals, lambda c, cap: writeRisk[(c, cap)])
+        self.assertTrue(offenders)
+        self.assertIn("không được đề xuất việc ghi", offenders[0])
+
+    def testReadProposalsPass(self):
+        offenders = proposalsAreReadOnly(
+            (TaskProposal("x", "docGiDo", {}, "thử"),),
+            lambda c, cap: RiskTier.read)
+        self.assertEqual(offenders, [])
+
+    def testShippedRulesNeverNameAWriteCapability(self):
+        """Bộ luật mặc định cố ý KHÔNG đề xuất việc ghi nào.
+
+        Hệ tự phát hiện vấn đề là một chuyện; hệ tự sửa mà không ai nhìn là
+        chuyện khác hẳn, và chuyện thứ hai phải đợi Autonomy có bằng chứng.
+        """
+        bus = EventBus()
+        for rule in defaultRules():
+            bus.register(rule)
+        for kind in (EventKind.buildFailed, EventKind.quotaHit,
+                     EventKind.missionStalled):
+            for proposal in bus.dispatch(Event(kind=kind)):
+                with self.subTest(kind=kind.value):
+                    self.assertEqual(
+                        proposal.capability, "",
+                        "luật mặc định đề xuất thẳng một năng lực — phải để "
+                        "admin/Core chọn, không tự chỉ định")
+
+
+class TestNotificationThrottle(unittest.TestCase):
+    """21 tin giống hệt lúc nửa đêm dạy admin bỏ qua thông báo."""
+
+    def setUp(self):
+        self.conn = sqlite3.connect(":memory:")
+        self.conn.row_factory = sqlite3.Row
+        self.throttle = NotificationThrottle(self.conn)
+
+    def testFirstFailureNotifies(self):
+        self.assertEqual(self.throttle.onFailure("notion-503")["action"],
+                         "notify")
+
+    def testRepeatsAreSuppressed(self):
+        self.throttle.onFailure("notion-503")
+        for _ in range(20):
+            result = self.throttle.onFailure("notion-503")
+        self.assertEqual(result["action"], "suppress")
+        self.assertEqual(result["occurrences"], 21)
+
+    def testRecoveryReportsTheCount(self):
+        """"Đã khỏi" một mình không nói lên gì; "đã khỏi sau 21 lần" thì có."""
+        for _ in range(21):
+            self.throttle.onFailure("notion-503")
+        recovery = self.throttle.onRecovery("notion-503")
+        self.assertEqual(recovery["action"], "notifyRecovery")
+        self.assertEqual(recovery["occurrences"], 21)
+
+    def testRecoveryWithoutIncidentIsSilent(self):
+        self.assertEqual(self.throttle.onRecovery("chuaBaoGioHong")["action"],
+                         "silent")
+
+    def testDifferentIncidentsAreIndependent(self):
+        self.throttle.onFailure("notion-503")
+        self.assertEqual(self.throttle.onFailure("telegram-429")["action"],
+                         "notify")
+
+
+class TestSilenceIsAnIncident(unittest.TestCase):
+    """Hệ chỉ biết kêu khi có lỗi thì nó CÂM đúng lúc nó chết."""
+
+    def testLongSilenceRaisesEvent(self):
+        event = silenceIsAnIncident("2026-09-17T00:00:00Z",
+                                    maxSilenceHours=6,
+                                    now="2026-09-19T13:00:00Z")
+        self.assertIsNotNone(event, "61 giờ im lặng mà không ai kêu")
+        self.assertIs(event.kind, EventKind.productionDown)
+
+    def testFreshHeartbeatIsFine(self):
+        self.assertIsNone(silenceIsAnIncident("2026-09-19T12:30:00Z",
+                                              maxSilenceHours=6,
+                                              now="2026-09-19T13:00:00Z"))
+
+    def testNoHeartbeatAtAllIsAnIncident(self):
+        self.assertIsNotNone(silenceIsAnIncident(None))
+
+    def testUnparseableHeartbeatIsAnIncidentNotASilentPass(self):
+        """Mốc hỏng KHÔNG được nuốt thành "chắc ổn" (O10)."""
+        event = silenceIsAnIncident("hôm qua", now="2026-09-19T13:00:00Z")
+        self.assertIsNotNone(event)
+
+
+class TestEventStore(unittest.TestCase):
+
+    def testEventsAreRecordedAndReadBack(self):
+        path = os.path.join(tempfile.mkdtemp(prefix="travisEvt"), "e.sqlite")
+        conn = openStore(path)
+        try:
+            record(conn, Event(kind=EventKind.quotaHit,
+                               payload={"resetsAt": "2am"}, source="test"))
+            rows = recentEvents(conn, EventKind.quotaHit)
+            self.assertEqual(len(rows), 1)
+            self.assertIn("2am", rows[0]["payload"])
+        finally:
+            conn.close()
+
+
+class TestAutonomyCeilings(unittest.TestCase):
+    """Trần theo rủi ro là phần KHÔNG thương lượng."""
+
+    def testIrreversibleIsAlwaysZero(self):
+        """"Đã làm đúng 500 lần" không phải lý lẽ với thứ không lấy lại được."""
+        perfect = TrackRecord("x", "y", totalRuns=500, verifiedSuccesses=500)
+        self.assertEqual(maxAutonomyFor(RiskTier.irreversible), 0)
+        self.assertEqual(earnedAutonomy(perfect, RiskTier.irreversible), 0)
+
+    def testWriteCapsAtTwo(self):
+        perfect = TrackRecord("x", "y", totalRuns=500, verifiedSuccesses=500)
+        self.assertEqual(earnedAutonomy(perfect, RiskTier.write), 2)
+
+    def testReadCanReachFour(self):
+        perfect = TrackRecord("x", "y", totalRuns=500, verifiedSuccesses=500)
+        self.assertEqual(earnedAutonomy(perfect, RiskTier.read), 4)
+
+
+class TestAutonomyIsEarnedNotAssumed(unittest.TestCase):
+
+    def testNoHistoryIsNotTrust(self):
+        """"Chưa hỏng lần nào" KHÁC "luôn chạy đúng" (O10).
+
+        Nhầm hai câu đó là cách một thứ chưa ai thử được trao quyền tự chạy.
+        """
+        fresh = TrackRecord("x", "y")
+        self.assertEqual(fresh.successRate, 0.0)
+        self.assertEqual(earnedAutonomy(fresh, RiskTier.read), 1)
+
+    def testTooFewRunsStaysAtOne(self):
+        record_ = TrackRecord("x", "y", totalRuns=MIN_RUNS_FOR_PROMOTION - 1,
+                              verifiedSuccesses=MIN_RUNS_FOR_PROMOTION - 1)
+        self.assertEqual(earnedAutonomy(record_, RiskTier.read), 1)
+
+    def testLowSuccessRateStaysAtOne(self):
+        record_ = TrackRecord("x", "y", totalRuns=10, verifiedSuccesses=5,
+                              failures=5)
+        self.assertEqual(earnedAutonomy(record_, RiskTier.read), 1)
+
+    def testOneIrreversibleFailureDemotesToZero(self):
+        """Trung bình che mất cái đuôi, mà cái đuôi mới là thứ giết người."""
+        record_ = TrackRecord("x", "y", totalRuns=100, verifiedSuccesses=99,
+                              failures=1, irreversibleFailures=1)
+        self.assertEqual(earnedAutonomy(record_, RiskTier.read), 0)
+
+    def testLadderGoesDownNotOnlyUp(self):
+        """Một cái thang chỉ đi lên là cái thang không ai dám trèo."""
+        good = TrackRecord("x", "y", totalRuns=20, verifiedSuccesses=20)
+        self.assertEqual(earnedAutonomy(good, RiskTier.read), 4)
+        afterTrouble = TrackRecord("x", "y", totalRuns=21,
+                                   verifiedSuccesses=20, failures=1)
+        self.assertLess(earnedAutonomy(afterTrouble, RiskTier.read), 4)
+
+
+class TestAutonomyGates(unittest.TestCase):
+
+    def testActingWithoutAskingNeedsBothLevelAndRisk(self):
+        """Hai điều kiện, không phải một — autonomy tăng CÙNG permission."""
+        self.assertTrue(mayActWithoutAsking(2, RiskTier.read))
+        self.assertFalse(mayActWithoutAsking(4, RiskTier.irreversible))
+        self.assertFalse(mayActWithoutAsking(1, RiskTier.read))
+
+    def testHigherAutonomyDemandsMoreProofNotLess(self):
+        self.assertFalse(requiresVerification(1))
+        self.assertTrue(requiresVerification(2))
+        self.assertTrue(requiresVerification(4))
+
+    def testSelfRetryIsLevelThreePrivilege(self):
+        """Tự thử lại khi chưa biết vì sao hỏng là cách biến lỗi thành vòng lặp."""
+        self.assertFalse(mayRetryAfterFailure(2))
+        self.assertTrue(mayRetryAfterFailure(3))
+
+
+class TestTrackRecordFromAudit(unittest.TestCase):
+    """Lịch sử đọc từ SỔ, không nhận từ model."""
+
+    def testOnlyCompletedCountsAsSuccess(self):
+        rows = [
+            {"status": TaskStatus.completed.value},
+            {"status": TaskStatus.verifying.value},   # chạy xong ≠ đã kiểm chứng
+            {"status": TaskStatus.failed.value},
+        ]
+        record_ = recordFromAuditRows("x", "y", rows)
+        self.assertEqual(record_.totalRuns, 3)
+        self.assertEqual(record_.verifiedSuccesses, 1)
+        self.assertEqual(record_.failures, 1)
+
+    def testIrreversibleFailureIsCounted(self):
+        rows = [{"status": TaskStatus.failed.value, "isReversible": False}]
+        self.assertEqual(
+            recordFromAuditRows("x", "y", rows).irreversibleFailures, 1)
+
+    def testExplanationIsReadable(self):
+        text = explainAutonomy(TrackRecord("expenseCompany", "addExpense"),
+                               RiskTier.write)
+        self.assertIn("expenseCompany.addExpense", text)
+        self.assertIn("chưa đủ", text)
+        self.assertIn(describeLevel(1), text)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
