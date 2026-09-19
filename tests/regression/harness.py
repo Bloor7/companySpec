@@ -17,6 +17,7 @@ import json
 import os
 import subprocess
 import sys
+import uuid
 
 import yaml
 
@@ -30,6 +31,16 @@ COMPANIES_DIR = os.path.join(REPO_ROOT, "companies")
 # cổng thật, ghi vào ĐÚNG sổ thật, và tách ra bằng nhãn chứ không bằng cách
 # trốn khỏi sổ. Muốn dọn thì: DELETE FROM taskLog WHERE traceId LIKE 'reg_%'.
 TRACE_PREFIX = "reg_"
+
+# Mỗi LẦN CHẠY một mã riêng, chèn vào giữa traceId.
+#
+# VÌ SAO: L4 chống lặp đếm số lần cùng một vân tay xuất hiện trong cùng một
+# traceId, và nó đếm trong backOffice/store.sqlite — sổ BỀN VỮNG. Với traceId
+# cố định thì lần chạy thứ hai của bộ test trông y hệt một CEO đang lặp lại
+# chính mình, và L4 chặn đúng như nó phải làm.
+#
+# Hàng rào không sai; người gọi sai. Nên sửa ở người gọi.
+RUN_TOKEN = uuid.uuid4().hex[:8]
 
 
 def loadManifests() -> dict:
@@ -164,7 +175,8 @@ def callDispatch(companyId: str, capabilityName: str, payload: dict,
     chạm handler và trước cả khi lấy token — nên đường này không đụng Notion,
     không đụng mạng, không sinh phiếu duyệt.
     """
-    traceId = f"{TRACE_PREFIX}{companyId}_{capabilityName}{traceSuffix}"
+    traceId = (f"{TRACE_PREFIX}{RUN_TOKEN}_{companyId}_"
+               f"{capabilityName}{traceSuffix}")
     argv = [
         sys.executable, os.path.join(REPO_ROOT, "ops", "dispatch.py"), "call",
         "--company", companyId,

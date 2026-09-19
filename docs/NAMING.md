@@ -144,33 +144,53 @@ người viết company mới — thêm khái niệm mới thì thêm một dòn
 
 ---
 
-## 4. Cách chuyển đổi
+## 4. Phạm vi: áp cho code MỚI, không đổi code cũ
 
-Không sửa tay 50 file. Đổi bằng máy, soát bằng máy:
+**Quyết định 2026-09-19 (admin chốt):** không đổi tên hàng loạt code đang chạy.
+
+Đã đo thử phạm vi của một lần đổi toàn bộ: **3.265 chỗ · 60 file · 38 cột
+SQLite có dữ liệu sống**. Và khi soi kỹ thì nó không hề "mechanical" như vẻ
+ngoài — có ít nhất ba lớp bẫy khiến thay-tự-động là thay-sai:
+
+- **Từ tiếng Việt không dấu trùng định danh.** `ngay` vừa là trường "ngày",
+  vừa là từ "ngay lập tức" nằm trong câu báo lỗi cho admin đọc. Thay mù biến
+  *"phải chặn ngay"* thành *"phải chặn date"* — không lỗi cú pháp, không ai báo.
+- **Tên trùng giá trị.** `tamDung` vừa là tên năng lực, vừa là **giá trị** của
+  `trangThai` trong `WHERE trangThai IN ('moi','tamDung')`. `xong` cũng vậy.
+  Thay tên thì hỏng dữ liệu.
+- **Cột SQLite có dữ liệu sống.** Đổi cột mà sót một chỗ đọc là hỏng lặng lẽ,
+  đúng loại lỗi đắt nhất dự án.
+
+Giá phải trả cao, thứ mua lại được thì thấp: code cũ **đang chạy đúng**.
+
+### Vậy file này để làm gì
+
+`registry/naming.yaml` là **từ điển**, không phải danh sách việc phải làm.
+
+Viết company mới, năng lực mới, trường mới, hay code trong `core/` thì **tra từ
+điển trước**, để không đẻ thêm tên thứ ba cho một khái niệm đã có tên:
 
 ```bash
-python3 ops/namingAudit.py                  # xem còn tên nào lệch luật
-python3 ops/renameIdentifiers.py --plan     # in ra sẽ đổi gì, KHÔNG đổi
-python3 ops/renameIdentifiers.py --apply    # đổi thật
-python3 ops/codemap.py --check              # luật kiến trúc còn đứng không
-python3 tests/regression/run.py             # hành vi có đổi không
+python3 ops/namingAudit.py           # xem từ điển và mọi định danh đang có
+python3 ops/namingAudit.py --check   # chỉ kêu khi SAI THẬT (xem dưới)
 ```
 
-Thứ tự bắt buộc: **`--plan` trước, đọc kỹ, rồi mới `--apply`.**
+`--check` chỉ đỏ với hai thứ, vì chúng là lỗi thật chứ không phải nợ cũ:
 
-### Những thứ KHÔNG được đổi tự động
+| Kêu khi | Vì sao |
+|---|---|
+| Mục từ điển trỏ vào thứ không tồn tại | Từ điển nói dối người tra nó |
+| Tên không phải camelCase | Phạm §7 về hình thức, sửa rẻ |
 
-Máy không được tự đụng vào bốn chỗ này, vì đổi sai thì hỏng lặng lẽ:
+### Bốn chỗ vĩnh viễn KHÔNG đụng
 
-1. **Tên thuộc tính trên Notion.** Chúng là dữ liệu thật của admin, nằm ngoài
-   repo. Company dịch tên trường ↔ tên thuộc tính Notion; chỉ đổi phía repo.
-2. **Giá trị `enum` tiếng Việt.** `danhMuc: [ăn uống, đi lại, …]` là **giá
-   trị**, không phải **tên**. Đổi giá trị là làm hỏng dữ liệu lịch sử trên
-   Notion và làm chết mọi whitelist đang khoá vào chúng.
-3. **Văn xuôi tiếng Việt.** Mô tả, comment, playbook, `SYSTEM.md` vẫn tiếng
-   Việt — admin đọc chúng. Chỉ đổi **định danh** nằm trong đó.
-4. **Dữ liệu lịch sử đã ghi.** `whitelist.jsonl`, `approvals.sqlite`,
-   `store.sqlite` cần **migration riêng**, không phải tìm-và-thay.
+1. **Tên thuộc tính Notion** (`"Số tiền"`, `"Ngày"`) — dữ liệu thật của admin,
+   nằm ngoài repo.
+2. **Giá trị `enum` tiếng Việt** — `[ăn uống, đi lại, …]` là **giá trị**, không
+   phải **tên**. Đổi là làm hỏng lịch sử và giết mọi whitelist khoá vào chúng.
+3. **Văn xuôi tiếng Việt** — mô tả, comment, playbook, `SYSTEM.md`. Admin đọc
+   chúng.
+4. **Dữ liệu lịch sử đã ghi** — `whitelist.jsonl`, `store.sqlite`.
 
 ---
 

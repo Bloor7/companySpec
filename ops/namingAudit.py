@@ -173,13 +173,15 @@ def printReport(report: dict) -> None:
         print()
 
     if report["toRenameCapabilities"]:
-        print(f"NĂNG LỰC CÒN PHẢI ĐỔI ({len(report['toRenameCapabilities'])}):")
+        print(f"TỪ ĐIỂN — năng lực tiếng Việt và tên tiếng Anh tương ứng "
+              f"({len(report['toRenameCapabilities'])}). Tra khi viết code mới; "
+              "KHÔNG phải việc phải làm:")
         for companyId, old, new in report["toRenameCapabilities"]:
             print(f"  {companyId:22} {old:22} → {new}")
         print()
 
     if report["toRenameFields"]:
-        print(f"TRƯỜNG CÒN PHẢI ĐỔI ({len(report['toRenameFields'])}):")
+        print(f"TỪ ĐIỂN — trường ({len(report['toRenameFields'])}):")
         shown = {}
         for companyId, old, new in report["toRenameFields"]:
             shown.setdefault((old, new), []).append(companyId)
@@ -222,12 +224,19 @@ def main() -> int:
         printUncoveredAsYaml(report)
         return 0
 
-    problems = (len(report["toRenameCapabilities"])
-                + len(report["toRenameFields"])
-                + len(report["uncoveredCapabilities"])
-                + len(report["uncoveredFields"])
-                + len(report["notCamelCase"])
-                + len(report["danglingEntries"]))
+    # CHỈ coi là "phạm luật" những thứ SAI THẬT, không phải những tên tiếng Việt
+    # đang chạy tốt.
+    #
+    # Đổi tên hàng loạt code đang chạy là việc tốn công và rủi ro cao mà không
+    # mua lại được gì tương xứng — admin chốt 2026-09-19. Bản đồ ở
+    # registry/naming.yaml giữ vai trò TỪ ĐIỂN: nơi tra "khái niệm này gọi là
+    # gì" khi viết code MỚI, để không đẻ thêm tên thứ ba cho cùng một thứ.
+    #
+    # Hai thứ dưới đây vẫn là lỗi thật:
+    #   · danglingEntries — mục từ điển trỏ vào thứ không tồn tại, tức là từ
+    #     điển đang nói dối người tra nó.
+    #   · notCamelCase    — phạm §7 về hình thức, sửa rẻ.
+    problems = len(report["notCamelCase"]) + len(report["danglingEntries"])
 
     if args.check:
         if problems:
