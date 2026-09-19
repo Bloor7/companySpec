@@ -1,0 +1,310 @@
+# Company giữ HÀNG ĐỢI Ý TƯỞNG và trạng thái làm dở của chúng.
+#
+# Nó sinh ra từ một câu của admin: "một số ý tưởng code anh nảy ra nhưng không
+# thực hiện và kiểm chứng liền được". Vòng lặp bị đứt ở chỗ *nảy ra → nguội →
+# quên*, nên company này vá đúng chỗ đứt: ghi lại lúc nảy ra, và giữ đủ trạng
+# thái để một kẻ thực thi nhặt lên làm bất cứ lúc nào.
+#
+# ĐÂY LÀ SỔ, KHÔNG PHẢI TAY. Nó không sửa mã, không chạy lệnh, không gọi model.
+# Kẻ thực thi (hộp) đọc sổ này rồi làm, rồi ghi ngược lại vào đây. Tách ra vì
+# một lẽ đo được ở chỗ khác: trí nhớ phải CÒN khi mọi thứ khác hỏng — mà thứ
+# hay hỏng nhất chính là kẻ đang làm việc.
+#
+# ── Vì sao có `nhipTim` ──────────────────────────────────────────────────
+# Mất điện thì không ai kịp ghi "tôi vừa chết". Tiến trình biến mất, dòng
+# `dangLam` nằm lại y nguyên, và nhìn từ ngoài nó giống hệt một việc đang chạy
+# ngon lành. Cùng họ với bài học "boot đo bằng GIÂY là boot chết yểu".
+# Nên kẻ thực thi phải đập nhịp tim mỗi lần ghi bước; nhịp tim cũ hơn
+# NHIP_TIM_DUT_PHUT thì `dsViec` gọi thẳng nó là ĐỨT GÁNH ngay lúc đọc, không
+# đợi ai sửa sổ.
+#
+# ── Vì sao `dsViec` (đọc) nói thật mà không ghi ──────────────────────────
+# S3: cron chỉ được ĐỌC. Nếu việc phát hiện đứt gánh nằm ở đường ghi thì một hệ
+# ngủ ba ngày sẽ suốt ba ngày báo "đang làm". Nên đường ĐỌC tự tính lại sự thật
+# mỗi lần đọc; đường GHI (`nhanViec`, `donDep`) mới là chỗ sửa sổ. Đọc nói thật
+# ngay, ghi dọn sau — hai việc khác nhau, đừng gộp.
+#
+# ── Vì sao `buocKeTiep` do CODE viết, không do model tóm tắt ─────────────
+# Đúng lẽ đã dùng cho `gateway.dong_phien()`: lúc hệ hỏng nhất cũng là lúc lời
+# gọi tóm tắt sẽ hỏng theo. Câu "làm gì tiếp" phải sống sót được cảnh mất điện,
+# mất mạng và hết hạn mức — nên nó là một chuỗi ngắn do kẻ thực thi ghi lại
+# bằng tay ở mỗi bước, không phải một đoạn văn nhờ model nghĩ hộ lúc kết thúc.
+#
+# ── Gói tiếp tục: đọc ÍT, không đọc lại từ đầu ───────────────────────────
+# `nhanViec` trả về đúng bốn thứ: việc là gì · các bước ĐÃ xong (mỗi bước một
+# dòng) · câu `buocKeTiep` · nhánh git đang làm dở. Không trả toàn bộ lịch sử.
+# Bản thân mã đã nằm trong git rồi — "đã làm được gì" đọc từ `git log` của
+# nhánh, không đọc từ lời kể.
+
+companyId: xuongCompany
+displayName: "Xưởng ý tưởng"
+version: 0.1.0
+
+# Dòng này được IN VÀO PROMPT CEO (gateway.danh_muc_block). Nó tồn tại vì một
+# lần hỏng có thật, 18/09: admin nhắn "làm thử cái todolist phong cách AoT đi
+# em", CEO thêm 7 đầu việc vào sổ Notion rồi bảo "em không viết file HTML
+# được, cần mở phiên code" — trong khi xưởng và cái hộp làm được đúng việc ấy.
+# Danh mục lúc đó chỉ in TÊN HÀM, nên mọi câu mô tả trong file này CEO chưa
+# từng nhìn thấy.
+goiKhi: >
+  Admin bảo LÀM/VIẾT/DỰNG một thứ mới (web, app, bot, script, tính năng) mà
+  không thể xong trong một câu trả lời — ghi vào đây rồi báo mã việc, hộp sẽ
+  làm và báo lại. ĐỪNG từ chối là "em không viết file được", ĐỪNG dán mã vào
+  chat, và ĐỪNG nhét nó vào todoCompany: todo là đầu việc CỦA ADMIN, xưởng là
+  việc CỦA HỆ. loai=duAn cho dự án riêng, loai=repo khi sửa companySpec.
+  `moTa` viết MỘT DÒNG, dưới 300 chữ, chép ý admin — đừng viết đặc tả dài
+  nhiều dòng: lệnh nhiều dòng bị guard chặn, và hộp tự hỏi chi tiết khi làm.
+
+runtime: code
+entrypoint: ./src/main.py
+runtimeReason: >
+  Không gọi model nào, không chạm mạng. Một bảng sqlite và vài phép đổi trạng
+  thái. Company này phải là thứ RẺ VÀ CHẮC nhất trong hệ, vì nó là chỗ mọi thứ
+  khác quay về hỏi "tôi đang dở việc gì".
+
+dataStore: ./store.sqlite
+secrets: []
+env: []
+canBeCalledBy: [ceo]
+canCall: []
+owner: admin
+
+capabilities:
+  - name: themViec
+    description: >
+      Ghi một ý tưởng vào hàng đợi. Dùng khi admin nảy ra việc muốn làm cho hệ
+      nhưng chưa làm ngay được — "sau này thêm cái…", "giá mà nó tự…", "hôm nào
+      sửa chỗ…". Ghi xong thì NÓI LẠI mã việc cho admin.
+      Đừng tự diễn giải rộng ra: chép ý admin, để nguyên chữ của họ trong moTa.
+      `uuTien` dùng ĐÚNG từ vựng của todoCompany: cao | thường | thấp.
+      ⚠ `loai` QUYẾT ĐỊNH VIỆC ĐƯỢC LÀM Ở ĐÂU, và ghi nhầm thì mã đẻ ra lạc chỗ:
+        · `repo`  — sửa chính repo companySpec. Làm trên bản sao, nhánh
+          y/<mã việc>, tự kiểm bằng codemap --check rồi đẩy lên gương cho admin
+          xem diff. Đây là mặc định.
+        · `duAn`  — một dự án RIÊNG, không liên quan repo này (một web app, một
+          con bot, một script). Làm trong thư mục riêng của hộp, git riêng,
+          KHÔNG đẩy vào gương của companySpec.
+      Admin nói "làm cho anh một cái web/app/bot…" thì đó là `duAn`. Admin nói
+      "thêm/sửa/bỏ … trong hệ" thì đó là `repo`. Không chắc thì HỎI một câu —
+      đoán sai loại tốn cả một lượt của hộp.
+    riskTier: write
+    maxDurationSec: 20
+    # một lần cho nguon=admin là mọi ý tưởng đại ca tự gõ khỏi hỏi lại; ý tưởng do hộp tự đẻ (nguon=hop) vẫn phải hỏi
+    whitelistScope: [nguon]
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [tieuDe]
+      properties:
+        tieuDe: { type: string, minLength: 4, maxLength: 120 }
+        moTa:   { type: string, maxLength: 4000 }
+        # CÙNG TỪ VỰNG VỚI todoCompany, cố ý. Bản đầu khai `integer 1..5` và
+        # đo được ngay lần chạy ca thử đầu tiên (18/09): CEO gửi
+        # `uuTien: "cao"` → bị chặn → gọi lại với `1` → một việc tốn hai lời
+        # gọi. CEO không đoán bừa: `uuTien` ở todoCompany LÀ cao|thường|thấp,
+        # và nó suy sang đúng như dòng đầu bảng "Đã sửa rồi" đã cảnh báo —
+        # chỉ khác là lần này manifest mới là cái sai, không phải model.
+        uuTien: { enum: [cao, thường, thấp] }
+        nguon:  { type: string, enum: [admin, ceo, hop] }
+        loai:   { type: string, enum: [repo, duAn] }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [viecId, tieuDe]
+      properties:
+        viecId:    { type: string }
+        tieuDe:    { type: string }
+        soDangCho: { type: integer }
+        loai:      { type: string }
+
+  - name: dsViec
+    description: >
+      Liệt kê việc trong xưởng. Dùng khi admin hỏi "xưởng đang làm gì", "còn ý
+      tưởng nào chưa làm", hoặc trước khi thêm để khỏi ghi trùng.
+      Việc nào đang làm mà nhịp tim đã cũ sẽ được gọi thẳng là ĐỨT GÁNH — mất
+      điện hoặc tiến trình chết giữa chừng. Nói nguyên văn điều đó với admin,
+      đừng làm tròn thành "đang chạy".
+    riskTier: read
+    maxDurationSec: 20
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        trangThai: { type: string, enum: [moi, dangLam, tamDung, choXem, daGop, bo, hong] }
+        gioiHan:   { type: integer, minimum: 1, maximum: 50 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [cacViec, tong]
+      properties:
+        cacViec:   { type: array }
+        tong:      { type: integer }
+        dangDo:    { type: integer }
+        choXem:    { type: integer }
+
+  - name: nhanViec
+    description: >
+      Kẻ thực thi nhận việc kế tiếp và lấy GÓI TIẾP TỤC để làm ngay mà không
+      phải đọc lại từ đầu. CEO hầu như không cần gọi cái này — nó dành cho hộp.
+      Thứ tự nhận: việc đang tạm dừng đã tới giờ thử lại → việc đứt gánh →
+      việc mới theo ưu tiên. Tức là DỞ DANG LUÔN ĐƯỢC LÀM TRƯỚC việc mới, vì
+      một việc bỏ dở tốn nhiều hơn một việc chưa bắt đầu.
+    riskTier: write
+    maxDurationSec: 20
+    # một lần cho aiLam=hop là thợ nhận việc suốt 90 ngày không hỏi nữa
+    whitelistScope: [aiLam]
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        aiLam: { type: string, minLength: 2, maxLength: 40 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [coViec]
+      properties:
+        coViec:      { type: boolean }
+        viecId:      { type: string }
+        tieuDe:      { type: string }
+        moTa:        { type: string }
+        nhanh:       { type: string }
+        buocKeTiep:  { type: string }
+        buocDaXong:  { type: array }
+        lanTruocDung: { type: string }
+        # repo hay duAn — thợ rẽ hai đường hoàn toàn khác nhau ở đây.
+        loai:        { type: string }
+
+  - name: ghiBuoc
+    description: >
+      Kẻ thực thi ghi lại một bước: bắt đầu, xong, hay hỏng. Mỗi lần ghi cũng
+      là một nhịp tim — hệ biết nó còn sống nhờ đúng chỗ này.
+      `buocKeTiep` là MỘT CÂU ngắn nói việc kế tiếp, viết lúc còn đang tỉnh.
+      Đó là thứ duy nhất đọc lại sau khi mất điện, nên viết cho người khác đọc
+      được, đừng viết ẩn ý.
+    riskTier: write
+    maxDurationSec: 20
+    # ba nhóm: dangLam/xong/hong — ba lần bấm, xong đời
+    whitelistScope: [trangThai]
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [viecId, ten, trangThai]
+      properties:
+        viecId:     { type: string, minLength: 4, maxLength: 40 }
+        ten:        { type: string, minLength: 2, maxLength: 200 }
+        trangThai:  { type: string, enum: [dangLam, xong, hong] }
+        ketQua:     { type: string, maxLength: 2000 }
+        maThoat:    { type: integer, minimum: -1, maximum: 255 }
+        buocKeTiep: { type: string, maxLength: 500 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [viecId, soBuoc]
+      properties:
+        viecId: { type: string }
+        soBuoc: { type: integer }
+
+  - name: tamDung
+    description: >
+      Dừng một việc đang làm và nói RÕ vì sao, kèm mốc nên thử lại.
+      `lyDo` là loại hỏng, không phải câu văn: hetHanMuc (Claude báo chạm trần)
+      · matMang · loi · admin (admin bảo dừng) · dutGanh (mất điện, tiến trình
+      chết — thường do donDep ghi chứ không phải ai gọi tay).
+      Hết hạn mức thì đặt `tiepLuc` đúng giờ nhà cung cấp báo reset, để xưởng
+      không cắn vào hạn mức lần nữa trước giờ đó.
+    riskTier: write
+    maxDurationSec: 20
+    # theo LOẠI hỏng, không theo việc: 'luôn cho phép dừng vì hetHanMuc' là một câu có nghĩa, và nó không kéo theo quyền dừng vì lý do khác
+    whitelistScope: [lyDo]
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [viecId, lyDo]
+      properties:
+        viecId:     { type: string, minLength: 4, maxLength: 40 }
+        lyDo:       { type: string, enum: [hetHanMuc, matMang, loi, admin, dutGanh] }
+        ghiChu:     { type: string, maxLength: 1000 }
+        tiepLuc:    { type: string, minLength: 16, maxLength: 20 }
+        buocKeTiep: { type: string, maxLength: 500 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [viecId, trangThai]
+      properties:
+        viecId:    { type: string }
+        trangThai: { type: string }
+        tiepLuc:   { type: string }
+
+  - name: xongViec
+    description: >
+      Đóng một việc. `trangThai` phải nói THẬT: choXem là đã làm xong và đang
+      đợi admin duyệt gộp; daGop là admin đã gộp rồi; hong là làm không được;
+      bo là quyết định không làm nữa.
+      ⚠ ĐỪNG dùng choXem cho một việc mới chỉ có kế hoạch. Bài học cũ của dự
+      án: `is_done()` tưởng là thành công, agent tự gọi "xong" với nội dung là
+      một câu kế hoạch. Không chắc đã chạy được thì đó là CHƯA XONG.
+    riskTier: write
+    maxDurationSec: 20
+    # choXem/daGop/bo/hong — đóng việc kiểu nào là một quyết định khác nhau
+    whitelistScope: [trangThai]
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [viecId, trangThai, ketQua]
+      properties:
+        viecId:    { type: string, minLength: 4, maxLength: 40 }
+        trangThai: { type: string, enum: [choXem, daGop, bo, hong] }
+        ketQua:    { type: string, minLength: 4, maxLength: 3000 }
+        nhanh:     { type: string, maxLength: 120 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [viecId, trangThai]
+      properties:
+        viecId:    { type: string }
+        trangThai: { type: string }
+        soBuoc:    { type: integer }
+
+  - name: donDep
+    description: >
+      Soát những việc đang làm mà nhịp tim đã tắt, chuyển chúng về tạm dừng với
+      lý do dutGanh để lần sau nhận lại được. Chạy sau khi máy bật lại, hoặc
+      khi thấy xưởng báo có việc đứt gánh.
+      Nó KHÔNG làm mất gì: các bước đã ghi giữ nguyên, `buocKeTiep` giữ nguyên.
+    riskTier: write
+    maxDurationSec: 30
+    whitelistScope: []
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        quaPhut: { type: integer, minimum: 2, maximum: 1440 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [daDon]
+      properties:
+        daDon:   { type: integer }
+        cacViec: { type: array }
+
+  - name: nhatKy
+    description: >
+      Xưởng ĐÃ LÀM những gì — trí nhớ giữa các phiên. Dùng khi admin hỏi "mấy
+      hôm nay em làm được gì", hoặc khi cần biết một ý tưởng cũ đã xử lý tới
+      đâu, để khỏi làm lại.
+      Trả về việc đã đóng kèm kết quả thật và số bước đã chạy, mới nhất trước.
+    riskTier: read
+    maxDurationSec: 20
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        soNgay:  { type: integer, minimum: 1, maximum: 180 }
+        gioiHan: { type: integer, minimum: 1, maximum: 50 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [cacMuc, tong]
+      properties:
+        cacMuc: { type: array }
+        tong:   { type: integer }

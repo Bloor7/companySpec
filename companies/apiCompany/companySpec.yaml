@@ -1,0 +1,150 @@
+# Company giữ DANH MỤC các API công khai — một cuốn sổ tra, KHÔNG phải một cửa ra.
+#
+# ĐỌC DÒNG NÀY TRƯỚC KHI THÊM NĂNG LỰC: company này chỉ được TRA, không được
+# GỌI API để lấy dữ liệu. Tra ra một API không có nghĩa là được phép dùng nó.
+# Muốn dùng thật thì viết thành năng lực riêng, khai vào companySpec.yaml của
+# company phụ trách lĩnh vực ấy, và đi qua dispatcher như mọi thứ khác.
+#
+# VÌ SAO GẮT THẾ: nếu một năng lực vừa tra được địa chỉ vừa gọi được địa chỉ
+# đó, thì hệ có một thứ GỌI ĐƯỢC BẤT KỲ URL NÀO — đúng thứ P2 tồn tại để chặn,
+# và là cửa rộng nhất từng mở trong dự án này. Ranh giới nằm ở đây, trong
+# manifest, chứ không nằm trong lời dặn nào cả.
+#
+# `kiemApi` là ngoại lệ HẸP và có chủ ý: nó gõ cửa một địa chỉ để xem còn sống
+# không, rồi trả về ĐÚNG mã trạng thái và thời gian phản hồi — KHÔNG trả nội
+# dung. Không trả nội dung thì nó không dùng thay cho một lời gọi API được.
+# Thêm ba hàng rào bằng mã: chỉ https, tên miền phải CÓ TRONG danh mục, và địa
+# chỉ phân giải ra phải là IP công cộng (chặn 127.0.0.1, 192.168.*, 169.254.*).
+#
+# NGUỒN DỮ LIỆU: github.com/public-apis/public-apis — README.md, mỗi mục một
+# dòng bảng với sẵn cột Auth/HTTPS/CORS. Đo 18/09: 2.330 dòng · ~1.844 mục ·
+# 52 nhóm. Không cài gì, không thêm phụ thuộc: kéo file chữ về rồi bóc.
+#
+# MẤY CỘT ẤY LÀ LỜI KHAI, KHÔNG PHẢI PHÉP ĐO. "HTTPS: Yes" do người đóng góp
+# tự điền, không ai kiểm. Muốn chắc thì `kiemApi` — cùng lẽ với `nao.py kiem`
+# hỏi thật nhà cung cấp thay vì tin tên model chép trong tài liệu.
+#
+# DANH MỤC CÓ HẠN SỬ DỤNG. API chết mà không nhà nào báo ai, y hệt chuyện tên
+# model cũ đi trong vài ngày. Nên mọi năng lực đọc ở đây đều trả kèm TUỔI của
+# danh mục, để người đọc biết mình đang tin vào một bản chụp bao giờ.
+
+companyId: apiCompany
+displayName: "Phòng tra API"
+version: 0.1.0
+
+runtime: code
+entrypoint: ./src/main.py
+runtimeReason: >
+  Không gọi model nào. Bóc một file Markdown thành bảng sqlite rồi tìm chuỗi.
+  Việc đã biết trước cách làm thì viết thẳng — để agent lái là trả tiền cho
+  thứ code làm đúng hơn và rẻ hơn.
+
+dataStore: ./store.sqlite
+secrets: []
+env: []
+canBeCalledBy: [ceo]
+canCall: []
+owner: admin
+
+capabilities:
+  - name: timApi
+    description: >
+      Tìm trong danh mục API công khai theo từ khoá. Dùng khi cần một nguồn dữ
+      liệu mà hệ chưa có: thời tiết, tỷ giá, mã bưu chính, ảnh, dịch thuật…
+      Trả về ứng viên kèm cột Auth (có cần khoá không), HTTPS, CORS — CHÚNG LÀ
+      LỜI KHAI CỦA NGƯỜI ĐÓNG GÓP, chưa ai đo. Muốn biết còn sống không thì
+      gọi kiemApi.
+      ⚠ Tìm ra rồi KHÔNG có nghĩa là hệ gọi được. Muốn dùng thật phải viết
+      thành năng lực mới và khai vào manifest — nói rõ điều đó với admin thay
+      vì hứa là sẽ lấy được dữ liệu ngay.
+      `khongCanKhoa: true` để chỉ lấy loại không phải đăng ký tài khoản.
+    riskTier: read
+    maxDurationSec: 20
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [tuKhoa]
+      properties:
+        tuKhoa:       { type: string, minLength: 2, maxLength: 80 }
+        nhom:         { type: string, minLength: 2, maxLength: 60 }
+        khongCanKhoa: { type: boolean }
+        gioiHan:      { type: integer, minimum: 1, maximum: 30 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [ketQua, tong, tuoiDanhMuc]
+      properties:
+        ketQua:      { type: array }
+        tong:        { type: integer }
+        tuoiDanhMuc: { type: string }
+        capNhatLuc:  { type: string }
+
+  - name: xemApi
+    description: >
+      Xem một mục trong danh mục theo đúng tên. Lấy tên từ timApi, đừng đoán.
+    riskTier: read
+    maxDurationSec: 20
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [ten]
+      properties:
+        ten: { type: string, minLength: 1, maxLength: 120 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [api, tuoiDanhMuc]
+      properties:
+        api:         { type: object }
+        tuoiDanhMuc: { type: string }
+
+  - name: capNhatDanhMuc
+    description: >
+      Kéo lại danh mục từ public-apis rồi dựng lại bảng. Chạy khi danh mục đã
+      cũ (mọi năng lực đọc đều nói tuổi của nó) hoặc khi tìm không ra thứ đáng
+      lẽ phải có. Miễn phí, không cần khoá, không gửi gì của admin đi đâu.
+    riskTier: write
+    maxDurationSec: 90
+    whitelistScope: []
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        batBuoc: { type: boolean }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [tongMuc, capNhatLuc]
+      properties:
+        tongMuc:    { type: integer }
+        themMoi:    { type: integer }
+        matDi:      { type: integer }
+        soNhom:     { type: integer }
+        capNhatLuc: { type: string }
+        boQua:      { type: boolean }
+
+  - name: kiemApi
+    description: >
+      Gõ cửa MỘT địa chỉ trong danh mục để xem nó còn sống không. Trả về mã
+      trạng thái HTTP và thời gian phản hồi — CỐ Ý KHÔNG trả nội dung, vì đây
+      là phép đo sức khoẻ, không phải một lời gọi API.
+      Dùng trước khi khuyên admin dựa vào một API nào đó: cột trong danh mục
+      là lời khai, cái này mới là phép đo.
+    riskTier: read
+    maxDurationSec: 30
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [ten]
+      properties:
+        ten: { type: string, minLength: 1, maxLength: 120 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [ten, ketLuan]
+      properties:
+        ten:         { type: string }
+        url:         { type: string }
+        maTrangThai: { type: integer }
+        msPhanHoi:   { type: integer }
+        ketLuan:     { type: string }

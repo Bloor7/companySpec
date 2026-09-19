@@ -1,0 +1,20 @@
+# Nhịp lấy việc của hộp. Xem hop-tho.service để biết cách cài.
+#
+# 5 phút: đủ nhanh để đại ca nhắn một ý tưởng rồi đi pha cà phê xong là nó đã
+# bắt đầu, đủ chậm để xưởng trống thì mỗi giờ chỉ tốn 12 lời gọi đọc (rẻ,
+# không đụng hạn mức LLM — `nhanViec` không gọi model nào).
+#
+# `Persistent=true`: máy tắt qua đêm thì sáng bật lên chạy BÙ một lần, thay vì
+# đợi trọn 5 phút nữa. Bù đúng một lần thôi — systemd không dồn các lần đã lỡ.
+
+[Unit]
+Description=Nhịp lấy việc của thợ trong hộp
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Persistent=true
+Unit=hop-tho.service
+
+[Install]
+WantedBy=timers.target

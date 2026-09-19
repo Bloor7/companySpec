@@ -1,0 +1,38 @@
+# Cầu — cửa duy nhất từ HỘP (distro openclaw) vào hệ. Xem hop/README.md.
+#
+#   cp ops/companyspec-cau.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now companyspec-cau
+#
+# Xem log:     journalctl --user -u companyspec-cau -f
+# Tắt:         systemctl --user disable --now companyspec-cau
+# Soát cấu hình mà KHÔNG mở cổng:  python3 ops/cau.py --tu-kiem
+
+[Unit]
+Description=companySpec cầu — cửa từ hộp openclaw vào dispatch
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/companySpec
+
+# CAU_TOKEN nằm trong đây. Cầu tự đọc lấy; không truyền khoá qua dòng lệnh,
+# vì dòng lệnh thì `ps` của mọi tiến trình khác đều đọc được.
+EnvironmentFile=%h/companySpec/ops/.env
+
+Environment=PATH=%h/.nvm/versions/node/v22.22.3/bin:/usr/local/bin:/usr/bin:/bin
+
+ExecStart=/usr/bin/python3 %h/companySpec/ops/cau.py
+
+Restart=on-failure
+RestartSec=5
+
+# Giống gateway: chỉ giết tiến trình chính, KHÔNG giết cây tiến trình con —
+# restart cầu giữa lúc một company đang chạy dở là mất trắng công việc đó.
+KillMode=process
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

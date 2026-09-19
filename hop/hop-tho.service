@@ -1,0 +1,34 @@
+# Thợ của HỘP — chạy TRONG distro openclaw, không chạy ở hệ chính.
+#
+#   (trong hộp, user hop)
+#   mkdir -p ~/.config/systemd/user
+#   cp hop-tho.service hop-tho.timer ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now hop-tho.timer
+#   sudo loginctl enable-linger hop        # chạy cả khi chưa đăng nhập
+#
+# Xem log:  journalctl --user -u hop-tho -f
+# Dừng:     systemctl --user disable --now hop-tho.timer
+#
+# VÌ SAO LÀ TIMER CHỨ KHÔNG PHẢI VÒNG LẶP VÔ HẠN: một vòng lặp treo thì treo
+# im lặng; một timer thì lần chạy sau vẫn tới, và `journalctl` ghi lại từng
+# lần một. Cộng thêm `--mot-vong`: mỗi lần chạy làm ĐÚNG một việc rồi thoát,
+# nên không có trạng thái nào sống lâu hơn một việc.
+#
+# VÌ SAO KHÔNG CÓ AI Ở HỆ CHÍNH GỌI SANG: chiều host→hộp không tồn tại (interop
+# tắt ở cả hai distro, cố ý). Hộp tự tới lấy việc. Muốn nó làm gì thì bỏ việc
+# vào xưởng — "/tay them <ý tưởng>" trong Telegram — rồi nó tự nhặt.
+
+[Unit]
+Description=Thợ của hộp — làm một việc trong xưởng ý tưởng
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h
+ExecStart=/usr/bin/python3 %h/tho.py --mot-vong
+
+# Một việc có thể chạy rất lâu (não được cấp 900 giây). Trần ở đây phải LỚN
+# HƠN HẲN trần bên trong, đúng chiều đã ghi trong CLAUDE.md: cắt sớm ở tầng
+# ngoài là giết một việc còn đang chạy đúng.
+TimeoutStartSec=1800

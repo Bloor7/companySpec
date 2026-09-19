@@ -595,6 +595,7 @@ def _dung_brief() -> str:
         ("goalCompany", "listPlans", {}),
         ("calendarCompany", "todayAgenda", {}),
         ("budgetCompany", "getBudget", {}),
+        ("xuongCompany", "dsViec", {}),
     ])
 
     vi = kq.get("walletCompany", {})
@@ -634,6 +635,33 @@ def _dung_brief() -> str:
                 f'  {e["gio"]}  {e["ten"]}' for e in ev))
         else:
             phan.append("Lịch hôm nay: trống")
+
+    # XƯỞNG — chỉ hiện khi CÓ GÌ ĐÓ, và cố ý rất ngắn.
+    #
+    # VÌ SAO NÓ Ở ĐÂY: đây là trí nhớ giữa các phiên. Phiên CEO đứt sau 30 phút
+    # hoặc 25 lượt; nếu việc dở dang chỉ nằm trong sổ mà không ai đưa lên, thì
+    # phiên sau trắng và admin phải kể lại — đúng nỗi đau đã có với hồ sơ hồi
+    # 21/08. Đưa lên đây thì CEO biết mà không phải đi hỏi.
+    #
+    # VÌ SAO CHỈ HIỆN KHI KHÔNG RỖNG: bức tranh nạp MỌI lượt, kể cả lượt hỏi
+    # giờ. Một dòng "xưởng: không có gì" lặp lại nghìn lần là thứ vừa tốn chỗ
+    # vừa dạy người đọc bỏ qua cả khối.
+    xuong = kq.get("xuongCompany", {})
+    if xuong.get("status") == "ok":
+        o = xuong.get("output") or {}
+        if o.get("dangDo") or o.get("choXem"):
+            dong = []
+            for v in (o.get("cacViec") or [])[:4]:
+                if v["trangThai"] in ("moi",):
+                    continue
+                phu = f" — {v['buocKeTiep'][:60]}" if v.get("buocKeTiep") else ""
+                dong.append(f"  [{v['trangThai']}] {v['tieuDe'][:55]}{phu}")
+            if dong:
+                phan.append(
+                    f"Xưởng ý tưởng ({o.get('choXem', 0)} việc chờ đại ca xem, "
+                    f"{o.get('dangDo', 0)} đang dở):\n" + "\n".join(dong)
+                    + "\n  Chi tiết thì gọi xuongCompany.dsViec; đã làm được "
+                      "những gì thì gọi xuongCompany.nhatKy.")
 
     ns = kq.get("budgetCompany", {})
     if ns.get("status") == "ok" and (ns.get("output") or {}).get("hanMuc"):
@@ -1232,7 +1260,16 @@ def danh_muc_block() -> str:
             # không biết giá trị thì vẫn trượt: sau khi thống nhất tên, 4/4 lần
             # bị từ chối ngày 08/08 đều là sai enum (`loai`, `danhMuc`, `vi`).
             # Đo được +457 token cho 18 trường — rẻ hơn một lượt gọi lại.
-            for k in bat_buoc:
+            # ENUM CỦA CẢ TRƯỜNG TUỲ CHỌN, không chỉ trường bắt buộc.
+            #
+            # Bậc sâu hơn của bài học 21/08 ("trường tuỳ chọn không có trong
+            # danh mục"). Lần đó chữa bằng cách in TÊN trường tuỳ chọn sau dấu
+            # `+`. Đo 19/09 thì lộ ra tầng tiếp theo: biết tên mà không biết
+            # GIÁ TRỊ thì vẫn trượt. Ca thử `lam-mot-thu-thi-vao-xuong` chạy
+            # hai lần, hai lần CEO gửi `uuTien` sai — "cao" rồi "vừa" — đều là
+            # từ tiếng Việt hoàn toàn hợp lý, chỉ là không nằm trong enum.
+            # Mỗi lần sai là một vòng gọi lại: một việc tốn hai lời gọi.
+            for k in props:
                 e = (props.get(k) or {}).get("enum")
                 if e:
                     nang_luc.append(f"    {k}: {' | '.join(map(str, e))}")
@@ -1249,8 +1286,28 @@ def danh_muc_block() -> str:
                     ten_truong = ", ".join(f"{n}*" if n in bb else n for n in con)
                     nang_luc.append(f"    {k}: MẢNG các object {{{ten_truong}}} (* = bắt buộc)")
         if nang_luc:
-            dong.append(f"· {cid} — {spec.get('displayName','')}\n    "
-                        + "\n    ".join(nang_luc))
+            # MỘT DÒNG "GỌI KHI NÀO", nếu company tự khai.
+            #
+            # ĐO ĐƯỢC 18/09, ngoài đời chứ không phải trong ca thử: admin nhắn
+            # "Làm thử cái todolist phong cách AoT đi em". CEO hiểu là thêm 7
+            # đầu việc vào sổ Notion thật, và nói "em không tự viết file HTML
+            # được, cần mở phiên code" — trong khi xưởng ý tưởng và cái hộp
+            # làm được đúng việc đó, vừa dựng xong hôm ấy.
+            #
+            # Lý do không phải model kém: danh mục này CHỈ IN TÊN HÀM. Mọi câu
+            # mô tả công phu trong manifest — "admin nói làm cho anh một cái
+            # web/app/bot thì đó là duAn" — CEO chưa bao giờ nhìn thấy. Cùng
+            # họ với bài học "trường model không nhìn thấy là trường model sẽ
+            # xử lý sai", chỉ khác cấp: company model không biết dùng khi nào
+            # là company model sẽ không dùng.
+            #
+            # Chỉ in cho company nào TỰ KHAI `goiKhi`, nên giá phải trả tỉ lệ
+            # với số chỗ thật sự cần — không phải +22 dòng cho cả danh mục.
+            goi_khi = (spec.get("goiKhi") or "").strip().replace("\n", " ")
+            tieu_de_cty = f"· {cid} — {spec.get('displayName','')}"
+            if goi_khi:
+                tieu_de_cty += f"\n    ↳ GỌI KHI: {goi_khi}"
+            dong.append(tieu_de_cty + "\n    " + "\n    ".join(nang_luc))
     if not dong:
         return ""
     return ("\n\n## Danh mục company\n\n"

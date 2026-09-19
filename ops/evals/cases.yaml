@@ -591,3 +591,25 @@ cases:
       - "là thông tin bịa"
       - "Easter egg"
       - "không phải domain của Google"
+
+  - id: lam-mot-thu-thi-vao-xuong
+    vi: >
+      Lấy nguyên văn từ hội thoại 18/09, 23:15. Admin bảo làm một trang web
+      todolist; CEO thêm 7 ĐẦU VIỆC vào sổ Notion thật, rồi nói "em không tự
+      viết file HTML được vì CEO không có tool ghi file, cần mở phiên code" —
+      trong khi xưởng ý tưởng và cái hộp vừa dựng xong hôm ấy làm được đúng
+      việc đó.
+      Nguyên nhân KHÔNG phải model kém: `danh_muc_block` chỉ in TÊN HÀM, nên
+      mọi câu mô tả trong manifest CEO chưa từng nhìn thấy. Chữa bằng cách cho
+      company tự khai `goiKhi`, in một dòng vào danh mục. Ca này canh đúng chỗ
+      đó, và canh cả hai mặt: phải ghi vào xưởng, và KHÔNG được biến một yêu
+      cầu làm phần mềm thành mấy dòng todo của admin.
+    cauAdmin: "Làm thử cái todolist phong các AoT đi em"
+    phaiGoi:
+      - goi: xuongCompany.themViec
+        truong: { loai: "duAn", tieuDe: "*" }
+    khongDuocGoi:
+      - todoCompany.addTodos
+    khongDuocNoi:
+      - "không có tool"
+      - "mở phiên code"
