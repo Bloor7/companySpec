@@ -47,9 +47,31 @@ def cac_tep_py() -> dict:
     return ra
 
 
+#: Thư mục gốc được coi là GÓI. Cần vì `from core.policy import decide` không
+#: có module nào tên `core.py` để nhận ra.
+GOI_NOI_BO = {"core", "ops", "lib", "companies", "backOffice", "hop",
+              "employees", "tests"}
+
+
 def phu_thuoc(tep: dict) -> dict:
     """Ai import module nội bộ nào. Đọc bằng AST — grep sẽ dính cả chuỗi và
-    comment, mà chuỗi thì không phải phụ thuộc."""
+    comment, mà chuỗi thì không phải phụ thuộc.
+
+    ⚠ SỬA 2026-09-19 — BỘ QUÉT NÀY TỪNG MÙ VỚI IMPORT DẠNG GÓI.
+
+    Bản cũ chỉ so tên module PHẲNG (`import db`). Với `from ops import gateway`
+    thì `n.module` là "ops", mà không có file nào tên `ops.py`, nên nó không
+    khớp gì cả và cạnh phụ thuộc BIẾN MẤT. `from core.policy import decide`
+    cũng vậy.
+
+    Trước đây cả repo dùng import phẳng nên chưa ai gặp. Nhưng hệ quả là luật
+    C4.2 (`core/` không được phụ thuộc ra ngoài) treo trên một bộ quét mù —
+    một hàng rào trông như đang canh mà chưa từng nhìn thấy gì. Đúng họ
+    "hàng rào giả", phát hiện bằng cách THỬ PHÁ chứ không bằng đọc mã.
+
+    Nay soát cả ba đường: tên gói gốc, mọi đoạn của tên có chấm, và tên được
+    lôi ra trong `from X import Y`.
+    """
     noi_bo = {os.path.splitext(os.path.basename(p))[0] for p in tep}
     canh = {}
     for rel, p in tep.items():
@@ -58,18 +80,23 @@ def phu_thuoc(tep: dict) -> dict:
         except (SyntaxError, OSError):
             continue
         goi = set()
+
+        def nhan(ten: str):
+            if ten and (ten in noi_bo or ten in GOI_NOI_BO):
+                goi.add(ten)
+
         for n in ast.walk(cay):
-            ten = None
             if isinstance(n, ast.Import):
                 for a in n.names:
-                    g = a.name.split(".")[0]
-                    if g in noi_bo:
-                        goi.add(g)
+                    for phan in a.name.split("."):
+                        nhan(phan)
                 continue
-            if isinstance(n, ast.ImportFrom) and n.module:
-                ten = n.module.split(".")[0]
-            if ten and ten in noi_bo:
-                goi.add(ten)
+            if isinstance(n, ast.ImportFrom):
+                for phan in (n.module or "").split("."):
+                    nhan(phan)
+                # `from ops import gateway` — thứ bị lôi ra cũng là phụ thuộc.
+                for a in n.names:
+                    nhan(a.name)
         canh[rel] = goi
     return canh
 
@@ -79,6 +106,8 @@ def tang_cua(rel: str) -> str:
         return "company"
     if rel.startswith("lib/"):
         return "lib"
+    if rel.startswith("core/"):
+        return "core"
     if rel.startswith("ops/"):
         return "ops"
     if rel.startswith("backOffice/"):
@@ -366,6 +395,21 @@ def soat(tep: dict, canh: dict) -> list:
             nguoc = goi - lib
             if nguoc:
                 pham.append(f"C4.1 · {rel} phụ thuộc ngược: {', '.join(sorted(nguoc))}")
+        elif tang == "core":
+            # C4.2 — core/ là LUẬT, không phải người vận chuyển.
+            #
+            # Nó chỉ được phụ thuộc vào chính nó và lib/. Import `ops.gateway`
+            # hay một company vào đây là phá đúng thứ việc tách tầng vừa mua
+            # được: quyết định quyền hạn hết tất định, và muốn kiểm một luật
+            # lại phải dựng cả một lượt chạy thật.
+            #
+            # Chiều NGƯỢC LẠI thì được: ops/ gọi vào core/ là đúng hình.
+            trong_core = {os.path.splitext(os.path.basename(p))[0]
+                          for r, p in tep.items() if tang_cua(r) == "core"}
+            la = goi - lib - trong_core
+            if la:
+                pham.append(f"C4.2 · {rel} phụ thuộc ra ngoài core/+lib/: "
+                            f"{', '.join(sorted(la))}")
     # Không ai được import thẳng vào ruột một company.
     for rel, p in tep.items():
         if tang_cua(rel) == "company":

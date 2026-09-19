@@ -1,0 +1,112 @@
+# brainPolicy.yaml — chọn bộ não nào cho việc gì, và ai được nhận dữ liệu gì.
+#
+# Danh sách model và chuỗi dự phòng nằm ở registry/models.yaml. File này chỉ
+# nói CHỌN AI, không nói model nào tồn tại.
+#
+# ⚠ ĐỌC docs/CORE_CONTRACT.md §7 trước khi sửa.
+#
+# ═══════════════════════════════════════════════════════════════════════
+# "LOCAL-FIRST" KHÔNG CÓ NGHĨA DỮ LIỆU KHÔNG BAO GIỜ RỜI MÁY
+# ═══════════════════════════════════════════════════════════════════════
+#
+# Dùng API của Claude/Gemini là context tương ứng ĐI RA NGOÀI, nằm trên máy
+# người khác, chịu chính sách dữ liệu của họ — nhiều gói miễn phí đổi lại bằng
+# quyền dùng dữ liệu để luyện model.
+#
+# ĐO THẬT 2026-08-27 (bắt gói tin, câu hỏi "tháng này tiêu bao nhiêu"): một
+# lượt đi ra 37.282 byte, system prompt 28.443 ký tự, bên trong có hồ sơ đời tư
+# (giờ dậy, nghề, nơi ở) và số dư từng ví — sang một nhà miễn phí mà admin chưa
+# từng đọc điều khoản.
+#
+# Bảng `dataBoundary` dưới đây tồn tại vì phép đo đó.
+
+version: 1
+
+# ───────────────────────── ranh giới dữ liệu ─────────────────────────
+#
+# Mức dữ liệu cao nhất của một Task quyết định nhà nào ĐƯỢC PHÉP nhận nó.
+# Đây là luật CHẶN, không phải gợi ý xếp hạng: nhà không có tên ở đây thì
+# không nhận được, kể cả khi nó rẻ hơn, nhanh hơn, và đang rảnh.
+dataBoundary:
+
+  # Thứ vốn đã công khai: tài liệu, trang web, kết quả tìm kiếm.
+  # Gửi đi không mất gì vì nó vốn ở ngoài rồi.
+  public:
+    allowed: [claude, gemini, groq, cerebras, openrouter, mistral, local]
+
+  # Mã nguồn dự án, kiến trúc, cấu hình. Không bí mật, nhưng là của admin.
+  # Chỉ những nhà admin đã chấp nhận điều khoản.
+  internal:
+    allowed: [claude, gemini, local]
+
+  # Đời tư: thói quen, sức khoẻ, nhật ký, quan hệ.
+  private:
+    allowed: [claude, local]
+    preferred: [local]
+
+  # Số dư ví, thu chi, cấu hình quyền, hình dạng hàng rào.
+  # Biết hàng rào đặt ở đâu là biết chỗ nào KHÔNG có hàng rào.
+  sensitive:
+    allowed: [claude, local]
+    preferred: [local]
+
+  # Khoá, token, mật khẩu. KHÔNG nhà nào cả, kể cả local.
+  #
+  # Danh sách rỗng ở đây nghĩa là ĐÓNG, và đó là chủ ý — nhưng vì `[]` từng lừa
+  # cả người viết lẫn người đọc ở whitelistScope, nó được viết TƯỜNG MINH bằng
+  # `denyAll: true` thay vì để người đọc tự suy ra từ một danh sách trống.
+  secret:
+    allowed: []
+    denyAll: true
+
+# ───────────────────────── chọn não theo loại việc ─────────────────────────
+#
+# `preferred` thử trước, hết thì `fallback`. Cả hai còn phải qua dataBoundary —
+# ưu tiên KHÔNG nâng được quyền.
+#
+# Không hardcode model = vai (§11 kế hoạch): đây là SỞ THÍCH, không phải danh
+# tính. Đổi model không làm mất employee (E-1).
+taskRouting:
+
+  # Suy luận dài trên nhiều ràng buộc. Đáng dùng model mạnh nhất.
+  architectureReview:
+    preferred: [claude]
+    fallback:  [gemini]
+
+  codeChange:
+    preferred: [claude]
+    fallback:  [gemini]
+
+  # Đọc nhiều, tóm gọn. Không cần model đắt nhất.
+  research:
+    preferred: [gemini]
+    fallback:  [claude, groq]
+
+  # Soát bảo mật: thà chậm còn hơn bỏ sót.
+  securityReview:
+    preferred: [claude]
+    fallback:  []
+
+  # Việc vặt có cấu trúc: phân loại, rút gọn, đặt tên.
+  routine:
+    preferred: [gemini, groq]
+    fallback:  [claude]
+
+  # Mặc định khi Task không khai loại.
+  default:
+    preferred: [claude]
+    fallback:  [gemini]
+
+# ───────────────────────── xếp hàng theo ĐO ĐƯỢC ─────────────────────────
+#
+# BÀI HỌC (bảng bẫy): cerebras trả `402 payment required` — khoá đúng, tài
+# khoản chưa bật thanh toán. Bộ lọc cũ chỉ biết THIẾU KHOÁ HAY KHÔNG nên vẫn
+# xếp nó vào ghế, và ghế đó hỏng lúc cuộc họp đã bắt đầu.
+#
+# Ghế ngồi xuống rồi mới hỏng là ghế MẤT TRẮNG. Nên thứ tự thật phải theo kết
+# quả `python3 ops/nao.py kiem` ĐO ĐƯỢC, đẩy nhà đang hỏng xuống cuối hàng.
+healthCheck:
+  command: "python3 ops/nao.py kiem"
+  # Quá hạn này mà chưa đo lại thì coi thứ tự trên là CHƯA KIỂM CHỨNG.
+  # Nhà cung cấp rút model mà không báo ai — xem models.yaml.
+  staleAfterDays: 7
