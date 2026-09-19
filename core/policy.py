@@ -50,8 +50,12 @@ def decide(request: PolicyRequest) -> PolicyOutcome:
         if outcome is not None:
             return outcome
 
-    return _needApproval(request, capability,
-                         "Cần admin duyệt trước khi thực hiện")
+    # Rơi tới đây nghĩa là: việc có tác động, không có quyền đứng nào, không có
+    # chữ ký nào. `reason` phải nói VÌ SAO phải hỏi, không nhắc lại rằng đang
+    # hỏi — người đọc đã biết điều đó từ câu trước rồi.
+    return _needApproval(
+        request, capability,
+        f"riskTier `{capability.riskTier.value}` và chưa có chữ ký nào")
 
 
 # ══════════════════════════ từng luật ══════════════════════════

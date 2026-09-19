@@ -35,6 +35,20 @@ sys.path.insert(0, os.path.join(ROOT, "lib"))
 import db  # noqa: E402
 BACKOFFICE = os.path.join(ROOT, "backOffice", "store.sqlite")
 
+# Quyết định quyền hạn đã bóc sang core/policy.py — một hàm THUẦN, kiểm được
+# bằng một dòng assert thay vì phải dựng cả một lượt chạy thật.
+#
+# File này giữ phần I/O: tra whitelist, tiêu phiếu duyệt, cộng tiền đã tiêu,
+# ghi sổ, chạy tiến trình con. `core.policy` chỉ QUYẾT ĐỊNH, không chạm gì.
+#
+# Ranh giới đó là cả điểm của việc tách: thứ gì cần biết từ thế giới bên ngoài
+# thì TRA Ở ĐÂY rồi đưa vào, nên cùng một câu hỏi luôn ra cùng một câu trả lời.
+sys.path.insert(0, ROOT)
+from core.contracts import (  # noqa: E402
+    Capability, IssuedBy, PolicyDecision, PolicyRequest,
+)
+from core.policy import decide as decidePolicy  # noqa: E402
+
 LOOP_GUARD_MAX = 2  # L4 — cùng dấu vân tay quá số này trong một trace là chặn
 
 
@@ -389,15 +403,59 @@ def cmd_call(args) -> dict:
     #
     # Whitelist thì VẪN không nâng được S3: nó là quyền đứng, không gắn với một
     # nội dung nào, nên nó mở ra một cánh cửa rộng chứ không phải một khe.
+    # ─── từ đây, LUẬT do core/policy nói; file này chỉ tra sự thật và thi hành ───
+    #
+    # Mọi thứ core/policy cần biết từ thế giới bên ngoài đều phải TRA Ở ĐÂY rồi
+    # đưa vào. Đó là lý do nó tất định, và tất định là lý do nó kiểm được bằng
+    # `assert` thay vì phải dựng một lượt chạy thật.
+    capabilityObject = Capability.fromManifest(args.company, cap)
+    identity = (IssuedBy.scheduledTrigger
+                if args.issued_by == "scheduledTrigger" else IssuedBy.ceo)
+
     hen_ok = False
     if args.issued_by == "scheduledTrigger" and args.approval_id:
         phieu = approvals.get(args.approval_id)
         hen_ok = bool(phieu and phieu["henLuc"])
-    if args.issued_by == "scheduledTrigger" and risk != "read" and not hen_ok:
-        return bail(
-            f"S3 — việc định kỳ chỉ được phép ĐỌC. '{args.capability}' là "
-            f"'{risk}'. Cron quan sát và chuẩn bị; muốn hành động thì chờ admin, "
-            "hoặc dùng phiếu hẹn admin đã ký trước.")
+
+    def _askPolicy(**extra):
+        return decidePolicy(PolicyRequest(
+            identity=identity,
+            capability=capabilityObject,
+            inputValue=inp,
+            isDryRun=bool(args.dry_run),
+            scheduledAt=args.hen_luc,
+            hasSignedSchedule=hen_ok,
+            **extra))
+
+    # Vòng hỏi thứ nhất: chỉ để bắt những luật CHẶN THẲNG (S3, L8).
+    #
+    # Hỏi sớm là có chủ ý, để giữ nguyên THỨ TỰ báo lỗi của bản cũ: một lời gọi
+    # vừa sai schema vừa phạm S3 thì phải nghe "S3", không phải "C2.3". Thứ tự
+    # câu trả lời cũng là hành vi — đổi nó là đổi thứ admin đọc được.
+    paid = cap.get("paidApi")
+    overExternalCap = False
+    spentThisMonth = capPerMonth = estimatedPrice = 0.0
+    if paid and not args.dry_run:
+        cfg = approvals.config().get("chiTieuNgoai", {})
+        capPerMonth = float(cfg.get("tranThangVnd", 0) or 0)
+        spentThisMonth = chi_tieu_ngoai_thang()
+        estimatedPrice = float(paid.get("giaUocVnd", 0) or 0)
+        overExternalCap = bool(
+            capPerMonth and spentThisMonth + estimatedPrice > capPerMonth)
+
+    gateOutcome = _askPolicy(externalSpendWouldExceedCap=overExternalCap)
+    if gateOutcome.decision is PolicyDecision.deny:
+        # Policy nói KHÔNG; câu chữ thì dựng ở đây, vì chỉ ở đây mới có những
+        # con số vừa tra được. Admin cần thấy "đã tiêu bao nhiêu / trần bao
+        # nhiêu", không phải một câu từ chối chung chung.
+        if overExternalCap:
+            return bail(
+                f"L8 — tháng này đã tiêu {spentThisMonth:,.0f}đ tiền thật cho "
+                f"API ngoài, lời gọi này ước {estimatedPrice:,.0f}đ nữa là vượt "
+                f"trần {capPerMonth:,.0f}đ. Muốn tiêu thêm thì sửa "
+                "`chiTieuNgoai.tranThangVnd` trong registry/gateway.yaml.",
+                status="budgetExceeded")
+        return bail(gateOutcome.reason)
 
     # KHÔNG CÒN CẦU DAO HẠN MỨC Ở ĐÂY — gỡ ngày 2026-08-16, admin quyết.
     #
@@ -417,19 +475,9 @@ def cmd_call(args) -> dict:
     # L8 — TIỀN THẬT ra ngoài. Đây mới là chỗ cầu dao có ý nghĩa: khác hạn mức
     # Pro (dùng hết thì thôi, tháng sau lại có), đây là tiền trừ vào thẻ, đo
     # được từng lời gọi và có hoá đơn đối chiếu.
-    paid = cap.get("paidApi")
-    if paid and not args.dry_run:
-        cfg = approvals.config().get("chiTieuNgoai", {})
-        tran = float(cfg.get("tranThangVnd", 0) or 0)
-        da_tieu = chi_tieu_ngoai_thang()
-        gia = float(paid.get("giaUocVnd", 0) or 0)
-        if tran and da_tieu + gia > tran:
-            return bail(
-                f"L8 — tháng này đã tiêu {da_tieu:,.0f}đ tiền thật cho API ngoài, "
-                f"lời gọi này ước {gia:,.0f}đ nữa là vượt trần {tran:,.0f}đ. "
-                "Muốn tiêu thêm thì sửa `chiTieuNgoai.tranThangVnd` trong "
-                "registry/gateway.yaml.",
-                status="budgetExceeded")
+    #
+    # Quyết định đã chạy ở vòng hỏi thứ nhất bên trên (core/policy). Ở đây chỉ
+    # còn phần thi hành.
 
     fingerprint = payload_hash(args.company, args.capability, inp)
 
@@ -456,33 +504,42 @@ def cmd_call(args) -> dict:
     # `paid` cũng phải qua cửa này dù riskTier là `read`: đọc thì không đổi gì
     # của admin, nhưng vẫn TRỪ TIỀN. Rủi ro ở đây không nằm ở dữ liệu mà ở ví.
     if (risk in ("write", "irreversible") or paid) and not args.dry_run:
-        granted, why = False, ""
+        why = ""
 
+        # ─── TRA sự thật (I/O) ───
+        #
         # G9 — irreversible không bao giờ đi đường whitelist.
         # `paid` cũng vậy, admin chốt 2026-08-16: mọi lời gọi tốn tiền thật đều
         # phải hỏi, mỗi lần. "Luôn cho phép tiêu tiền" là câu không ai muốn nói.
+        whitelistGrant = None
         if risk == "write" and not paid:
             rule = approvals.whitelist_match(args.company, args.capability, inp, cap)
             if rule:
                 used = approvals.used_today(args.company, args.capability)
                 if used < rule["maxPerDay"]:
-                    granted, why = True, f"whitelist {rule['ruleId']} ({used + 1}/{rule['maxPerDay']} hôm nay)"
+                    whitelistGrant = rule["ruleId"]
+                    why = f"whitelist {rule['ruleId']} ({used + 1}/{rule['maxPerDay']} hôm nay)"
                 else:
+                    # Hết hạn mức ngày thì quyền đứng KHÔNG còn hiệu lực — phải
+                    # hỏi lại admin. Không truyền grant sang policy nữa.
                     why = (f"whitelist {rule['ruleId']} đã hết hạn mức ngày "
                            f"({used}/{rule['maxPerDay']}) — phải hỏi lại admin")
 
-        if not granted and args.approval_id:
+        # `consume()` có TÁC ĐỘNG: nó tiêu mất phiếu. Nên chỉ gọi khi không có
+        # quyền đứng nào — đốt một chữ ký của admin cho một việc vốn đã được
+        # phép là phí một thứ dùng đúng một lần.
+        consumedApprovalId = None
+        if whitelistGrant is None and args.approval_id:
             ok, msg = approvals.consume(args.approval_id, fingerprint)
-            granted, why = ok, msg
+            why = msg
+            if ok:
+                consumedApprovalId = args.approval_id
 
-        # HẸN GIỜ: không bao giờ chạy ngay, kể cả khi whitelist đã cho phép.
-        # Whitelist trả lời câu "được làm không"; hẹn giờ trả lời câu "làm lúc
-        # nào". Cho whitelist nuốt luôn cái hẹn thì việc chạy ngay lập tức —
-        # đúng thứ admin vừa bảo là đừng làm.
-        if args.hen_luc:
-            granted, why = False, f"hẹn tới {args.hen_luc}"
+        # ─── HỎI luật (thuần) ───
+        outcome = _askPolicy(whitelistGrant=whitelistGrant,
+                             approvalId=consumedApprovalId)
 
-        if not granted:
+        if outcome.decision is PolicyDecision.allowWithApproval:
             # G5 — nói hậu quả. Với việc tốn tiền thật thì GIÁ chính là hậu quả
             # admin cần thấy trước khi bấm, đặt lên đầu câu chứ không giấu ở
             # cuối: đó là thứ phân biệt "đồng ý làm" với "đồng ý trả tiền".
@@ -505,7 +562,7 @@ def cmd_call(args) -> dict:
             )
             return bail(
                 f"Cần admin duyệt trước khi thực hiện ({risk})."
-                + (f" [{why}]" if why else ""),
+                + (f" [{why or outcome.reason}]" if (why or outcome.reason) else ""),
                 status="needsApproval",
                 extra={
                     "error": None,
@@ -519,8 +576,12 @@ def cmd_call(args) -> dict:
                         "riskTier": risk,
                         # nút "luôn cho phép" chỉ hiện khi company cho phép (G8)
                         # Không có nút "luôn cho phép" cho việc tốn tiền thật.
-                        "canWhitelist": (risk == "write" and not paid
-                                         and bool(cap.get("whitelistScope"))),
+                        #
+                        # Luật này giờ sống ở MỘT chỗ: Capability.canWhitelist
+                        # trong core/contracts.py. Trước đây nó được viết lại ở
+                        # ba nơi (dispatch, gateway, manifest), và `[]` là ĐÓNG
+                        # thì chỉ một trong ba nơi hiểu đúng.
+                        "canWhitelist": capabilityObject.canWhitelist,
                     },
                 },
             )

@@ -145,8 +145,14 @@ class RiskTier(str, Enum):
 
 
 class IssuedBy(str, Enum):
-    """Ai phát ra Task. Quyết định cửa nào mở."""
+    """Ai phát ra Task. Quyết định cửa nào mở.
+
+    `ceo` KHÁC `admin`, và sự khác đó là có chủ ý: CEO hành động THAY MẶT admin
+    chứ không phải LÀ admin. Gộp hai thứ lại thì sau này không viết nổi một luật
+    dạng "việc này chỉ admin gõ tay mới được làm".
+    """
     admin = "admin"
+    ceo = "ceo"
     employee = "employee"
     scheduledTrigger = "scheduledTrigger"
     eventTrigger = "eventTrigger"
