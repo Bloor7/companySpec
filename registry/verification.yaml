@@ -1,0 +1,93 @@
+# verification.yaml — loại thay đổi nào cần bằng chứng gì.
+#
+# Đọc docs/CORE_CONTRACT.md §14 trước khi sửa.
+#
+# ═══════════════════════════════════════════════════════════════════════
+# VÌ SAO KHÔNG DÙNG MỘT BỘ KIỂM CHUNG CHO MỌI THỨ
+# ═══════════════════════════════════════════════════════════════════════
+#
+# Một bộ chung thì hoặc THỪA (chạy build cho một lần sửa chữ nghĩa → chậm vô
+# ích, và chậm vô ích thì người ta tắt nó đi), hoặc THIẾU (sửa giao diện mà
+# chỉ chạy typecheck → cái nút lệch 40px vẫn PASS).
+#
+# ⚠ `inconclusive` TÍNH LÀ TRƯỢT (V-1). Không có lệnh để chạy thì đó KHÔNG
+# phải "đã qua" — đó là "không chứng minh được". Muốn bỏ qua thật thì khai rõ
+# `notApplicable` trong lệnh của dự án; phải NÓI RA mới được bỏ qua (V-2).
+
+version: 1
+
+changeKinds:
+
+  # Sửa mã nguồn thường.
+  codeChange:
+    required: [typecheck, lint, build, test]
+
+  # Sửa giao diện — cần thêm MẮT NHÌN.
+  #
+  # typecheck và build không bao giờ bắt được "cái nút lệch 40px" hay "chữ
+  # trắng trên nền trắng". Đó là lý do iris tồn tại như một employee riêng.
+  uiChange:
+    required: [typecheck, lint, build, browser, visual]
+
+  # Đụng vào sổ sách, ví, dữ liệu thật.
+  #
+  # `dataReadback` là phép kiểm quan trọng nhất ở đây: ĐỌC LẠI đúng cái vừa
+  # ghi. Nó bắt đúng họ lỗi mà `status: ok` không bắt được — company báo thành
+  # công trong khi Notion chưa nhận, hoặc nhận vào sai ngày vì lệch múi giờ.
+  dataChange:
+    required: [test, dataReadback]
+
+  # Nghiên cứu, đọc web. Không đổi gì nên không cần build.
+  #
+  # `sourcesCited` soát rằng kết luận có nguồn — bài học hội đồng: mấy model
+  # tuôn ra "73% kênh triệu view dùng giọng AI" nghe như tri thức, thật ra là
+  # văn mẫu, và ba lần đoán biến thành một lần "đồng thuận".
+  research:
+    required: [sourcesCited]
+
+  # Sửa chính sách, quyền hạn, hàng rào.
+  #
+  # `securityScan` và `policyParity` bắt buộc: đổi luật ở một chỗ mà quên chỗ
+  # kia là tạo ra nguồn sự thật thứ hai.
+  policyChange:
+    required: [test, securityScan, policyParity]
+
+  # Chỉ sửa chữ nghĩa, tài liệu.
+  documentation:
+    required: [lint]
+
+  # Khi Task không khai loại. Cố ý ĐÒI NHIỀU chứ không ít:
+  # mặc định phải nghiêng về phía an toàn, và một Task không khai loại là một
+  # Task chưa ai nghĩ kỹ.
+  default:
+    required: [typecheck, lint, build, test]
+
+# ───────────────────────── hạn giờ từng phép kiểm ─────────────────────────
+#
+# Quá hạn → `inconclusive` → TRƯỢT. Cố ý: một phép kiểm chạy mãi không xong
+# thì nó không chứng minh được gì, và "chắc là ổn" là câu đã gây ra đủ chuyện.
+timeoutSec:
+  typecheck: 180
+  lint: 120
+  build: 600
+  test: 600
+  browser: 300
+  visual: 300
+  dataReadback: 60
+  sourcesCited: 30
+  securityScan: 300
+  policyParity: 300
+
+# ───────────────────────── phép kiểm của chính repo này ─────────────────────
+#
+# companySpec tự kiểm được mình. Đây là bộ lệnh thật, chạy được ngay.
+selfCheck:
+  lint: "python3 ops/codemap.py --check"
+  test: "python3 tests/regression/run.py --quiet"
+  policyParity: "python3 tests/regression/run.py --only PolicyParity --quiet"
+  securityScan: "python3 ops/namingAudit.py --check"
+  # Repo này là Python thuần, không có bước biên dịch hay kiểm kiểu tĩnh.
+  # KHAI RÕ thay vì để trống — để trống thì thành `inconclusive` và không ai
+  # biết đó là cố ý hay bỏ quên (V-2).
+  typecheck: notApplicable
+  build: notApplicable
