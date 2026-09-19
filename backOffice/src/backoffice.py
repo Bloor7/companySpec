@@ -201,7 +201,8 @@ def cmd_report(args):
     #
     # KHÔNG che đi, chỉ tách ra: chúng vẫn là lời gọi đã xảy ra thật, và một
     # bộ đo tự xoá dấu vết của mình là một bộ đo không kiểm được.
-    TEST_TRACES = "(traceId LIKE 'reg_%' OR traceId LIKE 'evl_%')"
+    TEST_TRACES = ("(traceId LIKE 'reg_%' OR traceId LIKE 'evl_%' "
+                   "OR traceId LIKE 'e2e_%' OR traceId LIKE 'demo_%')")
     rows = list(conn.execute(
         "SELECT companyId, status, COUNT(*) n, ROUND(SUM(costUsd),3) c "
         f"FROM taskLog WHERE startedAt >= ? AND NOT {TEST_TRACES} "
@@ -255,7 +256,8 @@ def cmd_report(args):
     if testCalls:
         # Nói ra chứ không giấu: một con số bị bỏ khỏi bảng mà không ai nhắc
         # tới là một con số sẽ bị quên mất là nó tồn tại.
-        out.append(f"  + {testCalls} lời gọi của bộ đo (reg_/evl_), không tính ở trên")
+        out.append(f"  + {testCalls} lời gọi của bộ đo "
+                   "(reg_/evl_/e2e_/demo_), không tính ở trên")
     out.append("")
     out.append(f"  CEO: {ceo['n']} lượt · {ceo['e']} lỗi")
     for r in ceo_loi:

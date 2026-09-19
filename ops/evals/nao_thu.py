@@ -30,6 +30,25 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, os.path.join(ROOT, "ops"))
 import nao  # noqa: E402
 
+# ĐÁNH NHÃN MỌI LỜI GỌI CỦA BỘ ĐO.
+#
+# `nao.chay` nhận `trace_id`; ca thử không truyền nên dispatch tự sinh `trc_…`,
+# và những lời gọi giả (`khongCoCompany.abc`) lẫn vào báo cáo thật của admin
+# như lời gọi thường. Đo 19/09: 20 dòng như thế trong một ngày.
+#
+# Cùng bài học với `reg_`/`evl_` ở backOffice: bộ đo phải ghi sổ, nhưng phải
+# TÁCH BẰNG NHÃN. Bọc một lần ở đây thay vì sửa mười chỗ gọi — sửa mười chỗ
+# thì chỗ thứ mười một sẽ quên.
+_chay_goc = nao.chay
+
+
+def _chay_co_nhan(*args, **kwargs):
+    kwargs.setdefault("trace_id", "evl_naoThu")
+    return _chay_goc(*args, **kwargs)
+
+
+nao.chay = _chay_co_nhan
+
 # Kịch bản của nhà giả: mỗi phần tử là một câu trả lời, lấy lần lượt.
 KICH_BAN = []
 DA_NHAN = []          # thân request đã nhận, để soi model được gửi gì
