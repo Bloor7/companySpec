@@ -69,20 +69,38 @@ bằng tên đó. Nó đã làm đủ:
 đã đứng vững qua nhiều sự cố thật, mỗi sự cố để lại một dòng trong bảng bẫy
 của `CLAUDE.md`. Vứt đi là vứt luôn những bài học đó.
 
-### Cái còn thiếu
+### Trạng thái từng tầng
 
-| Thiếu | Hậu quả hôm nay |
-|---|---|
-| `PolicyDecision` tường minh | Quyết định nằm rải trong một hàm dài; không unit-test được |
-| Tầng `Employee` | Không có ai để giao việc; mọi thứ đổ lên một CEO duy nhất |
-| `Brain` như interface | `nao.py` đã thay não được nhưng chưa có hợp đồng chung |
-| `Mission` | Không có mục tiêu dài hạn; mỗi lượt là một tờ giấy trắng |
-| `Verification` | "Xong" vẫn là **lời khai**, không phải bằng chứng |
-| `Memory` phân tầng | Trí nhớ nằm rải giữa gateway, `profileCompany`, `ceo/store.sqlite` |
-| `Event bus` | Hệ chỉ phản ứng khi admin gõ, hoặc khi cron tới giờ |
-| `Lab` / `Acquisition` | Không có chỗ an toàn để thử repo lạ |
-| `tests/regression/` | Không có lưới; mọi refactor là đánh bạc |
-| Tên thống nhất | §7 ra luật tiếng Anh camelCase — thực tế đã lệch khỏi luật đó |
+Cập nhật 2026-09-19. **Đọc cột thứ ba** — "đã dựng" không đồng nghĩa với "đang
+chạy trong hệ thật", và nhầm hai thứ đó là cách một tài liệu bắt đầu nói dối.
+
+| Tầng | Đã dựng ở | `ops/` đã dùng chưa |
+|---|---|---|
+| `PolicyDecision` tường minh | `core/policy.py` | **RỒI** — `dispatch.py` gọi vào |
+| Execution Engine | `core/execution.py` | **RỒI** — `dispatch.py` gọi vào |
+| 15 primitive | `core/contracts.py` | một phần (`Capability`, `PolicyRequest`) |
+| `Employee` | `employees/` + `core/employeeRegistry.py` | **chưa** |
+| `Brain` router + data boundary | `core/brainRouter.py` | **chưa** (`ops/nao.py` vẫn tự lo) |
+| `Memory` phân tầng | `core/memory.py` | **chưa** |
+| `Mission` | `core/mission.py` | **chưa** |
+| `Verification` | `core/verification.py` | **chưa** |
+| `Event bus` + chống nhắn lặp | `core/events.py` | **chưa** (`scheduler.py` có bản riêng) |
+| `Autonomy` | `core/autonomy.py` | **chưa** — hệ thật đang ở mức 1 |
+| `Lab` / `Acquisition` | `core/lab.py`, `core/acquisition.py` | n/a |
+| `Council` có phản biện | `core/council.py` | **chưa** (`hoiDongCompany` có bản riêng) |
+| `Secret broker` | `core/secretBroker.py` | **chưa** — secret vẫn đi thẳng từ `os.environ` |
+| `Isolation` | `core/isolation.py` | **chưa** — và mới là cô lập LOGIC |
+| `tests/regression/` | 185 ca | **RỒI** |
+| Tên thống nhất | `registry/naming.yaml` làm TỪ ĐIỂN | code cũ giữ nguyên (admin chốt 19/09) |
+
+**Cột thứ ba là việc còn lại.** Dựng xong `core/` mà `ops/` chưa gọi vào thì
+ta có hai bản của cùng một luật — đúng thứ đã gây ra vụ "hạn mức ăn uống" ra
+hai con số khác nhau mà cả hai đều không lỗi.
+
+Với `policy` và `execution` thì việc chuyển đã xong, và có
+`testPolicyParity` chứng minh hai bên trả lời giống hệt nhau trên **mọi**
+năng lực thật. Những tầng còn lại đi theo đúng khuôn đó: interface → adapter →
+test đối chiếu → chuyển người gọi → xoá bản cũ.
 
 ---
 

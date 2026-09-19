@@ -35,10 +35,30 @@ Con số nào cần nói thì đếm lại bằng lệnh trên.
 | Tầng | Chứa gì | Được phụ thuộc vào |
 |---|---|---|
 | `lib/` | Kỹ thuật thuần: mở SQLite, gọi Notion, chạy phiên Claude nhốt kín | **không gì cả** |
+| `core/` | **LUẬT**: contracts, policy, execution, verification, memory, mission, event, autonomy, lab, secretBroker, isolation | **chỉ `core/` + `lib/`** (C4.2) |
 | `companies/<x>/src/` | Nghiệp vụ một lĩnh vực. Mỗi company là hộp kín, có sổ riêng | **chỉ `lib/`** |
-| `ops/` | Điều phối: gateway, dispatcher, scheduler, poller | `lib/`, `backOffice/` |
+| `ops/` | Điều phối và VẬN CHUYỂN: gateway, dispatcher, scheduler, poller | `core/`, `lib/`, `backOffice/` |
 | `backOffice/src/` | Theo dõi, báo cáo, cầu dao hạn mức. Hạ tầng, KHÔNG phải company | `lib/`, `ops/approvals` |
+| `employees/<x>/` | Danh tính: vai, tính cách, quyền CÓ PHẠM VI, `cannot` cứng | (dữ liệu, không phải mã) |
+| `lab/` | Nơi thử repo lạ. **Được phép hỏng** (P6). Nội dung không vào git | (dữ liệu) |
 | `ceo/playbooks/` | Sổ tay của CEO — luật nạp theo việc, không nạp mỗi lượt. Router `gateway.chon_so_tay()` chọn bằng từ khoá, code cứng nằm NGOÀI model | (chữ, không phải mã) |
+
+**`core/` khác `ops/` ở đúng một chỗ, và đó là cả điểm của việc tách:**
+
+- `core/` **QUYẾT ĐỊNH** — hàm thuần, không I/O, cùng đầu vào ra cùng câu trả
+  lời. Kiểm được bằng một dòng `assert`.
+- `ops/` **TRA sự thật rồi THI HÀNH** — mở sqlite, tra whitelist, tiêu phiếu
+  duyệt, chạy tiến trình con, nói chuyện với Telegram.
+
+Thứ gì `core/` cần biết từ thế giới ngoài thì **người gọi tra trước rồi đưa
+vào**. Nhờ vậy câu hỏi "cron có ghi được không" trả lời được bằng một dòng
+test, thay vì phải dựng cả một phiên Telegram.
+
+Từ vựng chung: [docs/CORE_CONTRACT.md](docs/CORE_CONTRACT.md) · kiến trúc:
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · bảo mật:
+[docs/SECURITY.md](docs/SECURITY.md) · quyền tự chủ:
+[docs/AUTONOMY.md](docs/AUTONOMY.md) · đặt tên:
+[docs/NAMING.md](docs/NAMING.md).
 
 **Ba câu hỏi trước khi viết một hàm mới:**
 
@@ -106,6 +126,14 @@ Mỗi dòng là một bug đã tốn công lần ra. Trước khi viết mã đ�
 | **Danh mục chỉ in TÊN HÀM, không in mô tả** | Admin nhắn "làm thử cái todolist phong cách AoT đi em". CEO thêm 7 đầu việc vào sổ Notion thật, rồi đáp "em không tự viết file HTML được, cần mở phiên code" — trong khi `xuongCompany` và cái hộp làm được đúng việc ấy, vừa dựng xong cùng ngày. Không phải model kém: `danh_muc_block` chỉ in `themViec(tieuDe) ✎ +moTa,uuTien,nguon,loai`, nên mọi câu mô tả công phu trong manifest CEO chưa từng nhìn thấy. Và "todolist" thì kéo thẳng về todoCompany | Company phải TỰ KHAI một dòng `goiKhi:` — in vào danh mục, nói rõ gọi khi nào và đừng gọi nhầm ai (`gateway.danh_muc_block`, +370 ký tự cho một company). W3 còn nguyên: thêm company không phải sửa CEO. **Bậc thứ hai, đo cùng ngày:** enum của trường TUỲ CHỌN cũng phải in — biết tên mà không biết giá trị thì vẫn trượt, CEO gửi `uuTien: "cao"` rồi `"vừa"`, hai lần đều là tiếng Việt hợp lý. Và `moTa` phải dặn viết MỘT DÒNG: đặc tả nhiều dòng biến lời gọi thành lệnh multiline, `guard.py` chặn, CEO bỏ cuộc rồi dán mã vào chat. Ca `lam-mot-thu-thi-vao-xuong` canh cả bốn |
 | **Việc XONG mà không ai nói cho người cần biết** | Hộp dựng xong một web todolist hoàn chỉnh — index.html, style.css 8,8KB, app.js 6,4KB, README có hướng dẫn chạy, đã commit — rồi đặt việc về `choXem` và im lặng. Cùng tối đó admin hỏi "cái web làm sao xem" và CEO đáp "em không viết file HTML được". Sản phẩm nằm cách đó đúng một thư mục. Không bộ phận nào hỏng: hộp làm đúng, sổ ghi đúng, `choXem` đúng nghĩa chờ-xem — chỉ là không ai CHỦ ĐỘNG nói ra | Vòng nào chạy xong mà người cần biết không biết thì tính là CHƯA XONG. Trạng thái nằm trong sổ không phải là thông báo: phải có một bên đẩy tin ra (`cau.bao_xong` → `ops/telegram.py`, T1). Cách bắt: sau khi dựng một dây chuyền, hỏi "ai là người đầu tiên biết việc đã xong, và họ biết bằng cách nào" — trả lời được bằng tên một hàm thì mới xong |
 
+| **Khai `anyOf` mà bộ soát chưa từng đọc** | `panharmonCompany.taoBaiNhap` khai `anyOf: [required:[noiDung], required:[baiVietPath]]` — "phải có nội dung HOẶC đường dẫn". `validate()` chưa bao giờ đọc từ khoá đó, nên suốt từ 06/08 tạo được bài nháp chỉ có tiêu đề. Đúng anh em sinh đôi của con bug `pattern` ở dòng trên | Cùng họ "hàng rào giả". Đã dạy `validate()` đọc `anyOf`/`oneOf`, và câu báo lỗi KỂ TÊN từng nhánh hỏng vì sao — nói trống thì CEO lại đoán, đúng thứ đang muốn chặn. Ca canh: `testOnlySupportedSchemaKeywords` bắt mọi từ khoá schema mà `validate()` không đỡ |
+| **Chú thích nói một đằng, giá trị làm một nẻo** | `nhacCompany.datNhac` viết `whitelistScope: []` KÈM chú thích "cho phép admin bấm luôn cho phép". Rỗng là falsy nên nút KHÔNG BAO GIỜ hiện — ý định ghi rõ trong chú thích, hiệu lực thì ngược lại. Admin bấm "cho phép 1 lần" cho MỌI lời nhắc kể từ ngày dựng. Đo 19/09: `xuongCompany` có 282 lần `needsApproval` trong MỘT ngày | Chú thích không phải hàng rào. Ca `testWhitelistScopeIsNeverEmptyList` cấm hẳn `[]`: muốn đóng thì BỎ khoá đi, để ý định đọc được từ mặt chữ. Và khi cơ chế không diễn đạt được ý định (như `datNhac` — mọi lời nhắc đều khác nhau nên không nhóm được) thì **đừng nhét bừa**, hãy ghi rõ là cơ chế còn thiếu |
+| **Cùng một bài học, vá một file quên file kia** | `proc.stderr.strip()[:400]` trong `ops/dispatch.py` — cắt log từ ĐẦU. Bài học "cắt từ đuôi" đã có sẵn trong bảng này và đã vá ở `ops/poller.py` từ lâu, nhưng chưa ai vá ở dispatch. Mỗi lần một company chết là mất đúng dòng cuối nói hỏng vì cái gì | Đọc bảng này thôi CHƯA ĐỦ — phải `grep` xem còn chỗ nào cùng họ. Một bài học chỉ vá ở nơi nó xảy ra thì nó sẽ quay lại ở nơi khác |
+| **Bộ quét phụ thuộc mù với import dạng gói** | Thêm luật C4.2 (`core/` không được phụ thuộc ra ngoài) xong, thử phá bằng `from ops import gateway` — codemap KHÔNG BẮT. Bản cũ chỉ so tên module PHẲNG, nên `from ops import gateway` và `from core.policy import decide` đều vô hình. Cả repo trước đây dùng import phẳng nên chưa ai gặp | Hàng rào mới phải được **THỬ PHÁ**, không phải đọc mã rồi tin. Nếu tớ chỉ đọc `codemap.py` thì đã kết luận là nó canh được. Nay `phu_thuoc()` soát cả tên gói gốc, mọi đoạn có chấm, và tên lôi ra trong `from X import Y` |
+| **Bộ đo làm hỏng chính phép đo** | Bộ regression chạy khô 82 năng lực mỗi lần, mang `traceId` `reg_`. Trộn chung thì `backoffice report` in "nhacCompany 1482 lời gọi" trong khi admin không đặt cái nhắc nào — và một báo cáo nói sai như thế dạy admin bỏ qua nó | Theo đúng tiền lệ `evl_` ở `ceoRunLog`: KHÔNG che đi, chỉ TÁCH RA và NÓI RA thành một dòng riêng. Che thì con số bị quên là nó tồn tại; mà bộ đo tự xoá dấu vết của mình là bộ đo không kiểm được |
+| **Ca thử tự chạy thật việc GHI** | Ca đối chiếu policy gọi dispatch không dry-run cho cả năng lực đã whitelist → dispatch không hỏi mà THI HÀNH. Không mất gì, nhưng nhờ MAY: `dispatch.py` không nạp `ops/.env` nên thiếu `NOTION_TOKEN`. `xuongCompany` dùng sqlite local thì đã chạy thật | "Biết trước nó sẽ cho qua rồi vẫn bấm nút" là cách người ta làm hỏng dữ liệu thật. Whitelist khớp thì KHÔNG gọi dispatch. Và `traceId` của bộ đo phải khác nhau mỗi LẦN CHẠY — cố định thì L4 tưởng bộ test đang lặp |
+| **Cửa thoát hợp lệ tự vô hiệu hoá chính nó** | `core/verification.py` bản đầu gộp `skipped` với `inconclusive`, nên khai rõ `notApplicable` (Python thuần thì làm gì có bước build) lại làm kết luận ra `failed`. Chính bộ đo bắt được khi chạy selfCheck của repo | Hai thứ khác hẳn nhau: `skipped` = CÓ NGƯỜI KHAI RÕ, đọc được trong file; `inconclusive` = KHÔNG chứng minh được gì. Gộp là hỏng theo một trong hai chiều — hoặc "không có lệnh build" thành PASS (chiều nguy hiểm), hoặc cửa thoát không ai dùng được |
+
 Sửa xong một bug **thuộc loại đã có ở đây** thì thêm một dòng. Bug mới hoàn
 toàn thì ghi vào bảng thay đổi cuối `PRINCIPLES.md` kèm lý do (W5).
 
@@ -114,6 +142,9 @@ toàn thì ghi vào bảng thay đổi cuối `PRINCIPLES.md` kèm lý do (W5).
 ## Cách kiểm, thay vì tin
 
 ```bash
+python3 tests/regression/run.py                 # 185 ca — LƯỚI AN TOÀN, chạy trước khi sửa gì
+python3 tests/regression/run.py --fast          # bỏ ca gọi tiến trình con (~0,2s)
+python3 ops/namingAudit.py                      # từ điển tên; --check nếu chỉ muốn biết sạch hay không
 python3 ops/codemap.py --check                  # luật kiến trúc
 python3 ops/dispatch.py list                    # danh mục company thật
 python3 backOffice/src/backoffice.py usage      # đã tiêu bao nhiêu, có lần nào chạm trần chưa
