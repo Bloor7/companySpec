@@ -191,9 +191,24 @@ def cmd_report(args):
     since = utc_ago(days=args.days)
     conn = store()
 
+    # LỜI GỌI CỦA BỘ ĐO ĐẾM RIÊNG, cùng lý lẽ với `evl_` ở ceoRunLog bên trên.
+    #
+    # Vì sao cần: bộ regression chạy khô cả 82 năng lực, mỗi lần chạy thêm vài
+    # trăm dòng mang traceId `reg_`. Trộn chung thì báo cáo ngày in
+    # "nhacCompany 1482 lời gọi" trong khi admin không hề đặt cái nhắc nào —
+    # và một báo cáo nói sai như thế thì admin học cách bỏ qua nó, đúng thứ
+    # dòng "lỗi hạ tầng lặp lại nhắn mỗi lần" trong bảng bẫy cảnh báo.
+    #
+    # KHÔNG che đi, chỉ tách ra: chúng vẫn là lời gọi đã xảy ra thật, và một
+    # bộ đo tự xoá dấu vết của mình là một bộ đo không kiểm được.
+    TEST_TRACES = "(traceId LIKE 'reg_%' OR traceId LIKE 'evl_%')"
     rows = list(conn.execute(
         "SELECT companyId, status, COUNT(*) n, ROUND(SUM(costUsd),3) c "
-        "FROM taskLog WHERE startedAt >= ? GROUP BY 1,2 ORDER BY 1,2", (since,)))
+        f"FROM taskLog WHERE startedAt >= ? AND NOT {TEST_TRACES} "
+        "GROUP BY 1,2 ORDER BY 1,2", (since,)))
+    testCalls = conn.execute(
+        f"SELECT COUNT(*) FROM taskLog WHERE startedAt >= ? AND {TEST_TRACES}",
+        (since,)).fetchone()[0]
     ceo = conn.execute(
         "SELECT COUNT(*) n, COALESCE(SUM(isError),0) e, ROUND(SUM(costUsd),3) c "
         "FROM ceoRunLog WHERE createdAt >= ?", (since,)).fetchone()
@@ -220,6 +235,7 @@ def cmd_report(args):
         "ceo": {"runs": ceo["n"], "errors": ceo["e"], "cost": ceo["c"] or 0,
                 "errorReasons": [dict(r) for r in ceo_loi]},
         "tasks": [dict(r) for r in rows],
+        "testCalls": testCalls,
         "sideEffects": {r["type"]: r["n"] for r in effects},
         "approvals": {r["status"]: r["n"] for r in approv},
     }
@@ -234,6 +250,12 @@ def cmd_report(args):
         total = sum(n for _, n in sts)
         detail = ", ".join(f"{s} {n}" for s, n in sts if s != "ok")
         out.append(f"  {co:<16}{total:>3} lời gọi" + (f"  ({detail})" if detail else ""))
+    if not by_co:
+        out.append("  (không có lời gọi thật nào)")
+    if testCalls:
+        # Nói ra chứ không giấu: một con số bị bỏ khỏi bảng mà không ai nhắc
+        # tới là một con số sẽ bị quên mất là nó tồn tại.
+        out.append(f"  + {testCalls} lời gọi của bộ đo (reg_/evl_), không tính ở trên")
     out.append("")
     out.append(f"  CEO: {ceo['n']} lượt · {ceo['e']} lỗi")
     for r in ceo_loi:
