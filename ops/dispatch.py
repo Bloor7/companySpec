@@ -121,6 +121,35 @@ def validate(value, schema, path="input"):
     if "enum" in schema and value not in schema["enum"]:
         errs.append(f"{path}: phải là một trong {schema['enum']}")
 
+    # `anyOf` / `oneOf` — thêm 2026-09-19, cùng loại với `pattern` ở trên.
+    #
+    # panharmonCompany.taoBaiNhap khai từ 06/08:
+    #     anyOf: [ {required: [noiDung]}, {required: [baiVietPath]} ]
+    # nghĩa là "phải có nội dung HOẶC đường dẫn bài viết". Bộ soát chưa từng
+    # đọc từ khoá đó, nên suốt từ đó tới nay tạo được một bài nháp chỉ có tiêu
+    # đề — không nội dung, không đường dẫn — và company mới ngã ở bên trong,
+    # sau khi admin đã bấm duyệt. Hàng rào giả hại hơn không có hàng rào, vì
+    # người đọc manifest sau này sẽ tin nó.
+    #
+    # Kể tên nhánh nào hỏng vì sao. Nói trống "không khớp anyOf" thì CEO không
+    # biết phải thêm trường gì, và nó sẽ đoán — đúng thứ ta đang muốn chặn.
+    for keyword in ("anyOf", "oneOf"):
+        branches = schema.get(keyword)
+        if not branches:
+            continue
+        passed, why = 0, []
+        for i, branch in enumerate(branches):
+            branchErrs = validate(value, branch, path)
+            if branchErrs:
+                why.append(f"({i + 1}) " + "; ".join(branchErrs))
+            else:
+                passed += 1
+        if passed == 0:
+            errs.append(f"{path}: không thoả nhánh nào của `{keyword}` — "
+                        + " | ".join(why))
+        elif keyword == "oneOf" and passed > 1:
+            errs.append(f"{path}: thoả {passed} nhánh của `oneOf`, chỉ được đúng một")
+
     if isinstance(value, str):
         if "minLength" in schema and len(value) < schema["minLength"]:
             errs.append(f"{path}: ngắn hơn {schema['minLength']} ký tự")

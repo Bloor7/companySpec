@@ -273,7 +273,11 @@ capabilities:
       Nó KHÔNG làm mất gì: các bước đã ghi giữ nguyên, `buocKeTiep` giữ nguyên.
     riskTier: write
     maxDurationSec: 30
-    whitelistScope: []
+    # Sửa 2026-09-19: bỏ `whitelistScope: []`. Rỗng là ĐÓNG, nên dòng đó không
+    # mở thêm gì — nó chỉ làm người đọc tưởng nút "Luôn cho phép" có hiện.
+    # `quaPhut` là số nguyên 2..1440 nên không dùng làm phạm vi được: mỗi giá
+    # trị một lần bấm thì bấm mãi không hết.
+    # Cũng là quyền ĐỨNG như nhacCompany.datNhac — chờ `standingPermission`.
     inputSchema:
       type: object
       additionalProperties: false

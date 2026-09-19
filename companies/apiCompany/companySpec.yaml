@@ -105,7 +105,12 @@ capabilities:
       lẽ phải có. Miễn phí, không cần khoá, không gửi gì của admin đi đâu.
     riskTier: write
     maxDurationSec: 90
-    whitelistScope: []
+    # Sửa 2026-09-19: trước đây là `whitelistScope: []`, mà rỗng nghĩa là ĐÓNG
+    # chứ không phải "không giới hạn" — `gateway.can_whitelist` đọc
+    # `bool(whitelistScope)`, nên nút "Luôn cho phép" chưa từng hiện.
+    # `batBuoc` là boolean nên phạm vi này có ĐÚNG HAI giá trị: admin bấm nhiều
+    # nhất hai lần rồi thôi. Đó là nhóm "có nghĩa, ít và đếm được".
+    whitelistScope: [batBuoc]
     inputSchema:
       type: object
       additionalProperties: false

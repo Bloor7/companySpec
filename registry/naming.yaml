@@ -1,0 +1,428 @@
+# naming.yaml — một khái niệm, một tên
+#
+# NGUỒN CHÂN LÝ cho việc đặt tên. Luật ở docs/NAMING.md; đây là dữ liệu.
+#
+# VÌ SAO LÀ FILE CHỨ KHÔNG PHẢI CODE: thêm một khái niệm mới là thêm một DÒNG
+# ở đây, không phải sửa bộ soát (W3′ — thêm gì cũng không được sửa Core).
+#
+# HAI CHỖ DỄ SAI, đọc trước khi thêm dòng:
+#
+#   1. `vi` mang HAI nghĩa trong repo này:
+#        walletCompany.vi     = ví   → wallet
+#        ngoaiNguCompany.vi   = tiếng Việt → vi (mã ISO 639-1, GIỮ NGUYÊN)
+#      Nên mới có mục `perCompany`. Đừng bao giờ thêm một tên mơ hồ vào
+#      `global` — cùng một chữ ở hai company có thể là hai thứ khác hẳn.
+#
+#   2. GIÁ TRỊ enum tiếng Việt thì KHÔNG đổi. `danhMuc: [ăn uống, đi lại…]`
+#      là dữ liệu thật đang nằm trên Notion của admin. Đổi tên TRƯỜNG thì được;
+#      đổi GIÁ TRỊ là làm hỏng lịch sử và làm chết mọi whitelist khoá vào chúng.
+
+version: 1
+
+# ────────────────────────── năng lực ──────────────────────────
+# Luật L3: động từ + tân ngữ. Chỉ liệt kê cái PHẢI đổi; tên đã đúng thì không
+# có mặt ở đây.
+capabilities:
+  apiCompany:
+    capNhatDanhMuc: refreshCatalog
+    kiemApi: checkApi
+    timApi: findApi
+    xemApi: getApi
+
+  browserCompany:
+    duyetWeb: browseWeb
+    kiemTraTrang: checkPage
+
+  expenseCompany:
+    suaExpense: updateExpense        # cả company dùng tiếng Anh, trừ đúng cái này
+
+  hoiDongCompany:
+    hoiY: askCouncil
+
+  ngoaiNguCompany:
+    themCau: addSentence
+    xoaCau: deleteSentence
+    dsCau: listSentences
+    danhDauThuoc: markMemorised
+
+  nhacCompany:
+    datNhac: createReminder
+    dsNhac: listReminders
+    huyNhac: cancelReminder
+
+  panharmonCompany:
+    taoBaiNhap: createDraft
+    dangBai: publishPost
+
+  writerCompany:
+    vietBai: writeArticle
+
+  researchCompany:
+    nghienCuu: research
+
+  searchCompany:
+    traNhanh: quickAnswer
+
+  xuongCompany:
+    themViec: addWorkItem
+    nhanViec: claimWorkItem
+    ghiBuoc: recordStep
+    xongViec: completeWorkItem
+    tamDung: pauseWorkItem
+    dsViec: listWorkItems
+    donDep: cleanupStalled
+    nhatKy: listWorkLog
+
+# ────────────────────────── trường dữ liệu ──────────────────────────
+fields:
+
+  # Áp cho mọi company. Chỉ đặt ở đây những tên mà nghĩa KHÔNG đổi theo ngữ
+  # cảnh — L7: một khái niệm một tên, ở khắp nơi.
+  global:
+    # tiền
+    soTien: amount                  # tiền của MỘT giao dịch
+    soDuCu: previousBalance
+    soDuMoi: newBalance
+    hanMuc: quota
+    canMoiThang: monthlyNeed
+    phanTram: percent
+    tuVi: fromWallet                # "từ ví", không phải tử vi
+    denVi: toWallet
+
+    # thời gian
+    ngay: date
+    tuNgay: fromDate
+    denNgay: toDate
+    thang: month
+    tuThang: fromMonth
+    denThang: toMonth
+    han: deadline
+    hanChot: dueDate
+    hetHan: expiresAt
+    datLuc: setAt
+    capNhatLuc: updatedAt
+    lanTruocDung: lastUsedAt
+    kiemKeTu: countedFrom
+    batDau: startAt
+    ketThuc: endAt
+    khiNao: scheduledAt
+    henGio: scheduleAt
+    conBaoLau: timeRemaining
+    quaHan: isOverdue
+    trongNgay: withinDays
+    trongPhut: withinMinutes
+    quaPhut: olderThanMinutes
+    soNgay: dayCount
+    gomDenHan: includeDue
+    choMs: waitMs
+    msPhanHoi: responseMs
+
+    # nội dung
+    ten: name
+    tieuDe: title
+    noiDung: content
+    moTa: description
+    ghiChu: note
+    tomTat: summary
+    trichDoan: excerpt
+    chuDe: topic
+    loaiChuDe: topicKind
+    tuKhoa: keyword
+    timChu: findText
+    chuThayDoi: changedText
+    cauHoi: question
+    traLoi: answer
+    slug: slug
+
+    # phân loại và trạng thái
+    loai: kind
+    nhom: group
+    danhMuc: category
+    danhMucId: categoryId
+    trangThai: status
+    previousTrangThai: previousStatus
+    uuTien: priority
+    giaiDoan: phase
+    vai: role
+    stt: ordinal
+    thuTu: order
+
+    # việc và kế hoạch
+    viecId: taskId                  # CÙNG khái niệm với taskId của Core
+    cacViec: tasks
+    keHoach: plan
+    mucTieu: objective
+    nhiemVu: mission
+    duAn: project
+    cacBuoc: steps
+    buocKeTiep: nextStep
+    buocDaLam: stepsDone
+    buocDaXong: stepsCompleted
+    soBuoc: stepCount
+    soBuocDaChay: stepsRun
+    soBuocToiDa: maxSteps
+    hetBuocGiuaChung: ranOutOfSteps
+    dangDo: isInProgress
+    chuaXong: isPending
+    xong: isDone
+    choXem: awaitingReview
+    batDong: isIdle
+
+    # đếm và tổng
+    tong: total
+    tongMuc: totalItems
+    tongDaCo: totalExisting
+    tongMucTieu: totalObjective
+    soLuong: quantity
+    soNhom: groupCount
+    soDanhMuc: categoryCount
+    soThanhVien: memberCount
+    soKyTu: charCount
+    soTu: wordCount
+    soVong: roundCount
+    soNut: buttonCount
+    soOnhap: inputCount
+    soDangCho: pendingCount
+    gioiHan: limit
+    doDaiTu: wordLength
+    tuoiDanhMuc: catalogAgeDays
+
+    # kết quả và lỗi
+    ketQua: result
+    ketLuan: conclusion
+    quyetDinh: decision
+    lyDo: reason
+    loi: error
+    coLoi: hasError
+    coViec: hasTask
+    maHttp: httpStatus
+    maThoat: exitCode
+    maTrangThai: statusCode
+    thayDoi: changes
+    themMoi: added
+    matDi: removed
+    daDon: cleanedCount
+    daCo: existing
+    daDoi: changed
+    daHuy: cancelled
+    daLamMoi: refreshed
+    conLai: remaining
+    conThieu: missing
+    previousDaCo: previousExisting
+    truocDo: previous
+
+    # cờ và tuỳ chọn
+    batBuoc: isForced
+    boQua: isSkipped
+    chiKhiCo: onlyWhenPresent
+    khongCanKhoa: isKeyFree
+    danhDau: mark
+    nhacNap: reloadHint
+
+    # bối cảnh, nguồn, bằng chứng
+    boiCanh: context
+    nguon: source
+    duKien: facts                   # "dữ kiện" — khối CEO tra trước rồi đưa sang
+    chuaKiemChung: unverified
+    dongThuan: consensus
+    chuToa: chairperson
+    thanhVien: members
+
+    # web và trình duyệt
+    urlBatDau: startUrl
+    khoaNguon: sourceKey            # khoá chống trùng khi kéo việc từ nơi khác
+    cacTrangDaVao: visitedPages
+    tenMienChoPhep: allowedDomains
+    bamNut: clickButton
+    nutThu: buttonTried
+    dienVao: fillIn
+    linkDuyet: approvalLink
+    baiVietPath: articlePath
+    goiApi: apiCall
+
+    # sự kiện và lịch
+    cacSuKien: events
+    cacNhac: reminders
+    nhacId: reminderId
+    diaDiem: location
+    khi: whenText
+
+    # tài chính khác
+    tenQuy: fundName
+    cacMuc: items
+    aiLam: assignee
+    kpiChinh: mainKpi
+    kpiDat: kpiAchieved
+
+    # nhóm theo
+    byGiaiDoan: byPhase
+    byLoai: byKind
+    byLoaiChuDe: byTopicKind
+    byNguon: bySource
+    byTrangThai: byStatus
+
+    # git
+    nhanh: branch
+
+  # Ghi đè theo company. Ưu tiên CAO HƠN `global`.
+  perCompany:
+    walletCompany:
+      vi: wallet                    # "ví" — enum [tiền mặt, tài khoản]
+
+    ngoaiNguCompany:
+      vi: vi                        # mã ISO 639-1, L6 giữ nguyên
+      en: en
+      zh: zh
+      py: py                        # pinyin
+      enDoc: enPronunciation
+      zhDoc: zhPronunciation
+      cau: sentence
+      cauId: sentenceId
+
+    xuongCompany:
+      tiepLuc: resumeToken
+
+# ────────────────────────── bảng SQLite ──────────────────────────
+# §7: bảng camelCase số ít, tiếng Anh. Hai bảng dưới đây cần migration dữ liệu
+# chứ không phải tìm-và-thay — xem ops/migrateNames.py.
+tables:
+  chiTieuNgoai: externalSpend
+  nhacDaGui: reminderSent
+
+# ────────────────────────── tên đã đúng, đã duyệt ──────────────────────────
+#
+# Những định danh đã là tiếng Anh camelCase đúng luật. Có mặt ở đây nghĩa là
+# CÓ NGƯỜI ĐÃ NHÌN và đồng ý, không phải "máy đoán là ổn".
+#
+# `ops/namingAudit.py --check` đòi MỌI định danh phải hoặc nằm trong bản đồ đổi
+# tên ở trên, hoặc nằm trong danh sách này. Thêm trường mới mà quên khai thì
+# bộ soát đỏ — đó là chủ ý: đặt tên phải là việc CỐ Ý, không phải tai nạn.
+#
+# Lấy danh sách cần thêm bằng: python3 ops/namingAudit.py --uncovered
+alreadyEnglish:
+  - addEntry
+  - addEvent
+  - addEvents
+  - addExpense
+  - addIncome
+  - addStep
+  - addTask
+  - addTodos
+  - adjustBalance
+  - amount
+  - api
+  - archivePlan
+  - archiveTask
+  - auditPage
+  - auditSite
+  - byCategory
+  - category
+  - content
+  - copyBudget
+  - count
+  - createFund
+  - createPlan
+  - date
+  - deleteBudget
+  - deleteEntry
+  - deleteEvent
+  - deleteEvents
+  - deleteExpense
+  - deleteIncome
+  - deleteStep
+  - deleteTodo
+  - depositFund
+  - done
+  - doneTodos
+  - dueSteps
+  - entries
+  - entryId
+  - eventId
+  - events
+  - expenseId
+  - expenses
+  - factId
+  - facts
+  - findings
+  - focus
+  - forgetFact
+  - from
+  - fundId
+  - fundProgress
+  - funds
+  - getBalance
+  - getBudget
+  - incomeId
+  - incomes
+  - items
+  - link
+  - listEntries
+  - listEvents
+  - listExpenses
+  - listFacts
+  - listFunds
+  - listIncomes
+  - listPlans
+  - listPosts
+  - listTasks
+  - listTodos
+  - maxPages
+  - mood
+  - note
+  - percentDone
+  - planSteps
+  - plans
+  - postId
+  - posts
+  - previous
+  - progressReport
+  - readEntry
+  - rememberFact
+  - reportPath
+  - setBalance
+  - setBudget
+  - setPriority
+  - stepId
+  - steps
+  - sumExpenses
+  - sumIncomes
+  - tasks
+  - theme
+  - title
+  - to
+  - todayAgenda
+  - todoId
+  - todos
+  - total
+  - transferBalance
+  - upcomingEvents
+  - updateProgress
+  - updateStep
+  - url
+  - withdrawFund
+
+# ────────────────────────── viết tắt được phép ──────────────────────────
+# Luật L4 cấm viết tắt, trừ những từ đã là tiêu chuẩn ngành.
+allowedAbbreviations:
+  - id
+  - url
+  - api
+  - http
+  - json
+  - yaml
+  - sql
+  - db
+  - ms
+  - sec
+  - usd
+  - vnd
+  - utc
+  - iso
+  - kpi
+  - seo
+  - ui
+  - ux
+  - py
+  - vi
+  - en
+  - zh

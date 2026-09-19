@@ -49,7 +49,24 @@ capabilities:
       đối đừng nói lại chữ "mai" — lặp lại chữ mơ hồ là giấu mất cái sai.
     riskTier: write
     maxDurationSec: 20
-    whitelistScope: []            # G12 — cho phép admin bấm "luôn cho phép"
+    # KHÔNG whitelist được — và đây là một thiếu sót của CƠ CHẾ, không phải ý
+    # định của năng lực này.
+    #
+    # Trước 2026-09-19 dòng này là `whitelistScope: []` kèm chú thích "cho phép
+    # admin bấm luôn cho phép". Nó làm ĐÚNG ĐIỀU NGƯỢC LẠI: rỗng là falsy, nên
+    # nút chưa từng hiện, và admin bấm "cho phép 1 lần" cho MỌI lời nhắc kể từ
+    # ngày dựng. Ý định ghi trong chú thích, hiệu lực thì ngược — không ai báo
+    # lỗi gì cả.
+    #
+    # Vì sao không vá bằng cách thêm trường phạm vi: đầu vào chỉ có `khiNao` và
+    # `noiDung`, cả hai đều KHÁC NHAU ở mỗi lời nhắc. Khoá phạm vi vào chúng là
+    # "mỗi lời nhắc một lần bấm" — tức là không bao giờ hết, đúng phản mẫu
+    # `viecId` đã ghi trong bảng bẫy.
+    #
+    # Thứ admin thật sự muốn nói là "luôn cho phép ĐẶT NHẮC", một quyền ĐỨNG
+    # không gắn phạm vi. `whitelistScope` không diễn đạt được câu đó. Chỗ đúng
+    # để vá là Policy Engine (`standingPermission`), không phải nhét bừa vào
+    # manifest — xem docs/SECURITY.md.
     inputSchema:
       type: object
       additionalProperties: false
