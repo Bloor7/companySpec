@@ -65,3 +65,9 @@ backOffice/media-loi.jsonl
 # Kết quả soát từng skill nằm ở .claude/README.md (file đó VẪN theo dõi).
 .agents/
 .claude/skills/
+
+# lab/ — nội dung là repo NGƯỜI LẠ và kết quả thí nghiệm.
+# Giữ khung thư mục, KHÔNG đưa nội dung vào git: repo lạ có giấy phép riêng,
+# và một thứ đang bị cách ly thì không nên nằm trong lịch sử của repo này.
+lab/*/*
+!lab/*/.gitkeep
