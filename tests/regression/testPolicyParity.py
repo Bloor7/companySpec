@@ -32,7 +32,8 @@ from core.contracts import (  # noqa: E402
 )
 from core.policy import decide  # noqa: E402
 
-MANIFESTS = loadManifests()
+# Bỏ company `internal: true` — xem ghi chú trong testDryRunAllCapabilities.py.
+MANIFESTS = loadManifests(includeInternal=False)
 
 
 def tearDownModule():

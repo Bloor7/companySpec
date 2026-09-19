@@ -31,6 +31,11 @@
 # cách đọc một tấm ảnh admin gửi — không phải như lời dặn.
 
 companyId: browserCompany
+
+# Tài nguyên company này chạm vào — dùng để soát quyền của
+# Employee (core/contracts.py:Capability.touches). Mặc định là
+# `database`; ở đây khác vì mở và đọc trang web thật.
+resource: web
 displayName: "Phòng duyệt web"
 version: 0.1.0
 

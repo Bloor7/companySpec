@@ -125,9 +125,19 @@ Nói thẳng, vì một tài liệu autonomy nói quá lên thì chính nó là 
 | | Trạng thái |
 |---|---|
 | Thang mức, trần rủi ro, phép tính | **Xong** — `core/autonomy.py`, 30 ca thử |
-| Verification làm cổng lên mức 2 | **Xong** — `core/verification.py` |
-| `ops/` đọc mức từ sổ audit rồi áp | **CHƯA** |
+| Verification làm cổng lên mức 2 | **Xong** — `core/verification.py`, chạy trên mọi lời gọi company |
+| Sổ audit ghi đủ để TÍNH được mức | **Xong** — `policyDecision` + `verificationJson` trong `taskLog` |
+| Đọc được mức đã kiếm | **Xong** — `python3 ops/travis.py autonomy` |
+| `ops/` **áp** mức đó để bớt hỏi admin | **CHƯA** |
 | Hệ thật đang chạy ở | **mức 1** với mọi thứ: chạy được, nhưng mọi việc `write` vẫn hỏi admin |
+
+Có một lý do cụ thể khiến mức chưa nhích lên, và nó đáng đọc: sổ hiện **chưa
+có dòng nào `completed`**. Company trả `ok` nghĩa là "chạy trót lọt", và
+`recordFromAuditRows` cố ý chỉ đếm `completed` là thành công. Nên
+`earnedAutonomy` trả về 1 cho mọi thứ — **đúng**, không phải hỏng.
+
+Muốn nhích lên thì phải có đường đóng dấu `completed` vào sổ, và đường đó phải
+đi qua Verification. Đó là việc tiếp theo, không phải một con số cần chỉnh.
 
 Nghĩa là: cái thang đã dựng và đã kiểm, nhưng **chưa ai trèo**. Đó là trạng
 thái đúng — nới quyền phải là một hành động có chủ ý của admin, không phải

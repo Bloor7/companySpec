@@ -1,0 +1,117 @@
+# Company NỘI BỘ — chỉ để đo chính hệ thống. Không có nghiệp vụ nào.
+#
+# ═══════════════════════════════════════════════════════════════════════
+# VÌ SAO CẦN MỘT COMPANY GIẢ
+# ═══════════════════════════════════════════════════════════════════════
+#
+# Muốn kiểm cả dây chuyền — Task → Employee → Policy → Execution →
+# Verification → Audit — thì phải có một lời gọi đi hết dây chuyền đó. Dùng
+# company thật để kiểm thì hoặc đụng Notion/ví của admin, hoặc phải giả lập,
+# mà giả lập thì kiểm cái giả chứ không kiểm cái thật.
+#
+# Company này đi qua ĐÚNG dispatcher thật, ĐÚNG policy thật, ĐÚNG executor
+# thật — chỉ có phần nghiệp vụ là rỗng. Nó không ghi ra ngoài, không gọi mạng,
+# không giữ secret nào.
+#
+# ═══════════════════════════════════════════════════════════════════════
+# `internal: true` LÀM GÌ
+# ═══════════════════════════════════════════════════════════════════════
+#
+# C5 — CEO không nhìn thấy và không gọi được, kể cả khi đoán ra tên. Đã soát
+# cả ba chỗ: `dispatch.cmd_list` lọc, `gateway.danh_muc_block` lọc, và
+# `dispatch.cmd_call` chặn trừ khi có cờ `--allow-internal` (chỉ dùng từ
+# terminal, CEO không có cờ đó).
+#
+# Nghĩa là admin sẽ KHÔNG BAO GIỜ thấy company này trong danh mục, và nó không
+# làm loãng những thứ CEO phải chọn giữa.
+
+companyId: travisSelfTestCompany
+displayName: "Phòng tự kiểm (nội bộ)"
+version: 0.1.0
+internal: true
+
+resource: database
+runtime: code
+entrypoint: ./src/main.py
+runtimeReason: >
+  Không gọi model, không gọi mạng. Nó chỉ trả về đúng thứ được yêu cầu trả về,
+  để dây chuyền bên ngoài có cái mà kiểm.
+
+dataStore: ./store.sqlite
+secrets: []
+env: []
+canBeCalledBy: [ceo]
+canCall: []
+owner: admin
+
+capabilities:
+  - name: echoRead
+    description: >
+      Trả lại đúng chữ được đưa vào. Năng lực ĐỌC — dùng để kiểm đường đi
+      không cần duyệt, và để kiểm rằng `sideEffectRecorded` được bỏ qua đúng
+      cách với năng lực chỉ đọc.
+    riskTier: read
+    maxDurationSec: 20
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [message]
+      properties:
+        message: { type: string, minLength: 1, maxLength: 200 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [message, echoedAt]
+      properties:
+        message:  { type: string }
+        echoedAt: { type: string }
+
+  - name: recordWrite
+    description: >
+      Ghi một dòng vào sổ riêng của chính nó và KHAI sideEffect. Năng lực GHI —
+      dùng để kiểm cửa duyệt, kiểm whitelist, và kiểm rằng tác động ra ngoài
+      được ghi vào sổ.
+      Tác động duy nhất là một dòng trong store.sqlite của chính company này,
+      nên nó hoàn tác được và không chạm gì của admin.
+    riskTier: write
+    maxDurationSec: 20
+    # `label` là từ vựng ĐÓNG và nhỏ — đúng nhóm "có nghĩa, ít và đếm được"
+    # mà whitelist cần. Ba giá trị nghĩa là admin bấm nhiều nhất ba lần.
+    whitelistScope: [label]
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [label, value]
+      properties:
+        label: { enum: [alpha, beta, gamma] }
+        value: { type: string, minLength: 1, maxLength: 200 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [entryId, label, value]
+      properties:
+        entryId: { type: string }
+        label:   { type: string }
+        value:   { type: string }
+
+  - name: failOnPurpose
+    description: >
+      Hỏng có chủ ý, theo kiểu được chọn. Dùng để kiểm rằng hệ XỬ LÝ ĐƯỢC hỏng
+      chứ không sập: quá giờ phải ra `budgetExceeded` báo được, output sai
+      schema phải bị bắt, và tiến trình chết phải để lại dòng cuối của
+      traceback chứ không phải dòng đầu.
+      Không có cái nào trong số này làm đổi gì ngoài thế giới.
+    riskTier: read
+    maxDurationSec: 5
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [mode]
+      properties:
+        mode: { enum: [timeout, badOutput, crash, needsInput] }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [mode]
+      properties:
+        mode: { type: string }

@@ -12,6 +12,11 @@
 # repoClient. Khi nào làm tới khâu sửa code panharmon thì mới dùng.
 
 companyId: panharmonCompany
+
+# Tài nguyên company này chạm vào — dùng để soát quyền của
+# Employee (core/contracts.py:Capability.touches). Mặc định là
+# `database`; ở đây khác vì clone và ghi vào kho git của dự án.
+resource: repository
 displayName: "Quản trị Panharmon"
 version: 0.1.0
 

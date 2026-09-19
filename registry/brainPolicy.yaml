@@ -36,8 +36,18 @@ dataBoundary:
 
   # Mã nguồn dự án, kiến trúc, cấu hình. Không bí mật, nhưng là của admin.
   # Chỉ những nhà admin đã chấp nhận điều khoản.
+  #
+  # `groq` CÓ trong danh sách này, và đó là một quyết định đã có từ trước chứ
+  # không phải tớ nới ra: models.yaml ghi rõ nó là LỚP ĐỠ CUỐI, bật 31/08 sau
+  # khi đo thật — chạy bộ ca thử trên não phụ, ca thứ tư chết vì CẢ HAI model
+  # Gemini cùng trả 503 trong một lần gọi.
+  #
+  # Bỏ nó khỏi đây nghĩa là: đúng lúc Claude đã câm VÀ cả hai Gemini cùng hỏng,
+  # hệ im luôn. Đó là lúc admin cần nó nhất. Mức `canTrong` (mặc định) đã cắt
+  # hồ sơ đời tư và bức tranh tài chính khỏi prompt rồi, nên thứ đi ra là câu
+  # hỏi cộng danh mục năng lực.
   internal:
-    allowed: [claude, gemini, local]
+    allowed: [claude, gemini, groq, local]
 
   # Đời tư: thói quen, sức khoẻ, nhật ký, quan hệ.
   private:

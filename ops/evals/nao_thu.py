@@ -87,7 +87,12 @@ def cau_hinh(port: int, chuoi: list, luot: int = 4) -> dict:
                         "khoaEnv": None, "mienPhi": True,
                         "giaVao": 0, "giaRa": 0}},
         "nao": {"macDinh": "phu", "chuoi": chuoi, "soLuotToiDa": luot,
-                "chapNhanTraTien": False},
+                "chapNhanTraTien": False,
+                # Nhà GIẢ của ca thử không có trong registry/brainPolicy.yaml,
+                # và đúng là không nên có. Khai riêng ở đây để ranh giới dữ
+                # liệu (§29) không lọc sạch chuỗi rồi làm ca đỏ vì một lý do
+                # chẳng liên quan gì tới thứ đang đo.
+                "nhaThuThem": ["gia"]},
     }
 
 
@@ -336,7 +341,8 @@ def _chay_ceo_qua_nha_gia(port, muc, brief, them):
                         "khoaEnv": None, "mienPhi": True,
                         "giaVao": 0, "giaRa": 0}},
         "nao": {"macDinh": "phu", "chuoi": [{"nha": "gia", "model": "m1"}],
-                "soLuotToiDa": 2, "chapNhanTraTien": False, "riengTu": muc},
+                "soLuotToiDa": 2, "chapNhanTraTien": False, "riengTu": muc,
+                "nhaThuThem": ["gia"]},   # nhà giả — xem ghi chú ở cau_hinh()
     }
     gateway.llmClient_nap = lambda: cfg
     nao.llmClient.nap = lambda path="": cfg

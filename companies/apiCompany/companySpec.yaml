@@ -29,6 +29,11 @@
 # danh mục, để người đọc biết mình đang tin vào một bản chụp bao giờ.
 
 companyId: apiCompany
+
+# Tài nguyên company này chạm vào — dùng để soát quyền của
+# Employee (core/contracts.py:Capability.touches). Mặc định là
+# `database`; ở đây khác vì kéo danh mục API từ public-apis trên internet.
+resource: web
 displayName: "Phòng tra API"
 version: 0.1.0
 

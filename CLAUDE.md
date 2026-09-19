@@ -134,6 +134,11 @@ Mỗi dòng là một bug đã tốn công lần ra. Trước khi viết mã đ�
 | **Ca thử tự chạy thật việc GHI** | Ca đối chiếu policy gọi dispatch không dry-run cho cả năng lực đã whitelist → dispatch không hỏi mà THI HÀNH. Không mất gì, nhưng nhờ MAY: `dispatch.py` không nạp `ops/.env` nên thiếu `NOTION_TOKEN`. `xuongCompany` dùng sqlite local thì đã chạy thật | "Biết trước nó sẽ cho qua rồi vẫn bấm nút" là cách người ta làm hỏng dữ liệu thật. Whitelist khớp thì KHÔNG gọi dispatch. Và `traceId` của bộ đo phải khác nhau mỗi LẦN CHẠY — cố định thì L4 tưởng bộ test đang lặp |
 | **Cửa thoát hợp lệ tự vô hiệu hoá chính nó** | `core/verification.py` bản đầu gộp `skipped` với `inconclusive`, nên khai rõ `notApplicable` (Python thuần thì làm gì có bước build) lại làm kết luận ra `failed`. Chính bộ đo bắt được khi chạy selfCheck của repo | Hai thứ khác hẳn nhau: `skipped` = CÓ NGƯỜI KHAI RÕ, đọc được trong file; `inconclusive` = KHÔNG chứng minh được gì. Gộp là hỏng theo một trong hai chiều — hoặc "không có lệnh build" thành PASS (chiều nguy hiểm), hoặc cửa thoát không ai dùng được |
 
+| **Suýt chặn mất cái phao cứu sinh** | Viết `dataBoundary` cho mức `internal` gồm `claude, gemini, local` — nghe hợp lý. Nhưng `groq` là LỚP ĐỠ CUỐI, admin bật 31/08 sau một phép đo thật: cả hai model Gemini cùng trả 503 trong một lần gọi. Bỏ nó đi nghĩa là đúng lúc Claude câm VÀ hai Gemini cùng hỏng thì hệ im luôn — im đúng lúc admin cần nhất. Lộ ra vì 12 ca não phụ đỏ, không phải vì đọc lại luật | Viết một chính sách CHẶN thì phải đọc lại VÌ SAO từng thứ có mặt trong danh sách cũ. Mỗi dòng trong `models.yaml` đều có một đoạn giải thích — chúng không ở đó cho đẹp. Ca `testRealFallbackChainSurvivesTheBoundary…` canh chuỗi THẬT, không canh một chuỗi bịa |
+| **Khai thiếu một giá trị, mặc định an toàn che mất** | `nao.riengTu` có BA mức (`dayDu`, `canTrong`, `toiThieu`) nhưng bản đồ chỉ khai hai. `toiThieu` — mức cắt NHIỀU nhất, đáng ra mở nhất — rơi vào mặc định an toàn `sensitive` và bị chặn CHẶT HƠN `canTrong`. Ngược hoàn toàn | Mặc định nghiêng về an toàn là đúng và phải giữ, nhưng nó KHÔNG thay được việc khai đủ: nó biến "quên khai" thành "sai lặng lẽ theo hướng ngược". Bắt bằng cách so THỨ TỰ, không so từng giá trị — `cắt nhiều hơn` phải `mở rộng hơn` |
+| **Hai bản của cùng một luật, sửa một bên** | `Verification.isVerified` trong `contracts.py` vẫn đòi mọi phép kiểm `passed`, trong khi `concludeTask` đã học chấp nhận `skipped`. Nên một lời gọi `read` có đủ bằng chứng vẫn bị gắn nhãn `unverified`. Đây là LẦN THỨ HAI của cùng một nhầm lẫn, và lần này là do vá file kia rồi quên file này | Hằng dùng chung (`_VERIFICATION_ACCEPTABLE`) đặt ở MỘT chỗ, bên kia `import` về. Định nghĩa lại cho tiện là tạo sẵn chỗ để hai bên lệch nhau |
+| **Bị chặn trước Policy thì sổ trông như không có cửa** | `travis health` báo "10 lời gọi KHÔNG qua Policy" — hoá ra là những lời gọi bị chặn ở C2.1/C2.2/C5, tức là TRƯỚC khi hỏi Policy (không thể hỏi Policy về một năng lực không tồn tại). Nhưng để trống thì sổ trông như có đường vào hệ không qua cửa nào | Chặn ở cổng vào CŨNG là một quyết định, và phải ghi như một quyết định. Một cảnh báo đúng luật nhưng sai chỗ thì cũng dạy người ta bỏ qua cảnh báo — hệt như 21 tin lúc nửa đêm |
+
 Sửa xong một bug **thuộc loại đã có ở đây** thì thêm một dòng. Bug mới hoàn
 toàn thì ghi vào bảng thay đổi cuối `PRINCIPLES.md` kèm lý do (W5).
 
@@ -142,8 +147,16 @@ toàn thì ghi vào bảng thay đổi cuối `PRINCIPLES.md` kèm lý do (W5).
 ## Cách kiểm, thay vì tin
 
 ```bash
-python3 tests/regression/run.py                 # 185 ca — LƯỚI AN TOÀN, chạy trước khi sửa gì
-python3 tests/regression/run.py --fast          # bỏ ca gọi tiến trình con (~0,2s)
+python3 tests/run.py                            # LƯỚI AN TOÀN — chạy trước khi sửa gì
+python3 tests/run.py --fast                     # bỏ ca gọi tiến trình con (~1s)
+python3 tests/run.py --suite integration        # chỉ ca đi hết dây chuyền
+python3 ops/travis.py health                    # hệ còn sống không, im lặng bao lâu
+python3 ops/travis.py why <taskId>              # VÌ SAO lời gọi đó được phép
+python3 ops/travis.py autonomy                  # mức tự chủ từng năng lực ĐÃ KIẾM được
+python3 ops/travis.py employees                 # ai làm được gì, ai bị cấm gì
+python3 ops/travis.py brains sensitive          # mức dữ liệu này gửi được cho ai
+python3 ops/travis.py verify                    # tự kiểm repo bằng Verification Engine
+python3 ops/travis.py acquire lab/quarantine/x  # soi repo lạ, KHÔNG chạy nó
 python3 ops/namingAudit.py                      # từ điển tên; --check nếu chỉ muốn biết sạch hay không
 python3 ops/codemap.py --check                  # luật kiến trúc
 python3 ops/dispatch.py list                    # danh mục company thật

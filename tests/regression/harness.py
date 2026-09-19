@@ -43,12 +43,25 @@ TRACE_PREFIX = "reg_"
 RUN_TOKEN = uuid.uuid4().hex[:8]
 
 
-def loadManifests() -> dict:
-    """Đọc mọi companySpec.yaml. Trả về {companyId: spec}."""
+def loadManifests(includeInternal: bool = True) -> dict:
+    """Đọc mọi companySpec.yaml. Trả về {companyId: spec}.
+
+    `includeInternal=False` bỏ company `internal: true`.
+
+    VÌ SAO CÓ CỜ NÀY: company nội bộ (travisSelfTestCompany) bị C5 chặn khi
+    gọi qua dispatch mà không có `--allow-internal`. Ca nào GỌI THẬT thì phải
+    bỏ nó ra — bằng không chúng đỏ vì hàng rào đang làm đúng việc, và một ca
+    đỏ vì lý do sai thì tệ hơn không có ca.
+
+    Ca soát TĨNH (hợp đồng manifest) thì vẫn phải kiểm nó: nó cũng là một
+    company, và một company nội bộ khai sai cũng hỏng như mọi company khác.
+    """
     manifests = {}
     for path in sorted(glob.glob(os.path.join(COMPANIES_DIR, "*", "companySpec.yaml"))):
         with open(path, encoding="utf-8") as fh:
             spec = yaml.safe_load(fh)
+        if spec.get("internal") and not includeInternal:
+            continue
         spec["_path"] = path
         spec["_dir"] = os.path.dirname(path)
         manifests[spec["companyId"]] = spec

@@ -76,31 +76,52 @@ chạy trong hệ thật", và nhầm hai thứ đó là cách một tài liệu
 
 | Tầng | Đã dựng ở | `ops/` đã dùng chưa |
 |---|---|---|
-| `PolicyDecision` tường minh | `core/policy.py` | **RỒI** — `dispatch.py` gọi vào |
-| Execution Engine | `core/execution.py` | **RỒI** — `dispatch.py` gọi vào |
-| 15 primitive | `core/contracts.py` | một phần (`Capability`, `PolicyRequest`) |
-| `Employee` | `employees/` + `core/employeeRegistry.py` | **chưa** |
-| `Brain` router + data boundary | `core/brainRouter.py` | **chưa** (`ops/nao.py` vẫn tự lo) |
-| `Memory` phân tầng | `core/memory.py` | **chưa** |
-| `Mission` | `core/mission.py` | **chưa** |
-| `Verification` | `core/verification.py` | **chưa** |
-| `Event bus` + chống nhắn lặp | `core/events.py` | **chưa** (`scheduler.py` có bản riêng) |
-| `Autonomy` | `core/autonomy.py` | **chưa** — hệ thật đang ở mức 1 |
-| `Lab` / `Acquisition` | `core/lab.py`, `core/acquisition.py` | n/a |
+| `PolicyDecision` tường minh | `core/policy.py` | **RỒI** — `dispatch.py` |
+| Execution Engine | `core/execution.py` | **RỒI** — `dispatch.py` |
+| `Verification` | `core/verification.py` | **RỒI** — mỗi lời gọi company sinh bằng chứng |
+| `Audit` có `policyDecision` | `core/audit.py` | **RỒI** — `travis why <taskId>` |
+| `Employee` + quyền có phạm vi | `employees/` + `core/employeeRegistry.py` | **RỒI** — `dispatch --employee` |
+| Ranh giới dữ liệu | `core/brainRouter.py` | **RỒI** — `nao.py` lọc chuỗi dự phòng |
+| Chống nhắn lặp | `core/events.decideNotification` | **RỒI** — `scheduler.py` |
+| 15 primitive | `core/contracts.py` | phần lớn |
+| `Autonomy` | `core/autonomy.py` | **đọc được** (`travis autonomy`), **chưa áp** |
+| `Memory` phân tầng | `core/memory.py` | **chưa** — gateway vẫn tự lo |
+| `Mission` | `core/mission.py` | **đọc/ghi qua `travis mission`**, chưa nối CEO |
+| `Event bus` (luật + đề xuất) | `core/events.py` | **chưa** — mới dùng phần chống nhắn lặp |
+| `Lab` / `Acquisition` | `core/lab.py`, `core/acquisition.py` | `travis acquire` |
 | `Council` có phản biện | `core/council.py` | **chưa** (`hoiDongCompany` có bản riêng) |
 | `Secret broker` | `core/secretBroker.py` | **chưa** — secret vẫn đi thẳng từ `os.environ` |
 | `Isolation` | `core/isolation.py` | **chưa** — và mới là cô lập LOGIC |
-| `tests/regression/` | 185 ca | **RỒI** |
+| Bộ kiểm | `tests/` — 209 ca (regression + integration) | **RỒI** |
 | Tên thống nhất | `registry/naming.yaml` làm TỪ ĐIỂN | code cũ giữ nguyên (admin chốt 19/09) |
 
 **Cột thứ ba là việc còn lại.** Dựng xong `core/` mà `ops/` chưa gọi vào thì
 ta có hai bản của cùng một luật — đúng thứ đã gây ra vụ "hạn mức ăn uống" ra
 hai con số khác nhau mà cả hai đều không lỗi.
 
-Với `policy` và `execution` thì việc chuyển đã xong, và có
-`testPolicyParity` chứng minh hai bên trả lời giống hệt nhau trên **mọi**
-năng lực thật. Những tầng còn lại đi theo đúng khuôn đó: interface → adapter →
-test đối chiếu → chuyển người gọi → xoá bản cũ.
+Mỗi lần chuyển đi theo đúng một khuôn: interface → adapter → **test đối chiếu**
+→ chuyển người gọi → xoá bản cũ. `testPolicyParity` là ví dụ: nó chứng minh
+`core/policy` và `ops/dispatch.py` trả lời giống hệt nhau trên **mọi** năng lực
+thật, trên bốn trục.
+
+### Một lời gọi hôm nay đi qua những đâu
+
+```text
+CEO / cron / terminal
+        ↓
+ops/dispatch.py
+        ├─ C2.1/C2.2  company và năng lực có khai không
+        ├─ Employee   quyền có phạm vi, `cannot` thắng tất  (nếu có --employee)
+        ├─ core/policy  6 quyết định tường minh
+        ├─ C2.3       input khớp schema
+        ├─ L4         chống lặp
+        ├─ core/execution  tiến trình con, hạn giờ, phạm vi secret
+        ├─ C2.3 ra    output khớp schema
+        ├─ core/verification  gói thành BẰNG CHỨNG
+        └─ core/audit   ghi: quyết định · vì sao · ai · bằng chứng
+```
+
+Tra lại bất kỳ lời gọi nào: `python3 ops/travis.py why <taskId>`.
 
 ---
 

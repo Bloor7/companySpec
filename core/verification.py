@@ -179,7 +179,12 @@ def concludeTask(verification: Verification,
 #: ⚠ Bản đầu của file này gộp chúng, và chính bộ đo bắt được khi chạy selfCheck
 #: của repo: `typecheck: notApplicable` (Python thuần, đúng) làm kết luận ra
 #: `failed`. Ghi lại đây để đừng ai "dọn cho gọn" bằng cách gộp lại.
-_ACCEPTABLE = (CheckStatus.passed, CheckStatus.skipped)
+#:
+#: Lấy từ contracts.py chứ KHÔNG định nghĩa lại: bản đầu định nghĩa riêng ở
+#: đây, và khi sửa thì chỉ sửa một bên — nên `Verification.isVerified` vẫn coi
+#: `skipped` là trượt trong khi `concludeTask` đã chấp nhận nó. Hai bản của
+#: cùng một luật là cách nó lệch đi.
+from .contracts import _VERIFICATION_ACCEPTABLE as _ACCEPTABLE  # noqa: E402
 
 
 def explainVerdict(verification: Verification,
@@ -206,6 +211,75 @@ def explainVerdict(verification: Verification,
         return "CHƯA XONG — chưa có phép kiểm nào chạy."
     return ("XONG — " + ", ".join(f"{c.name} {c.status.value}"
                                   for c in verification.checks))
+
+
+#: Bộ kiểm cho MỘT LỜI GỌI COMPANY. Tên cố định, dùng ở cả dispatch và test.
+COMPANY_CALL_CHECKS = ("statusOk", "outputSchema", "sideEffectRecorded")
+
+
+def verifyCompanyCall(status: str, outputSchemaErrors: tuple,
+                      sideEffects: tuple, isDryRun: bool = False,
+                      declaresSideEffects: bool = True) -> Verification:
+    """Bằng chứng cho một lời gọi company — thứ dispatch VỐN ĐÃ làm.
+
+    ═══ VÌ SAO HÀM NÀY TỒN TẠI ═══
+
+    Dispatch từ lâu đã soát output theo `outputSchema` và ghi `sideEffects`.
+    Đó CHÍNH LÀ bằng chứng — nhưng nó trôi mất ngay sau khi dùng: kết quả trả
+    về chỉ còn `status: ok`, và sổ chỉ ghi `ok`.
+
+    Hệ quả: sáu tháng sau không ai trả lời được "lần đó đã kiểm những gì".
+    Hàm này không thêm phép kiểm nào mới — nó chỉ GIỮ LẠI thứ đã kiểm, dưới
+    dạng đọc được.
+
+    ═══ VÌ SAO KHÔNG ĐÒI THÊM ═══
+
+    Cám dỗ là bắt mọi lời gọi company chạy typecheck/build/test. Nhưng company
+    là code cứng đã có test riêng; chạy lại cả bộ cho mỗi lần ghi một khoản
+    chi thì việc 0,3 giây thành 40 giây, và thứ gì chậm vô ích thì người ta
+    tắt nó đi.
+
+    Bằng chứng phải TƯƠNG XỨNG với việc. Việc nặng hơn (sửa code, đổi UI) thì
+    dùng bộ kiểm trong registry/verification.yaml.
+    """
+    checks = []
+
+    if isDryRun:
+        # Chạy khô không chạm gì, nên không có gì để kiểm chứng — và nói thẳng
+        # điều đó, đừng cho nó một dấu PASS mà nó chưa kiếm được.
+        return Verification(checks=(
+            VerificationCheck("statusOk", CheckStatus.skipped,
+                              "chạy khô — không có tác động nào để kiểm"),))
+
+    checks.append(VerificationCheck(
+        "statusOk",
+        CheckStatus.passed if status == "ok" else CheckStatus.failed,
+        f"company trả `{status}`"))
+
+    checks.append(VerificationCheck(
+        "outputSchema",
+        CheckStatus.passed if not outputSchemaErrors else CheckStatus.failed,
+        "khớp outputSchema" if not outputSchemaErrors
+        else "; ".join(outputSchemaErrors)[:300]))
+
+    # Năng lực có tác động ra ngoài mà KHÔNG khai sideEffects là một khoảng
+    # tối: thế giới đã đổi và sổ không biết. Nhưng năng lực chỉ ĐỌC thì không
+    # khai gì mới là đúng — nên người gọi phải nói rõ nó thuộc loại nào.
+    if not declaresSideEffects:
+        checks.append(VerificationCheck(
+            "sideEffectRecorded", CheckStatus.skipped,
+            "năng lực chỉ đọc — không có tác động nào để ghi"))
+    elif sideEffects:
+        checks.append(VerificationCheck(
+            "sideEffectRecorded", CheckStatus.passed,
+            f"{len(sideEffects)} tác động đã ghi vào sổ"))
+    else:
+        checks.append(VerificationCheck(
+            "sideEffectRecorded", CheckStatus.inconclusive,
+            "năng lực GHI mà không khai tác động nào — thế giới có thể đã đổi "
+            "mà sổ không biết"))
+
+    return Verification(checks=tuple(checks))
 
 
 def specsForProject(projectCommands: dict, requiredNames: tuple,

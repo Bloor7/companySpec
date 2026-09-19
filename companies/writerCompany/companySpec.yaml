@@ -10,6 +10,11 @@
 # panharmonCompany, không phải company này tự đưa.
 
 companyId: writerCompany
+
+# Tài nguyên company này chạm vào — dùng để soát quyền của
+# Employee (core/contracts.py:Capability.touches). Mặc định là
+# `database`; ở đây khác vì ghi bài vào kho git.
+resource: repository
 displayName: "Phòng nội dung"
 version: 0.1.0
 

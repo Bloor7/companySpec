@@ -13,6 +13,11 @@
 # Tách ra còn giữ được quyền hẹp: company này KHÔNG có Write, KHÔNG có Task.
 
 companyId: searchCompany
+
+# Tài nguyên company này chạm vào — dùng để soát quyền của
+# Employee (core/contracts.py:Capability.touches). Mặc định là
+# `database`; ở đây khác vì tra cứu trên internet.
+resource: web
 displayName: "Phòng tra nhanh"
 version: 0.1.0
 

@@ -14,6 +14,11 @@
 # Câu hỏi vặt thì gọi searchCompany, đừng gọi vào đây.
 
 companyId: researchCompany
+
+# Tài nguyên company này chạm vào — dùng để soát quyền của
+# Employee (core/contracts.py:Capability.touches). Mặc định là
+# `database`; ở đây khác vì đọc nhiều nguồn trên internet.
+resource: web
 displayName: "Phòng nghiên cứu"
 version: 0.2.0
 

@@ -49,6 +49,9 @@ from core.contracts import (  # noqa: E402
 )
 from core.policy import decide as decidePolicy  # noqa: E402
 from core.execution import ProcessLimits, runCompanyProcess  # noqa: E402
+from core.verification import verifyCompanyCall  # noqa: E402
+from core.employeeRegistry import EmployeeManifestError, loadEmployees  # noqa: E402
+import core.audit as coreAudit  # noqa: E402
 
 LOOP_GUARD_MAX = 2  # L4 — cùng dấu vân tay quá số này trong một trace là chặn
 
@@ -244,6 +247,12 @@ def backoffice():
         );
         """
     )
+    # Thêm cột cho Travis Core (policyDecision, employeeId, verificationJson…).
+    #
+    # CHỈ THÊM, không đổi tên, không xoá: sổ này có dữ liệu thật của nhiều
+    # tháng và đang được ops/ lẫn backOffice/ đọc. Mọi cột mới cho phép NULL —
+    # dòng cũ không có dữ liệu đó, và điền mặc định vào là bịa ra quá khứ.
+    coreAudit.migrate(conn)
     return conn
 
 
@@ -279,17 +288,26 @@ def loop_guard_count(conn, trace_id: str, fingerprint: str) -> int:
 
 
 def log_outcome(conn, task_id, trace_id, company_id, capability, risk,
-                fingerprint, result):
+                fingerprint, result, policy_decision=None, policy_reason="",
+                employee_id=None):
     """O5/O6 — mọi lời gọi đều để lại dấu, kể cả lần bị chặn.
-    Không có việc gì trong hệ thống không thuộc về một trace nào (T4)."""
+    Không có việc gì trong hệ thống không thuộc về một trace nào (T4).
+
+    `policy_decision` thêm 2026-09-19. §30 kế hoạch đòi dashboard trả lời được
+    câu "VÌ SAO nó được phép" — và bản cũ ghi `status` nhưng không ghi quyết
+    định lẫn lý do, nên câu đó chỉ trả lời được bằng cách đọc lại code. Mà code
+    thì đã đổi từ lúc đó rồi.
+    """
     conn.execute(
         "INSERT OR REPLACE INTO taskLog (taskId, traceId, companyId, capability, "
         "riskTier, fingerprint, status, summary, startedAt, finishedAt, durationMs, "
-        "costUsd) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        "costUsd, policyDecision, policyReason, employeeId) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (task_id, trace_id, company_id, capability, risk, fingerprint,
          result["status"], result.get("summary", ""), now(), now(),
          result.get("usage", {}).get("durationMs", 0),
-         result.get("usage", {}).get("costUsd", 0.0)),
+         result.get("usage", {}).get("costUsd", 0.0),
+         policy_decision, policy_reason, employee_id),
     )
     conn.commit()
 
@@ -349,13 +367,32 @@ def cmd_call(args) -> dict:
     sweep_orphans(conn)
     risk, fingerprint = "unknown", ""
 
+    # Quyết định Policy gần nhất, để `bail` ghi được VÌ SAO chứ không chỉ ghi
+    # rằng đã chặn. Dùng list một phần tử thay vì `nonlocal` cho gọn — closure
+    # này được gọi từ nhiều nhánh khác nhau.
+    lastPolicy = [None, ""]
+
     def bail(reason, status="rejected", extra=None):
-        """Từ chối, nhưng vẫn để lại dấu vết (O5). Lần bị chặn cũng là dữ liệu."""
+        """Từ chối, nhưng vẫn để lại dấu vết (O5). Lần bị chặn cũng là dữ liệu.
+
+        CHẶN TRƯỚC KHI TỚI POLICY CŨNG LÀ MỘT QUYẾT ĐỊNH — và phải ghi như một
+        quyết định. Company không tồn tại, năng lực không khai, input sai
+        schema: những thứ đó bị cổng vào chặn, không phải bị luật Policy chặn,
+        vì không thể hỏi Policy về một năng lực không tồn tại.
+        Nhưng nếu để trống thì sổ trông như có đường vào hệ KHÔNG qua cửa nào —
+        `travis health` báo đúng chuyện đó, và một cảnh báo sai chỗ thì cũng
+        dạy người ta bỏ qua cảnh báo.
+        """
+        decision = lastPolicy[0] or ("allowWithApproval"
+                                     if status == "needsApproval" else "deny")
+        why = lastPolicy[1] or f"cổng vào chặn: {reason[:160]}"
         res = reject(task_id, trace_id, reason, status)
         if extra:
             res.update(extra)
         log_outcome(conn, task_id, trace_id, args.company, args.capability,
-                    risk, fingerprint, res)
+                    risk, fingerprint, res,
+                    policy_decision=decision, policy_reason=why,
+                    employee_id=getattr(args, "employee", None))
         conn.close()
         return res
 
@@ -409,9 +446,42 @@ def cmd_call(args) -> dict:
     # Mọi thứ core/policy cần biết từ thế giới bên ngoài đều phải TRA Ở ĐÂY rồi
     # đưa vào. Đó là lý do nó tất định, và tất định là lý do nó kiểm được bằng
     # `assert` thay vì phải dựng một lượt chạy thật.
-    capabilityObject = Capability.fromManifest(args.company, cap)
+    capabilityObject = Capability.fromManifest(args.company, cap,
+                                               companyResource=spec.get("resource"))
     identity = (IssuedBy.scheduledTrigger
                 if args.issued_by == "scheduledTrigger" else IssuedBy.ceo)
+
+    # ─── EMPLOYEE (tuỳ chọn) ───
+    #
+    # Không có `--employee` thì giữ nguyên hành vi cũ: CEO gọi thẳng. Có thì
+    # quyền của người đó được soát TRƯỚC Policy, và `cannot` thắng mọi thứ
+    # (E-2). Soát trước vì đây là câu hỏi rẻ hơn và dứt khoát hơn: "người này
+    # có được phép làm loại việc này không" không phụ thuộc nội dung lời gọi.
+    employeeId = getattr(args, "employee", None)
+    if employeeId:
+        try:
+            employees = loadEmployees()
+        except EmployeeManifestError as exc:
+            return bail(f"Hồ sơ employee hỏng: {exc}")
+        employee = employees.get(employeeId)
+        if employee is None:
+            return bail(
+                f"Không có employee `{employeeId}`. Có: "
+                f"{', '.join(sorted(employees)) or '(chưa ai)'}")
+        resource, action = capabilityObject.touches
+        if not employee.mayDo(resource, action):
+            identity = IssuedBy.employee
+            lastPolicy[0], lastPolicy[1] = "deny", (
+                f"`{employeeId}` không có quyền {resource.value}.{action.value}")
+            return bail(
+                f"`{employeeId}` không được phép "
+                f"{resource.value}.{action.value} — nên không gọi được "
+                f"{args.company}.{args.capability}. "
+                + (f"Luật cấm: {', '.join(employee.cannot)}"
+                   if employee.isForbidden(f"{resource.value}.{action.value}")
+                   else "Không khai quyền này = không có (PM-1)."),
+                status="denied")
+        identity = IssuedBy.employee
 
     hen_ok = False
     if args.issued_by == "scheduledTrigger" and args.approval_id:
@@ -419,7 +489,7 @@ def cmd_call(args) -> dict:
         hen_ok = bool(phieu and phieu["henLuc"])
 
     def _askPolicy(**extra):
-        return decidePolicy(PolicyRequest(
+        outcome = decidePolicy(PolicyRequest(
             identity=identity,
             capability=capabilityObject,
             inputValue=inp,
@@ -427,6 +497,9 @@ def cmd_call(args) -> dict:
             scheduledAt=args.hen_luc,
             hasSignedSchedule=hen_ok,
             **extra))
+        # Nhớ lại để `bail` và sổ ghi được VÌ SAO, không chỉ ghi rằng đã chặn.
+        lastPolicy[0], lastPolicy[1] = outcome.decision.value, outcome.reason
+        return outcome
 
     # Vòng hỏi thứ nhất: chỉ để bắt những luật CHẶN THẲNG (S3, L8).
     #
@@ -611,9 +684,11 @@ def cmd_call(args) -> dict:
 
     conn.execute(
         "INSERT INTO taskLog (taskId, traceId, companyId, capability, riskTier, "
-        "fingerprint, status, startedAt) VALUES (?,?,?,?,?,?,?,?)",
+        "fingerprint, status, startedAt, policyDecision, policyReason, "
+        "employeeId) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         (task_id, trace_id, args.company, args.capability, risk,
-         fingerprint, "running", now()),
+         fingerprint, "running", now(),
+         lastPolicy[0], lastPolicy[1], getattr(args, "employee", None)),
     )
     conn.commit()
 
@@ -649,8 +724,10 @@ def cmd_call(args) -> dict:
     )
 
     # 9. C2.3 ra
+    outputSchemaErrors = ()
     if result.get("status") == "ok":
         errs = validate(result.get("output") or {}, cap.get("outputSchema", {}), "output")
+        outputSchemaErrors = tuple(errs)
         if errs and not args.dry_run:
             # Việc ĐÃ chạy xong rồi mới tới lượt kiểm output, nên nếu company khai
             # sideEffects thì thế giới bên ngoài ĐÃ đổi — chỉ có kết quả là không
@@ -674,11 +751,30 @@ def cmd_call(args) -> dict:
     duration = int((time.time() - started) * 1000)
     result.setdefault("usage", {})["durationMs"] = duration
 
+    # ─── BẰNG CHỨNG (V-1) ───
+    #
+    # Không thêm phép kiểm nào mới. Dispatch VỐN ĐÃ soát output theo schema và
+    # ghi sideEffects; chỗ này chỉ GIỮ LẠI thứ đã kiểm thay vì để nó trôi mất
+    # ngay sau khi dùng. Trước đây sổ chỉ ghi `ok`, nên sáu tháng sau không ai
+    # trả lời được "lần đó đã kiểm những gì".
+    #
+    # KHÔNG đổi `result["status"]`: đó là hợp đồng C1 với 22 company và với
+    # CEO. Bằng chứng đi kèm THÊM, không thay thế.
+    verification = verifyCompanyCall(
+        status=result.get("status", "failed"),
+        outputSchemaErrors=outputSchemaErrors,
+        sideEffects=tuple(result.get("sideEffects") or ()),
+        isDryRun=bool(args.dry_run),
+        declaresSideEffects=(risk != "read"),
+    )
+    result["verification"] = verification.toDict()
+
     conn.execute(
-        "UPDATE taskLog SET status=?, summary=?, finishedAt=?, durationMs=?, costUsd=? "
-        "WHERE taskId=?",
+        "UPDATE taskLog SET status=?, summary=?, finishedAt=?, durationMs=?, "
+        "costUsd=?, verificationJson=? WHERE taskId=?",
         (result["status"], result.get("summary", ""), now(), duration,
-         result.get("usage", {}).get("costUsd", 0.0), task_id),
+         result.get("usage", {}).get("costUsd", 0.0),
+         json.dumps(verification.toDict(), ensure_ascii=False), task_id),
     )
     # L8 — TIỀN THẬT đã tiêu, ghi vào sổ riêng.
     #
@@ -791,6 +887,9 @@ def main() -> int:
     p.add_argument("--ttl", type=int, default=None,
                    help="ghi đè hạn chót (giây); bỏ trống thì lấy maxDurationSec của năng lực")
     p.add_argument("--issued-by", default="ceo", choices=["ceo", "scheduledTrigger"])
+    p.add_argument("--employee", help="giao việc cho một employee — quyền của "
+                                      "người đó được soát trước Policy (E-2). "
+                                      "Bỏ trống thì CEO gọi thẳng, như cũ")
     p.set_defaults(fn=cmd_call)
 
     sub.add_parser("list", help="danh mục company và năng lực").set_defaults(fn=cmd_list)

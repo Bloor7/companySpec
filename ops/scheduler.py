@@ -36,6 +36,10 @@ import backoffice as bo  # noqa: E402
 sys.path.insert(0, os.path.join(ROOT, "lib"))
 import db  # noqa: E402
 
+# Luật chống nhắn lặp sống ở core/, không viết lại ở đây (một luật một chỗ).
+sys.path.insert(0, ROOT)
+from core.events import decideNotification  # noqa: E402
+
 SCHEDULES = os.path.join(ROOT, "registry", "schedules.yaml")
 STORE = os.path.join(ROOT, "backOffice", "store.sqlite")
 TZ = timezone(timedelta(hours=7))
@@ -915,10 +919,19 @@ def cmd_run(args):
         # thì nhắn một câu báo đã chạy lại được. Im lặng ở giữa KHÔNG phải nuốt
         # lỗi (O10): mọi lần đều nằm trong scheduleRun, `backoffice report` vẫn
         # đếm đủ.
+        # LUẬT nằm ở core/events.decideNotification — hàm thuần, một chỗ duy
+        # nhất. Trước 2026-09-20 luật này được viết lại ở đây, và có một bản
+        # thứ hai trong core/events.NotificationThrottle. Hai bản của cùng một
+        # luật là cách nó lệch đi.
+        #
+        # Phần LƯU thì vẫn ở đây, và cố ý: trạng thái suy ra từ `scheduleRun`
+        # vốn đã phải ghi, nên không có trạng thái thứ hai để lệch.
         truoc = trang_thai_truoc(conn, sid)
-        im = status == "failed" and truoc == "failed"
-        if status == "ok" and truoc == "failed":
-            n = so_lan_hong_lien_tiep(conn, sid)
+        n = so_lan_hong_lien_tiep(conn, sid)
+        quyet_dinh = decideNotification(truoc, status, n)
+        im = quyet_dinh["action"] == "suppress"
+        if quyet_dinh["action"] == "notifyRecovery":
+            n = quyet_dinh["occurrences"]
             text = (f"— {sched['displayName']} —\n\nĐã chạy lại được"
                     + (f" (hỏng {n} lần liên tiếp trước đó)." if n else ".")
                     + ("\n\n" + text.split("\n\n", 1)[1] if "\n\n" in text else ""))

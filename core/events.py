@@ -90,8 +90,47 @@ class EventBus:
 
 # ══════════════════════════ chống nhắn lặp ══════════════════════════
 
+def decideNotification(previousStatus: Optional[str], currentStatus: str,
+                       consecutiveFailures: int = 0) -> dict:
+    """LUẬT chống nhắn lặp, dạng hàm THUẦN. Không sổ, không trạng thái.
+
+    ═══ VÌ SAO TÁCH RA KHỎI `NotificationThrottle` ═══
+
+    `ops/scheduler.py` đã có bản của riêng nó, và bản đó tốt hơn ở một điểm:
+    nó suy trạng thái từ bảng `scheduleRun` vốn đã phải ghi, nên không có
+    trạng thái thứ hai để lệch. Còn `NotificationThrottle` giữ bảng riêng, hợp
+    với nguồn không có sẵn lịch sử.
+
+    Hai cách lưu, nhưng phải MỘT LUẬT. Hai bản của cùng một luật là cách nó
+    lệch đi — đúng vụ "hạn mức ăn uống" ra hai con số mà cả hai đều không lỗi.
+
+    Nên luật sống ở đây; cả hai bên chỉ đưa dữ liệu vào rồi đọc câu trả lời.
+
+    Trả về `action`:
+      notify         — lần đầu hỏng, nhắn
+      suppress       — đang lặp, im (VẪN GHI SỔ — im lặng khác nuốt lỗi, O10)
+      notifyRecovery — vừa khỏi, báo KÈM số lần đã hỏng
+      silent         — bình thường, không có gì để nói
+    """
+    failedNow = currentStatus == "failed"
+    failedBefore = previousStatus == "failed"
+
+    if failedNow and failedBefore:
+        return {"action": "suppress", "occurrences": consecutiveFailures + 1}
+    if failedNow:
+        return {"action": "notify", "occurrences": 1}
+    if failedBefore:
+        # "Đã khỏi" một mình không nói lên gì; "đã khỏi sau 21 lần hỏng trong
+        # 6 tiếng" nói rằng có thứ cần sửa tận gốc.
+        return {"action": "notifyRecovery", "occurrences": consecutiveFailures}
+    return {"action": "silent", "occurrences": 0}
+
+
 class NotificationThrottle:
     """Lỗi hạ tầng lặp lại thì nhắn MỘT lần, khỏi thì báo kèm số lần.
+
+    Bản CÓ SỔ RIÊNG, cho nguồn không có sẵn lịch sử. Luật nằm ở
+    `decideNotification` — lớp này chỉ lo phần nhớ.
 
     BÀI HỌC (bảng bẫy): cron 15 phút/lần × sự cố 6 tiếng = 21 tin giống hệt
     lúc nửa đêm. Hệ quả không phải phiền — hệ quả là admin HỌC CÁCH BỎ QUA

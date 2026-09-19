@@ -247,9 +247,35 @@ class Capability:
     whitelistScope: tuple = ()
     paidApi: Optional[dict] = None
 
+    #: Tài nguyên năng lực này chạm vào, và chạm kiểu gì.
+    #:
+    #: Manifest khai được (`resource: repository`); không khai thì suy từ
+    #: `riskTier`. Suy chứ không đoán bừa: phần lớn company ở đây ghi vào sổ
+    #: của chính nó hoặc vào Notion, tức là `database`.
+    resource: Optional[ResourceKind] = None
+
     @property
     def qualifiedName(self) -> str:
         return f"{self.companyId}.{self.name}"
+
+    @property
+    def touches(self) -> tuple:
+        """(ResourceKind, ActionKind) — để soát quyền của Employee.
+
+        Mặc định `database` là có chủ ý và nói ra được: company của hệ này
+        hoặc ghi sổ sqlite riêng, hoặc ghi Notion. Company nào chạm thứ khác
+        (repo, web, telegram) thì KHAI `resource:` trong manifest — và khai
+        sai thì `codemap --check` bắt, vì tên phải khớp enum.
+        """
+        resource = self.resource or ResourceKind.database
+        action = {
+            RiskTier.read: ActionKind.read,
+            RiskTier.low: ActionKind.read,
+            RiskTier.write: ActionKind.modify,
+            RiskTier.high: ActionKind.modify,
+            RiskTier.irreversible: ActionKind.delete,
+        }[self.riskTier]
+        return resource, action
 
     @property
     def canWhitelist(self) -> bool:
@@ -270,7 +296,15 @@ class Capability:
         return bool(self.whitelistScope)
 
     @classmethod
-    def fromManifest(cls, companyId: str, raw: dict) -> "Capability":
+    def fromManifest(cls, companyId: str, raw: dict,
+                     companyResource: Optional[str] = None) -> "Capability":
+        # Năng lực khai được riêng; không khai thì lấy của company (tham số
+        # `companyResource`); vẫn không có thì suy từ riskTier.
+        #
+        # Khai ở tầng COMPANY là đủ cho hầu hết trường hợp: một company là một
+        # lĩnh vực có ranh giới, và cả lĩnh vực đó thường chạm cùng một loại
+        # tài nguyên. Một dòng cho cả company, thay vì một dòng cho mỗi năng lực.
+        declaredResource = raw.get("resource") or companyResource
         return cls(
             companyId=companyId,
             name=raw["name"],
@@ -281,6 +315,10 @@ class Capability:
             outputSchema=raw.get("outputSchema") or {},
             whitelistScope=tuple(raw.get("whitelistScope") or ()),
             paidApi=raw.get("paidApi"),
+            # Khai sai tên thì NÉM ngay lúc nạp, không nuốt thành mặc định:
+            # một `resource: repositry` bị nuốt sẽ lặng lẽ thành `database`, và
+            # quyền của employee được soát trên một tài nguyên sai (O10).
+            resource=ResourceKind(declaredResource) if declaredResource else None,
         )
 
 
@@ -692,6 +730,11 @@ class CheckStatus(str, Enum):
     inconclusive = "inconclusive"
 
 
+#: Trạng thái KHÔNG chặn. Một nguồn sự thật duy nhất cho cả contracts.py và
+#: core/verification.py — hai bản của cùng một luật là cách nó lệch đi.
+_VERIFICATION_ACCEPTABLE = (CheckStatus.passed, CheckStatus.skipped)
+
+
 @dataclass
 class VerificationCheck:
     name: str
@@ -711,19 +754,28 @@ class Verification:
 
     @property
     def isVerified(self) -> bool:
-        """`inconclusive` tính là TRƯỢT, cố ý.
+        """`inconclusive` tính là TRƯỢT. `skipped` thì KHÔNG.
 
         Đây là chỗ bài học `is_done()` được đóng đinh bằng code: một bộ kiểm
         không kết luận được thì không phải một bộ kiểm đã qua.
+
+        ⚠ `skipped` KHÁC `inconclusive`, và nhầm chúng đã xảy ra HAI LẦN:
+          · lần đầu ở core/verification.py:concludeTask
+          · lần hai ở ĐÂY — sửa file kia rồi quên file này, nên một lời gọi
+            `read` có mọi phép kiểm đạt vẫn bị gắn nhãn `unverified`
+        Đúng dòng bẫy "cùng một bài học, vá một file quên file kia".
+
+        skipped      = CÓ NGƯỜI KHAI RÕ là không áp dụng (đọc được trong file)
+        inconclusive = KHÔNG chứng minh được gì (thiếu lệnh, quá giờ)
         """
         if not self.checks:
             return False
-        return all(c.status is CheckStatus.passed for c in self.checks)
+        return all(c.status in _VERIFICATION_ACCEPTABLE for c in self.checks)
 
     @property
     def failedCheckNames(self) -> tuple:
         return tuple(c.name for c in self.checks
-                     if c.status is not CheckStatus.passed)
+                     if c.status not in _VERIFICATION_ACCEPTABLE)
 
     def toDict(self) -> dict:
         return {

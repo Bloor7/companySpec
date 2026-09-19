@@ -20,7 +20,10 @@ from harness import (  # noqa: E402
     callDispatch, capabilitiesOf, loadManifests, sampleInputFor,
 )
 
-MANIFESTS = loadManifests()
+# Bỏ company `internal: true`: chúng bị C5 chặn khi gọi qua dispatch mà không
+# có `--allow-internal`, nên ca GỌI THẬT sẽ đỏ vì hàng rào đang làm đúng việc.
+# Chúng được kiểm ở tests/integration/ (có cờ đó) và ở ca soát manifest tĩnh.
+MANIFESTS = loadManifests(includeInternal=False)
 
 # Năng lực tiêu TIỀN THẬT: không gọi, kể cả dry-run.
 #

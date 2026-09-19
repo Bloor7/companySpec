@@ -18,7 +18,8 @@ from harness import (  # noqa: E402
     REPO_ROOT, TRACE_PREFIX, callDispatch, capabilitiesOf, loadManifests,
 )
 
-MANIFESTS = loadManifests()
+# Bỏ company `internal: true` — xem ghi chú trong testDryRunAllCapabilities.py.
+MANIFESTS = loadManifests(includeInternal=False)
 
 
 def _pickCapability(riskTier: str):

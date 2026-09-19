@@ -24,6 +24,11 @@
 # nghĩ. Cần số liệu thật thì hỏi company giữ sổ, đừng hỏi ở đây.
 
 companyId: hoiDongCompany
+
+# Tài nguyên company này chạm vào — dùng để soát quyền của
+# Employee (core/contracts.py:Capability.touches). Mặc định là
+# `database`; ở đây khác vì gửi câu hỏi sang máy của nhà cung cấp model.
+resource: web
 displayName: "Hội đồng cố vấn"
 version: 0.1.0
 

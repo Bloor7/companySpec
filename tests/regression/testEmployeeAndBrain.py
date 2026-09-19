@@ -15,8 +15,8 @@ REPO_ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, REPO_ROOT)
 
 from core.brainRouter import (  # noqa: E402
-    DataBoundaryError, allowedBrainsFor, explainRouting, loadBrainPolicy,
-    routeBrains,
+    DataBoundaryError, allowedBrainsFor, classificationForPrivacyLevel,
+    explainRouting, filterProviderChain, loadBrainPolicy, routeBrains,
 )
 from core.contracts import (  # noqa: E402
     ActionKind, DataClassification, Employee, Environment, Permission,
@@ -275,6 +275,83 @@ class TestRoutingCannotEscalate(unittest.TestCase):
                               POLICY, chain)
         self.assertIn("sensitive", text)
         self.assertIn("chặn", text)
+
+
+class TestPrivacyLevelMapsToClassification(unittest.TestCase):
+    """`nao.riengTu` quyết định prompt bị cắt tới đâu → quyết định gửi cho ai."""
+
+    def testMoreCuttingMeansMoreOpen(self):
+        """Cắt NHIỀU hơn thì được gửi RỘNG hơn — thứ tự phải đúng chiều.
+
+        ⚠ Bản đầu chỉ khai hai mức, nên `toiThieu` (cắt nhiều nhất) rơi vào
+        mặc định an toàn `sensitive` và bị chặn CHẶT HƠN `canTrong` — ngược
+        hoàn toàn. Mặc định an toàn là đúng, nhưng nó không thay được việc
+        khai đủ.
+        """
+        openness = {
+            "toiThieu": len(allowedBrainsFor(
+                classificationForPrivacyLevel("toiThieu"), POLICY)),
+            "canTrong": len(allowedBrainsFor(
+                classificationForPrivacyLevel("canTrong"), POLICY)),
+            "dayDu": len(allowedBrainsFor(
+                classificationForPrivacyLevel("dayDu"), POLICY)),
+        }
+        self.assertGreaterEqual(openness["toiThieu"], openness["canTrong"])
+        self.assertGreater(openness["canTrong"], openness["dayDu"])
+
+    def testUnknownLevelIsTreatedAsMostSensitive(self):
+        """Thêm mức mới mà quên khai thì hệ CHẶN và hỏi, không lặng lẽ gửi đi."""
+        self.assertIs(classificationForPrivacyLevel("mucLaHoac"),
+                      DataClassification.sensitive)
+
+
+class TestLastResortProviderSurvives(unittest.TestCase):
+    """Đừng chặn mất cái phao cứu sinh."""
+
+    def testGroqStaysAvailableForCutPrompts(self):
+        """`groq` là LỚP ĐỠ CUỐI, bật 31/08 sau một phép đo thật: cả hai model
+        Gemini cùng trả 503 trong một lần gọi.
+
+        Bỏ nó khỏi mức `internal` nghĩa là đúng lúc Claude đã câm VÀ cả hai
+        Gemini cùng hỏng, hệ im luôn — tức là im đúng lúc admin cần nó nhất.
+
+        Ca này suýt không tồn tại: bản đầu của brainPolicy.yaml KHÔNG có groq
+        ở `internal`, và nó chỉ lộ ra khi 12 ca não phụ đỏ.
+        """
+        allowed = allowedBrainsFor(
+            classificationForPrivacyLevel("canTrong"), POLICY)
+        self.assertIn("groq", allowed)
+
+    def testRealFallbackChainSurvivesTheBoundaryAtDefaultPrivacy(self):
+        """Chuỗi THẬT trong models.yaml phải còn dùng được ở mức mặc định."""
+        import yaml
+        with open(os.path.join(REPO_ROOT, "registry", "models.yaml"),
+                  encoding="utf-8") as fh:
+            models = yaml.safe_load(fh) or {}
+        chain = (models.get("nao") or {}).get("chuoi") or []
+        self.assertTrue(chain, "models.yaml không khai chuỗi dự phòng nào")
+
+        kept, blocked = filterProviderChain(
+            chain, classificationForPrivacyLevel("canTrong"), POLICY)
+        self.assertTrue(
+            kept,
+            f"ranh giới dữ liệu chặn SẠCH chuỗi dự phòng (chặn: {blocked}). "
+            "Nghĩa là não phụ không bao giờ chạy được — và nó chỉ chạy đúng "
+            "lúc Claude đã câm.")
+
+    def testFullProfileModeBlocksFreeProviders(self):
+        """`dayDu` gửi cả hồ sơ đời tư và số dư ví — nhà miễn phí KHÔNG nhận.
+
+        Nghe khó chịu nhưng đúng: bộ não dự phòng chỉ chạy khi Claude đã câm,
+        và đúng lúc đó mà gửi số dư ví sang một nhà miễn phí thì cái giá không
+        nằm ở chỗ tiện hay không tiện.
+        """
+        kept, blocked = filterProviderChain(
+            [{"nha": "gemini", "model": "x"}, {"nha": "groq", "model": "y"}],
+            classificationForPrivacyLevel("dayDu"), POLICY)
+        self.assertEqual(kept, ())
+        self.assertIn("gemini", blocked)
+        self.assertIn("groq", blocked)
 
 
 if __name__ == "__main__":

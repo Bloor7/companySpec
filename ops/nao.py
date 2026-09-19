@@ -51,6 +51,12 @@ sys.path.insert(0, os.path.join(ROOT, "lib"))
 import db  # noqa: E402
 import llmClient  # noqa: E402
 
+# Ranh giới dữ liệu sống ở core/, không viết lại ở đây (§29, một luật một chỗ).
+sys.path.insert(0, ROOT)
+from core.brainRouter import (  # noqa: E402
+    classificationForPrivacyLevel, filterProviderChain, loadBrainPolicy,
+)
+
 DISPATCH = os.path.join(ROOT, "ops", "dispatch.py")
 CEO_STORE = os.path.join(ROOT, "ceo", "store.sqlite")
 BACKOFFICE = os.path.join(ROOT, "backOffice", "store.sqlite")
@@ -393,6 +399,40 @@ def chay(message: str, *, system_prompt: str, lich_su: list = None,
         if not duoc:
             chi_mien_phi = True
             canh_tran = ly_do
+
+    # ─── RANH GIỚI DỮ LIỆU (§29) ───
+    #
+    # "Local-first" KHÔNG có nghĩa dữ liệu không rời máy: gọi API của nhà nào
+    # là context đi sang máy nhà đó. Đo 27/08 — một lượt đi ra 37.282 byte, có
+    # cả hồ sơ đời tư và số dư từng ví.
+    #
+    # `nao.riengTu` quyết định prompt bị cắt tới đâu, và mức cắt quyết định
+    # nhà nào được nhận. Luật nằm ở registry/brainPolicy.yaml, không ở đây —
+    # nới nó phải là sửa một file đọc được, không phải sửa một nhánh `if`.
+    muc_rieng_tu = (nao_cfg.get("riengTu") or "canTrong")
+    phan_loai = classificationForPrivacyLevel(muc_rieng_tu)
+    # `nhaThuThem` CHỈ dùng cho ca thử với nhà giả — xem docstring của
+    # filterProviderChain. models.yaml thật không khai khoá này.
+    chuoi, bi_chan = filterProviderChain(
+        chuoi, phan_loai, loadBrainPolicy(),
+        extraAllowed=tuple(nao_cfg.get("nhaThuThem") or ()))
+    if bi_chan:
+        # KHÔNG im lặng. Chặn mà không nói thì admin thấy "bộ não dự phòng
+        # không chạy" và đi tìm lỗi ở chỗ không có lỗi.
+        print(f"[nao] ranh giới dữ liệu `{phan_loai.value}` "
+              f"(riengTu={muc_rieng_tu}) chặn: {', '.join(bi_chan)}",
+              file=sys.stderr)
+    if not chuoi:
+        return {"result":
+                f"Không gọi được bộ não dự phòng nào: mức riêng tư "
+                f"`{muc_rieng_tu}` xếp prompt vào loại `{phan_loai.value}`, và "
+                f"ranh giới dữ liệu chặn mọi nhà trong chuỗi "
+                f"({', '.join(bi_chan) or 'chuỗi rỗng'}).\n\n"
+                "Đây KHÔNG phải lỗi — đó là luật đang giữ đúng thứ nó phải "
+                "giữ. Muốn đổi thì sửa `dataBoundary` trong "
+                "registry/brainPolicy.yaml, hoặc đặt `nao.riengTu: canTrong` "
+                "để prompt được cắt bớt trước khi gửi đi.",
+                "is_error": True, "tienVnd": 0.0, "soLuot": 0}
 
     tin = [{"role": "system", "content": system_prompt + KHOI_DAN}]
     for m in lich_su or []:

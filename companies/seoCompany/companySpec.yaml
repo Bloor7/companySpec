@@ -12,6 +12,11 @@
 # khi làm gì. Đắt hơn mọi company khác một bậc — nên đừng gọi nó cho việc vặt.
 
 companyId: seoCompany
+
+# Tài nguyên company này chạm vào — dùng để soát quyền của
+# Employee (core/contracts.py:Capability.touches). Mặc định là
+# `database`; ở đây khác vì soi trang web thật.
+resource: web
 displayName: "Phòng SEO"
 version: 0.1.0
 
