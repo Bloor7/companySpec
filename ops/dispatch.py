@@ -48,6 +48,7 @@ from core.contracts import (  # noqa: E402
     Capability, IssuedBy, PolicyDecision, PolicyRequest,
 )
 from core.policy import decide as decidePolicy  # noqa: E402
+from core.execution import ProcessLimits, runCompanyProcess  # noqa: E402
 
 LOOP_GUARD_MAX = 2  # L4 — cùng dấu vân tay quá số này trong một trace là chặn
 
@@ -624,40 +625,28 @@ def cmd_call(args) -> dict:
     # một hợp đồng: envelope vào stdin, result ra stdout (C1).
     entry = os.path.join(COMPANIES, args.company, spec["entrypoint"])
 
-    # C2.4 — company CHỈ nhận đúng những secret nó đã khai trong manifest.
-    # Nếu truyền cả os.environ thì notesCompany cũng đọc được NOTION_TOKEN, và
-    # "mỗi company một phạm vi" chỉ còn là lời nói. Danh sách lấy từ file trên
-    # đĩa, không lấy từ envelope — model không nới được (G3).
-    child_env = {
-        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-        "HOME": os.environ.get("HOME", ""),
-        "LANG": os.environ.get("LANG", "C.UTF-8"),
-        "PYTHONIOENCODING": "utf-8",
-    }
-    for name in spec.get("secrets") or []:
-        if name in os.environ:
-            child_env[name] = os.environ[name]
-    # Cấu hình không phải secret nhưng thuộc về company (id database…)
-    for name in spec.get("env") or []:
-        if name in os.environ:
-            child_env[name] = os.environ[name]
-
-    try:
-        proc = subprocess.run(
-            [sys.executable, entry],
-            input=json.dumps(envelope, ensure_ascii=False),
-            capture_output=True, text=True, env=child_env,
-            timeout=cap.get("maxDurationSec", 30),
-        )
-        if proc.returncode != 0:
-            raise RuntimeError(proc.stderr.strip()[:400] or "tiến trình thoát khác 0")
-        result = json.loads(proc.stdout)
-    except subprocess.TimeoutExpired:
-        result = reject(task_id, trace_id,
-                        f"Quá {cap.get('maxDurationSec', 30)}s — cắt.", "budgetExceeded")
-    except Exception as exc:
-        result = reject(task_id, trace_id,
-                        f"Company hỏng: {type(exc).__name__}: {exc}", "failed")
+    # Chạy tiến trình con: đã bóc sang core/execution.py.
+    #
+    # C2.4 (company chỉ nhận secret đã khai) và O8 (cửa vào không được sập) giờ
+    # sống ở đó, cùng với ca thử ép chúng vào đúng tình huống đã gây sự cố.
+    #
+    # ⚠ BẢN CŨ Ở ĐÂY CÓ MỘT LỖI, sửa luôn khi chuyển: nó cắt
+    # `proc.stderr.strip()[:400]` — cắt từ ĐẦU chuỗi. Traceback Python để LOẠI
+    # LỖI ở dòng CUỐI, nên company chết là mất đúng dòng nói hỏng vì cái gì.
+    # Bài học này đã ghi trong bảng bẫy và đã vá ở ops/poller.py từ lâu, nhưng
+    # chưa ai vá ở đây — cùng một lỗi, hai file, chỉ một file được sửa.
+    # core/execution cắt từ ĐUÔI.
+    result = runCompanyProcess(
+        entrypoint=entry,
+        interpreter=sys.executable,
+        envelope=envelope,
+        limits=ProcessLimits(
+            timeoutSec=cap.get("maxDurationSec", 30),
+            allowedSecretNames=tuple(spec.get("secrets") or ()),
+            # Cấu hình không phải secret nhưng thuộc về company (id database…)
+            allowedEnvNames=tuple(spec.get("env") or ()),
+        ),
+    )
 
     # 9. C2.3 ra
     if result.get("status") == "ok":
