@@ -261,6 +261,37 @@ class TestTrackRecordFromAudit(unittest.TestCase):
         self.assertEqual(record_.verifiedSuccesses, 1)
         self.assertEqual(record_.failures, 1)
 
+    def testApprovalRequestsAreNotFailures(self):
+        """⚠ Bẫy đã dính thật: `needsApproval` bị đếm vào MẪU SỐ.
+
+        Hệ dừng lại hỏi admin KHÔNG phải là trượt — đó là hệ làm đúng. Đếm
+        chúng làm tỉ lệ đạt tụt vô nghĩa: `xuongCompany.nhanViec` ra 20% trong
+        khi mọi lần nó CHẠY đều xong, chỉ là phần lớn lượt dừng ở cửa duyệt.
+
+        Và cái sai đó nghiêng về phía CHẶT hơn nên nó im lặng — không ai đi
+        tìm lý do một năng lực mãi không lên mức. (Sau khi sửa: 77%.)
+        """
+        rows = [{"status": TaskStatus.completed.value}] * 3
+        rows += [{"status": "needsApproval"}] * 20
+        rows += [{"status": "rejected"}] * 5
+        record_ = recordFromAuditRows("x", "y", rows)
+        self.assertEqual(record_.totalRuns, 3,
+                         "lần KHÔNG CHẠY vẫn vào mẫu số")
+        self.assertEqual(record_.successRate, 1.0)
+
+    def testRanButUnverifiedCountsInDenominatorOnly(self):
+        """`ok` = chạy trót lọt nhưng CHƯA kiểm chứng.
+
+        Nó vào mẫu số mà không vào tử số — chạy mà không chứng minh được thì
+        không được kéo mức lên.
+        """
+        rows = [{"status": TaskStatus.completed.value},
+                {"status": "ok"}]
+        record_ = recordFromAuditRows("x", "y", rows)
+        self.assertEqual(record_.totalRuns, 2)
+        self.assertEqual(record_.verifiedSuccesses, 1)
+        self.assertEqual(record_.successRate, 0.5)
+
     def testIrreversibleFailureIsCounted(self):
         rows = [{"status": TaskStatus.failed.value, "isReversible": False}]
         self.assertEqual(

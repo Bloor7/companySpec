@@ -173,6 +173,21 @@ def explainAutonomy(record: TrackRecord, riskTier: RiskTier) -> str:
     return " · ".join(parts)
 
 
+#: Trạng thái nghĩa là "đã THẬT SỰ chạy company". Chỉ những lần này mới vào
+#: mẫu số của tỉ lệ đạt.
+#:
+#: `ok` có mặt vì nó nghĩa là company chạy trót lọt nhưng CHƯA kiểm chứng —
+#: nó vào mẫu số mà không vào tử số, và đó đúng là điều ta muốn: chạy mà không
+#: chứng minh được thì không kéo mức lên.
+_ACTUALLY_RAN = frozenset({
+    TaskStatus.completed.value,
+    TaskStatus.failed.value,
+    TaskStatus.budgetExceeded.value,
+    TaskStatus.verifying.value,
+    "ok",
+})
+
+
 def recordFromAuditRows(companyId: str, capability: str,
                         rows: list) -> TrackRecord:
     """Dựng TrackRecord từ các dòng audit thật.
@@ -184,8 +199,22 @@ def recordFromAuditRows(companyId: str, capability: str,
     total = successes = failures = irreversible = 0
     lastFailureAt = None
     for row in rows:
-        total += 1
         status = row.get("status")
+
+        # CHỈ ĐẾM NHỮNG LẦN THẬT SỰ CHẠY.
+        #
+        # `needsApproval`, `rejected`, `denied`, `scheduled` là những lần
+        # KHÔNG CHẠY — hệ dừng lại hỏi, hoặc cổng vào chặn. Đếm chúng vào mẫu
+        # số làm tỉ lệ đạt tụt xuống một cách vô nghĩa: `xuongCompany.nhanViec`
+        # ra 20% trong khi mọi lần nó CHẠY đều xong, chỉ là phần lớn lượt gọi
+        # dừng ở cửa duyệt.
+        #
+        # Và cái sai đó nghiêng về phía CHẶT hơn, nên nó im lặng: không ai đi
+        # tìm lý do một năng lực mãi không lên mức.
+        if status not in _ACTUALLY_RAN:
+            continue
+
+        total += 1
         if status == TaskStatus.completed.value:
             successes += 1
             continue

@@ -62,7 +62,7 @@ Ba mức, và sự khác nhau giữa chúng là điều quan trọng nhất ở 
 |---|---|---|---|
 | ✅ | Scheduler hỗ trợ health/review | `core/events/review.py` + lịch `weeklyReview` | `scheduler.py run --force weeklyReview` |
 | 🔶 | Events cho phép Travis proactive | `core/events/` | soát tuần + chống nhắn lặp **đã chạy**; event bus (đẻ Task) **chưa nối** |
-| 🔶 | Autonomy có nhiều level | `core/policy/autonomy.py` | **CHƯA ÁP** — đọc bằng `travis.py autonomy` |
+| 🔶 | Autonomy có nhiều level | `core/policy/autonomy.py` | Thang **LEO ĐƯỢC THẬT** — `travis.py autonomy`. Chưa dùng để bớt hỏi admin |
 | 🔶 | Travis có thể đề xuất self-improvement | `core/events/review.py` | `proposals()` — nêu chỗ hỏng dần, kèm SỐ. Dừng ở CHỮ, cố ý |
 
 ## Cô lập cứng
@@ -84,10 +84,27 @@ admin — phải có test đối chiếu trước, giống `testPolicyParity`. C
 `os.environ` theo danh sách trong manifest (C2.4), và cách đó **đã an toàn**.
 Broker thêm được hạn dùng và sổ tra; nó là cải tiến, không phải vá lỗ.
 
-**Autonomy chưa áp.** Có lý do cụ thể: sổ **chưa có dòng nào `completed`**, vì
-company trả `ok` nghĩa là "chạy trót lọt" chứ không phải "đã kiểm chứng". Nên
-`earnedAutonomy` trả 1 cho mọi thứ — **đúng**, không phải hỏng. Muốn nhích lên
-thì phải có đường đóng dấu `completed`, và đường đó phải qua Verification.
+**Autonomy: thang đã LEO ĐƯỢC, nhưng chưa ai dùng nó để bớt hỏi admin.**
+
+Trước 2026-09-20 nó kẹt ở mức 1 cho mọi thứ vì sổ không có dòng `completed`
+nào. Nay `completed` được **SUY RA TỪ BẰNG CHỨNG**: `core/audit` đọc
+`verificationJson` thay vì đọc tên trạng thái.
+
+Không đổi `taskLog.status` thành `completed` là có chủ ý — **năm chỗ** đang
+đọc đúng chuỗi `ok` (trần whitelist ngày, thống kê backOffice, trí nhớ CEO
+trong một trace, báo cáo và dọn dòng cron của scheduler). Đổi là gãy cả năm
+trong im lặng.
+
+Đo thật hôm nay:
+
+| Năng lực | Mức | Vì sao |
+|---|---|---|
+| `nhacCompany.dsNhac` | **4** | 200/200 đã kiểm chứng, `read` nên trần là 4 |
+| `travisSelfTestCompany.recordWrite` | **2** | 23/23 đã kiểm chứng — **chạm trần `write`** |
+| `xuongCompany.nhanViec` | 1 | tỉ lệ đạt 77% < 90% |
+
+Việc còn lại là để Policy ĐỌC mức đó rồi bớt hỏi admin. Đó phải là một quyết
+định có chủ ý của admin, không phải thứ tự xảy ra vì code đã sẵn sàng.
 
 **Sandbox cứng chưa làm.** §41 xếp nó vào nhóm không làm sớm, và
 `isolationMaturity()` nói thẳng cái chưa có (container/VM, cgroup, netns,

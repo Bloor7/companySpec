@@ -309,12 +309,22 @@ class TestAutonomyReadsRealHistory(unittest.TestCase):
         record = recordFromAuditRows(COMPANY, "echoRead", rows)
         self.assertGreaterEqual(record.totalRuns, 3)
 
-        # `ok` của company KHÔNG phải `completed` — chỉ Verification mới đẩy
-        # được lên đó. Nên mức kiếm được vẫn là 1, và đó là câu trả lời ĐÚNG:
-        # hệ chưa có đường nào đóng dấu `completed` vào sổ.
-        self.assertEqual(earnedAutonomy(record, RiskTier.read), 1,
-                         "mức tự chủ nhảy lên trong khi sổ chưa có dòng nào "
-                         "`completed` — ai đó đang đếm `ok` là thành công")
+        # `completed` SUY RA TỪ BẰNG CHỨNG, không từ tên trạng thái.
+        #
+        # `taskLog.status` vẫn là `ok` — đổi nó thành `completed` sẽ làm gãy
+        # năm chỗ đang đọc đúng chuỗi ấy (trần whitelist ngày, trí nhớ CEO,
+        # dọn dòng cron…). Nên `core/audit.trackRecordRows` đọc
+        # `verificationJson` và chỉ gọi là `completed` khi có bằng chứng.
+        #
+        # Đây là V-1 đóng thành code: "xong" là một KẾT LUẬN từ bằng chứng,
+        # không phải một chuỗi ai đó gõ vào.
+        self.assertGreater(
+            record.verifiedSuccesses, 0,
+            "không dòng nào được suy ra là `completed` — Verification đang "
+            "sinh bằng chứng mà sổ không đọc nó")
+        self.assertGreaterEqual(
+            earnedAutonomy(record, RiskTier.read), 1,
+            "thang tự chủ không leo được dù đã có bằng chứng")
 
 
 # ══════════════════════════ không có đường vòng ══════════════════════════

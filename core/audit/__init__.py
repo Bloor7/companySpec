@@ -192,16 +192,48 @@ def trackRecordRows(conn: sqlite3.Connection, companyId: str,
                     capability: str, limit: int = 200) -> list:
     """Lịch sử của một năng lực, cho core.policy.autonomy tính mức.
 
+    ═══ THÀNH CÔNG ĐỌC TỪ BẰNG CHỨNG, KHÔNG ĐỌC TỪ TÊN TRẠNG THÁI ═══
+
+    `taskLog.status` giữ nguyên `ok` — KHÔNG đổi thành `completed`, vì có NĂM
+    chỗ đang đọc đúng chuỗi ấy và đổi là làm gãy cả năm trong im lặng:
+      · `approvals.used_today` — trần whitelist mỗi ngày
+      · `backoffice` — thống kê whitelist
+      · `session` — trí nhớ CEO về việc đã làm trong một trace
+      · `scheduler` — báo cáo, và dọn dòng cron cũ
+
+    Nên `completed` được SUY RA ở đây: `status == 'ok'` **và**
+    `verificationJson` nói `verified`. Đó mới đúng nghĩa V-1 — "xong" là một
+    kết luận từ BẰNG CHỨNG, không phải một chuỗi ai đó gõ vào.
+
     Chỉ trả về dòng ĐÃ CÓ quyết định policy: dòng cũ hơn mốc di trú không có
-    `verificationJson`, và đếm chúng như thành công là trao quyền dựa trên một
-    quá khứ ta không đo được.
+    bằng chứng nào, và đếm chúng như thành công là trao quyền dựa trên một quá
+    khứ ta không đo được.
     """
     rows = conn.execute(
         "SELECT status, verificationJson, startedAt FROM taskLog "
         "WHERE companyId = ? AND capability = ? AND policyDecision IS NOT NULL "
         "ORDER BY startedAt DESC LIMIT ?", (companyId, capability, limit))
-    return [{"status": r["status"], "createdAt": r["startedAt"],
-             "isReversible": None} for r in rows]
+
+    out = []
+    for row in rows:
+        verified = False
+        if row["status"] == "ok" and row["verificationJson"]:
+            try:
+                verified = (json.loads(row["verificationJson"]).get("status")
+                            == "verified")
+            except json.JSONDecodeError:
+                # Sổ hỏng thì coi là CHƯA kiểm chứng, không coi là đã.
+                # "Không đọc được" và "đã đạt" là hai câu rất khác nhau (O10).
+                verified = False
+        out.append({
+            # `completed` CHỈ xuất hiện khi có bằng chứng. Mọi trường hợp khác
+            # giữ nguyên status thật, để `recordFromAuditRows` phân biệt được
+            # "chạy xong nhưng chưa kiểm" với "trượt".
+            "status": "completed" if verified else row["status"],
+            "createdAt": row["startedAt"],
+            "isReversible": None,
+        })
+    return out
 
 
 def entryFrom(task: Task, outcome: PolicyOutcome,
