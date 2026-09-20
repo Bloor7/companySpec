@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import secrets
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -254,6 +255,19 @@ class Capability:
     #: của chính nó hoặc vào Notion, tức là `database`.
     resource: Optional[ResourceKind] = None
 
+    #: Company TỰ KHAI rằng năng lực này được phép tự chạy khi đã KIẾM ĐƯỢC
+    #: mức tự chủ (xem core/policy/autonomy.py). Không khai = không bao giờ,
+    #: kể cả khi thống kê đẹp tới đâu.
+    #:
+    #: VÌ SAO PHẢI OPT-IN chứ không để bằng chứng tự quyết: thống kê chỉ nói
+    #: năng lực đó CHẠY ĐÚNG, nó không nói hậu quả của một lần sai là gì. Chỉ
+    #: người viết company biết điều đó, và họ nói ra ở đây, bằng một dòng đọc
+    #: được trong manifest — không phải bằng một con số tự trôi lên.
+    #:
+    #: ⚠ Khai `false` thì bị ca thử chặn: muốn đóng thì BỎ khoá đi, để ý định
+    #: đọc được từ MẶT CHỮ. Cùng bài học với `whitelistScope: []`.
+    autonomyOptIn: bool = False
+
     @property
     def qualifiedName(self) -> str:
         return f"{self.companyId}.{self.name}"
@@ -295,6 +309,28 @@ class Capability:
             return False
         return bool(self.whitelistScope)
 
+    @property
+    def canEverActOnEarnedAutonomy(self) -> bool:
+        """Năng lực này có ĐƯỢC PHÉP đi đường tự chủ không — trước khi xét mức.
+
+        Ba điều kiện, và chúng sống ở ĐÚNG MỘT CHỖ là đây. Viết lại phép so này
+        ở dispatcher là tạo nguồn sự thật thứ hai, đúng thứ đã cho ra hai con số
+        "hạn mức ăn uống" mà cả hai đều không lỗi:
+
+          1. Company phải TỰ KHAI. Không khai = không bao giờ.
+          2. Không bao giờ cho việc tốn TIỀN THẬT. Cùng lý lẽ với G9 ở
+             whitelist: "luôn cho phép tiêu tiền" là câu không ai muốn nói, và
+             một lần sai ở đây trừ vào thẻ của admin chứ không vào một cái sổ.
+          3. Không bao giờ cho `irreversible`. `maxAutonomyFor` đã chặn bằng
+             trần 0, nhưng nói lại ở đây là CỐ Ý: hàng rào quan trọng nhất thì
+             đừng để nó chỉ đứng bằng một bảng tra ở file khác.
+        """
+        if not self.autonomyOptIn:
+            return False
+        if self.paidApi:
+            return False
+        return self.riskTier is not RiskTier.irreversible
+
     @classmethod
     def fromManifest(cls, companyId: str, raw: dict,
                      companyResource: Optional[str] = None) -> "Capability":
@@ -319,6 +355,9 @@ class Capability:
             # một `resource: repositry` bị nuốt sẽ lặng lẽ thành `database`, và
             # quyền của employee được soát trên một tài nguyên sai (O10).
             resource=ResourceKind(declaredResource) if declaredResource else None,
+            # Không khai = False. Đó là mặc định ĐÓNG, và nó đúng chiều: quên
+            # khai thì hệ hỏi admin như cũ, không phải tự chạy trong im lặng.
+            autonomyOptIn=bool(raw.get("autonomyOptIn")),
         )
 
 
@@ -384,6 +423,16 @@ class PolicyRequest:
     hasSignedSchedule: bool = False
     whitelistGrant: Optional[str] = None
     externalSpendWouldExceedCap: bool = False
+
+    #: Mức tự chủ năng lực này ĐÃ KIẾM ĐƯỢC, tính từ sổ audit thật.
+    #:
+    #: Policy KHÔNG tự tính con số này — tính nó là mở sqlite, và I/O trong hàm
+    #: quyết định là thứ làm nó hết tất định. Người gọi tra trước rồi đưa vào,
+    #: đúng như `whitelistGrant` và `externalSpendWouldExceedCap`.
+    #:
+    #: Mặc định 0: người gọi nào quên tra thì nhận về hành vi CŨ (hỏi admin),
+    #: không phải hành vi mới. Quên một chỗ thì sai về phía chặt.
+    earnedAutonomyLevel: int = 0
 
 
 @dataclass
@@ -605,6 +654,58 @@ class MemoryTier(str, Enum):
     system = "system"
 
 
+#: Hình dạng hợp lệ của một mốc hết hạn: NGÀY trần, hoặc mốc ISO đầy đủ.
+_MOMENT_SHAPES = (
+    re.compile(r"^\d{4}-\d{2}-\d{2}$"),
+    re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"),
+)
+
+
+def _isWellFormedMoment(value: str) -> bool:
+    return any(shape.match(value) for shape in _MOMENT_SHAPES)
+
+
+def isStillValid(expiresAt: Optional[str], now: str) -> bool:
+    """"Điều này còn đúng vào lúc `now` không?" — ĐỊNH NGHĨA GỐC của M-2.
+
+    ═══ NÓ NẰM Ở TẦNG THẤP NHẤT VÌ BA NƠI CÙNG CẦN HỎI ═══
+
+      · `core/memory.recall` hỏi bằng SQL (`_NOT_EXPIRED`);
+      · `MemoryItem.isExpired` hỏi trên một object;
+      · `gateway/telegram/session.py:profile_block` hỏi về từng dòng của
+        PROFILE.md — một file thuộc `profileCompany`, không nằm trong sổ nào
+        của core.
+
+    Trước 2026-09-20 mỗi nơi có phép so riêng, và chúng lệch nhau: đo được
+    3 trên 4 mốc trong một ngày cho kết quả khác nhau giữa core và gateway.
+    Cái sai nghiêng về hướng MẤT DỮ LIỆU — một điều admin dặn ta nhớ biến mất
+    sớm một ngày, không dòng lỗi nào.
+
+    ═══ HAI QUYẾT ĐỊNH NGỮ NGHĨA, VIẾT RA CHO RÕ ═══
+
+    1. **NGÀY so với NGÀY.** `[đến 2026-10-15]` trong tiếng Việt nghĩa là đúng
+       HẾT ngày 15/10. So thẳng chuỗi 10 ký tự với mốc ISO 20 ký tự thì chuỗi
+       ngắn luôn nhỏ hơn (nó là tiền tố), nên điều ấy rụng ngay 00:00 ngày
+       15/10. Cùng họ với "so chuỗi ngày nguyên bản" trong bảng bẫy.
+
+    2. **`now` là đồng hồ của NGƯỜI GỌI.** Hàm không tự đọc giờ, không biết
+       múi giờ nào là đúng. Ngày của admin là ngày ở Đà Lạt; ai tính theo UTC
+       thì từ 00:00 đến 07:00 giờ VN sẽ trả lời cho hôm trước.
+
+    `core/memory` re-export hàm này; `_NOT_EXPIRED` là bản SQL của nó, và ca
+    `testSqlAndPythonAnswerTheSameQuestion` ép hai bên nói giống nhau.
+    """
+    if not expiresAt:
+        # Không hạn — kể cả chuỗi rỗng. `validate()` chặn chuỗi rỗng ở cửa
+        # vào, nhưng bộ đọc vẫn phải xử lý được dòng đã lỡ nằm trong sổ, và
+        # xử lý theo hướng GIỮ LẠI: đoán sai mà mất trí nhớ của admin thì tệ
+        # hơn đoán sai mà giữ thừa một dòng.
+        return True
+    if len(expiresAt) == 10:
+        return expiresAt >= now[:10]
+    return expiresAt > now
+
+
 class MemoryKind(str, Enum):
     """LUẬT M-1: không biến `inference` thành `fact`.
 
@@ -637,6 +738,14 @@ class MemoryItem:
                 errors.append("inference phải có `confidence`")
             if not self.source:
                 errors.append("inference phải có `source`")
+        if self.expiresAt is not None and not _isWellFormedMoment(self.expiresAt):
+            # Chặn ở CỬA VÀO. `expiresAt = ""` từng ghi vào được mà không bao
+            # giờ đọc ra: bộ đọc SQL coi chuỗi rỗng là "đã rụng", còn bộ đọc
+            # Python coi là "không hạn". Một dòng như thế biến mất im lặng —
+            # và nó là điều admin đã dặn ta nhớ.
+            errors.append(
+                f"`expiresAt` phải là YYYY-MM-DD hoặc mốc ISO đầy đủ, "
+                f"nhận: {self.expiresAt!r}. Không có hạn thì để None.")
         return errors
 
     @property
@@ -647,8 +756,13 @@ class MemoryItem:
         thay người) — không phải cảm giác một ngày, cũng không phải điều luôn
         đúng. Cất mà không hẹn ngày hết thì tệ hơn không cất: hồ sơ nạp vào mọi
         lượt và không bao giờ tự hết hạn.
+
+        ⚠ Dùng `utcNow()`, tức là NGÀY THEO UTC. Ai tính ngày theo giờ admin
+        thì gọi thẳng `isStillValid(expiresAt, now)` với mốc giờ của mình —
+        đừng dùng thuộc tính này. Từ 00:00 tới 07:00 giờ VN, hai bên nói hai
+        ngày khác nhau.
         """
-        return bool(self.expiresAt) and self.expiresAt < utcNow()
+        return not isStillValid(self.expiresAt, utcNow())
 
 
 # ══════════════════════════ 11–12. Secret và Event ══════════════════════════

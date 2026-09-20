@@ -93,6 +93,10 @@ def failOnPurpose(inputValue: dict):
 
 
 HANDLERS = {"echoRead": echoRead, "recordWrite": recordWrite,
+            # Cùng một việc, khác đúng một thứ: manifest khai `autonomyOptIn`
+            # cho nó. Tách ra thành hai tên để `recordWrite` giữ nguyên vai
+            # chốt canh cửa duyệt trong tests/integration/testEndToEnd.py.
+            "recordWriteAuto": recordWrite,
             "failOnPurpose": failOnPurpose}
 
 

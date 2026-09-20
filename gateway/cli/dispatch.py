@@ -50,15 +50,61 @@ BACKOFFICE = os.path.join(ROOT, "backOffice", "store.sqlite")
 # thì TRA Ở ĐÂY rồi đưa vào, nên cùng một câu hỏi luôn ra cùng một câu trả lời.
 sys.path.insert(0, ROOT)
 from core.contracts import (  # noqa: E402
-    Capability, IssuedBy, PolicyDecision, PolicyRequest,
+    Capability, IssuedBy, PolicyDecision, PolicyRequest, SecretRequest,
 )
+import core.secrets as coreSecrets  # noqa: E402
+from core.secrets import SecretLease  # noqa: E402
 from core.policy import decide as decidePolicy  # noqa: E402
+from core.policy.autonomy import (  # noqa: E402
+    earnedAutonomy, recordFromAuditRows,
+)
 from core.execution import ProcessLimits, runCompanyProcess  # noqa: E402
 from core.verification import verifyCompanyCall  # noqa: E402
 from core.permissions import EmployeeManifestError, loadEmployees  # noqa: E402
 import core.audit as coreAudit  # noqa: E402
 
 LOOP_GUARD_MAX = 2  # L4 — cùng dấu vân tay quá số này trong một trace là chặn
+
+
+def _capPhieuSecret(companyId: str, capability: str, declared: tuple,
+                    subject: str, traceId: str) -> tuple:
+    """Xin broker một phiếu cho mỗi secret company đã khai. §28.
+
+    Danh sách `declared` lấy từ MANIFEST TRÊN ĐĨA, không từ envelope — model
+    không nới được (G3). Broker chỉ cấp đúng những tên nằm trong danh sách ấy,
+    nên phiếu không bao giờ rộng hơn manifest.
+
+    O8 — cửa vào không được sập: sổ phiếu hỏng thì KHÔNG được làm chết lời gọi.
+    Nhưng cũng không được im lặng bỏ qua, vì lúc đó hệ chạy mà không ai ghi
+    được "khoá nào đã bị chạm" — đúng câu §30 sinh ra để trả lời. Nên hỏng thì
+    kêu ra stderr và lùi về danh sách manifest, tức là quay đúng về cách hệ
+    chạy trước khi có broker: không mất an toàn, chỉ mất sổ tra.
+    """
+    try:
+        conn = coreSecrets.openStore()
+    except Exception as exc:
+        print(f"[dispatch] không mở được sổ phiếu secret, lùi về manifest: "
+              f"{type(exc).__name__}: {exc}", file=sys.stderr)
+        return tuple(SecretLease(secretName=name, subject=subject,
+                                 expiresAt="9999-12-31T23:59:59Z")
+                     for name in declared)
+    try:
+        leases = []
+        for name in declared:
+            try:
+                leases.append(coreSecrets.issueLease(
+                    conn,
+                    SecretRequest(subject=subject, secretName=name,
+                                  reason=f"chạy {companyId}.{capability}"),
+                    allowedSecretNames=declared, traceId=traceId))
+            except coreSecrets.SecretDenied as exc:
+                # Từ chối là một QUYẾT ĐỊNH, phải nói ra. Im lặng thì company
+                # chết vì thiếu token và không ai biết vì sao.
+                print(f"[dispatch] broker từ chối `{name}`: {exc}",
+                      file=sys.stderr)
+        return tuple(leases)
+    finally:
+        conn.close()
 
 
 # ────────────────────────── tiện ích ──────────────────────────
@@ -493,6 +539,23 @@ def cmd_call(args) -> dict:
         phieu = approvals.get(args.approval_id)
         hen_ok = bool(phieu and phieu["henLuc"])
 
+    # ─── TRA sự thật: mức tự chủ năng lực này ĐÃ KIẾM ĐƯỢC ───
+    #
+    # Chỉ tra khi company đã KHAI `autonomyOptIn`. Không khai thì con số này
+    # không dùng vào việc gì, và một lần mở sqlite cho mỗi lời gọi là cái giá
+    # không có lý do để trả.
+    #
+    # ⚠ `earnedAutonomy` đọc SỔ THẬT, nên nó là I/O — và vì thế nó nằm ở ĐÂY
+    # chứ không trong `core/policy`. Policy nhận con số đã tra xong, và nhờ vậy
+    # nó vẫn trả lời được bằng một dòng assert.
+    earnedLevel = 0
+    if capabilityObject.canEverActOnEarnedAutonomy:
+        earnedLevel = earnedAutonomy(
+            recordFromAuditRows(
+                args.company, args.capability,
+                coreAudit.trackRecordRows(conn, args.company, args.capability)),
+            capabilityObject.riskTier)
+
     def _askPolicy(**extra):
         outcome = decidePolicy(PolicyRequest(
             identity=identity,
@@ -501,6 +564,7 @@ def cmd_call(args) -> dict:
             isDryRun=bool(args.dry_run),
             scheduledAt=args.hen_luc,
             hasSignedSchedule=hen_ok,
+            earnedAutonomyLevel=earnedLevel,
             **extra))
         # Nhớ lại để `bail` và sổ ghi được VÌ SAO, không chỉ ghi rằng đã chặn.
         lastPolicy[0], lastPolicy[1] = outcome.decision.value, outcome.reason
@@ -609,10 +673,19 @@ def cmd_call(args) -> dict:
         # phép là phí một thứ dùng đúng một lần.
         consumedApprovalId = None
         if whitelistGrant is None and args.approval_id:
-            ok, msg = approvals.consume(args.approval_id, fingerprint)
-            why = msg
-            if ok:
-                consumedApprovalId = args.approval_id
+            # Hỏi Policy TRƯỚC, không đưa grant nào, chỉ để biết: việc này có
+            # tự đi được không? Đi được (mức tự chủ đã kiếm đủ) thì ĐỪNG tiêu
+            # phiếu — một chữ ký của admin dùng đúng một lần, đốt nó cho việc
+            # vốn đã được phép là phí.
+            #
+            # Hỏi lại thay vì tự suy ở đây là có chủ ý: viết bản thứ hai của
+            # phép so "có được tự chạy không" là tạo nguồn sự thật thứ hai, và
+            # nó sẽ lệch đúng vào hôm ai đó sửa một bên.
+            if not _askPolicy().isAllowed:
+                ok, msg = approvals.consume(args.approval_id, fingerprint)
+                why = msg
+                if ok:
+                    consumedApprovalId = args.approval_id
 
         # ─── HỎI luật (thuần) ───
         outcome = _askPolicy(whitelistGrant=whitelistGrant,
@@ -716,13 +789,28 @@ def cmd_call(args) -> dict:
     # Bài học này đã ghi trong bảng bẫy và đã vá ở gateway/telegram/poller.py từ lâu, nhưng
     # chưa ai vá ở đây — cùng một lỗi, hai file, chỉ một file được sửa.
     # core/execution cắt từ ĐUÔI.
+    # ─── SECRET BROKER (§28) ───
+    #
+    # Mỗi secret company khai được cấp một PHIẾU mang TÊN, có hạn, có lý do,
+    # có dòng trong sổ tra. Phiếu KHÔNG mang giá trị: giá trị chỉ được bơm vào
+    # môi trường của tiến trình con, ở `buildChildEnvironment`.
+    #
+    # ⚠ Phiếu phải GÁNH VIỆC, không chỉ ghi sổ. `allowedSecretNames` dựng TỪ
+    # phiếu cấp được, nên một secret bị từ chối thì nó KHÔNG đi vào tiến trình
+    # con — chứ không phải vẫn đi vào mà sổ ghi là đã từ chối. Một bản ghi
+    # trông như đang kiểm soát mà thật ra không, là hàng rào giả, và hàng rào
+    # giả hại hơn không có hàng rào vì người đọc sau này sẽ tin nó.
+    leases = _capPhieuSecret(args.company, args.capability,
+                             tuple(spec.get("secrets") or ()),
+                             employeeId or "ceo", trace_id)
+
     result = runCompanyProcess(
         entrypoint=entry,
         interpreter=sys.executable,
         envelope=envelope,
         limits=ProcessLimits(
             timeoutSec=cap.get("maxDurationSec", 30),
-            allowedSecretNames=tuple(spec.get("secrets") or ()),
+            allowedSecretNames=tuple(lease.secretName for lease in leases),
             # Cấu hình không phải secret nhưng thuộc về company (id database…)
             allowedEnvNames=tuple(spec.get("env") or ()),
         ),

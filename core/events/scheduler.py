@@ -76,6 +76,10 @@ def _send(chatId: str, text: str) -> dict:
 # Luật chống nhắn lặp sống ở core/, không viết lại ở đây (một luật một chỗ).
 sys.path.insert(0, ROOT)
 from core.events import decideNotification  # noqa: E402
+import core.events as coreEvents  # noqa: E402
+import core.secrets as coreSecrets  # noqa: E402
+import core.audit as coreAudit  # noqa: E402
+import core.missions as coreMissions  # noqa: E402
 
 SCHEDULES = os.path.join(ROOT, "registry", "schedules.yaml")
 STORE = os.path.join(ROOT, "backOffice", "store.sqlite")
@@ -941,6 +945,23 @@ def cmd_run(args):
     if don:
         print(f"đã dọn {don} dòng thăm dò cũ của cron")
 
+    # Cùng nhịp, cùng lý lẽ: sổ phiếu secret cũng phình vì bộ đo (~190 phiếu
+    # mỗi lượt `tests/run.py`). Chỉ dọn phiếu CỦA BỘ ĐO và ĐÃ HẾT HẠN — phiếu
+    # thật giữ nguyên, vì chúng là câu trả lời cho §30.
+    don_phieu = don_phieu_secret()
+    if don_phieu:
+        print(f"đã dọn {don_phieu} phiếu secret cũ của bộ đo")
+
+    # EV-1 — gom sự cố thành ĐỀ XUẤT rồi báo admin. Không thi hành gì.
+    # Bọc riêng: bộ phát hiện hỏng thì lịch định kỳ và lời nhắc vẫn phải chạy.
+    try:
+        n_de_xuat = duyet_su_kien(admin)
+        if n_de_xuat:
+            print(f"đã báo admin {n_de_xuat} đề xuất từ event bus")
+    except Exception as exc:
+        print(f"[scheduler] duyệt sự kiện hỏng: "
+              f"{type(exc).__name__}: {exc}", file=sys.stderr)
+
     # Hẹn giờ KHÔNG chạy ở đây — nó có timer riêng nhịp 1 phút (`scheduler.py
     # hen`). Để chung thì cái hẹn 3h sáng kêu lúc 3h14, mà đó đúng là thứ cần
     # sửa. Vẫn gọi một lần ở đây làm lưới đỡ: timer 1 phút chết thì ít nhất
@@ -1046,6 +1067,171 @@ def don_dong_cron() -> int:
     c.commit()
     c.close()
     return n
+
+
+#: Chỉ soi lời gọi hỏng trong ngần này giờ. Quét cả lịch sử thì lần chạy đầu
+#: tiên sau khi bật sẽ nhắn về mọi sự cố từ tháng Tám — báo động về QUÁ KHỨ,
+#: đúng cái bẫy đã dính một lần với "5288 lời gọi không qua cửa".
+SOI_SU_CO_GIO = 6
+
+#: Trần số đề xuất in ra trong MỘT tin. Nhiều hơn thì đếm và nói là còn nữa:
+#: một tin dài 40 dòng lúc nửa đêm cũng dạy admin bỏ qua thông báo, y như 21
+#: tin ngắn.
+TRAN_DE_XUAT_MOI_TIN = 5
+
+
+def _su_that_su_co(conn) -> dict:
+    """TRA sự thật cho event bus. Chỉ đọc, không quyết định gì.
+
+    Luật nằm ở `core.events.eventsFromFacts` — hàm thuần. Ở đây chỉ mở sqlite
+    và múc dữ liệu, đúng chỗ phân vai giữa `core/` và tầng dây dẫn.
+
+    Mỗi nguồn bọc riêng: sổ mission hỏng thì vẫn phải báo được lời gọi hỏng.
+    Gộp chung một try là để một nguồn câm làm câm cả bộ phát hiện.
+    """
+    moc = (datetime.now(timezone.utc) - timedelta(hours=SOI_SU_CO_GIO)
+           ).strftime("%Y-%m-%dT%H:%M:%SZ")
+    facts = {}
+
+    try:
+        # sql-an-toan: chỉ ghép `notTest` dựng từ hằng viết cứng; giá trị qua `?`
+        notTest = " AND ".join(f"traceId NOT LIKE '{p}%'"
+                               for p in coreAudit.TEST_TRACE_PREFIXES)
+        c = db.connect(STORE)
+        # sql-an-toan: chỉ ghép `notTest` dựng từ hằng viết cứng; giá trị qua `?`
+        facts["failedTasks"] = [dict(r) for r in c.execute(
+            "SELECT taskId, companyId, capability, startedAt FROM taskLog "
+            f"WHERE status = 'failed' AND startedAt >= ? AND {notTest} "
+            "ORDER BY startedAt DESC LIMIT 50", (moc,))]
+        facts["quotaHits"] = [dict(r) for r in c.execute(
+            "SELECT hitId, loai, resetLuc, createdAt FROM quotaHit "
+            "WHERE createdAt >= ? ORDER BY createdAt DESC LIMIT 10", (moc,))]
+        c.close()
+    except Exception as exc:
+        print(f"[scheduler] không tra được sổ backOffice: "
+              f"{type(exc).__name__}: {exc}", file=sys.stderr)
+
+    try:
+        m = coreMissions.openStore()
+        try:
+            facts["stalledMissions"] = [
+                {"missionId": row.get("missionId", ""),
+                 "title": row.get("title", ""),
+                 "updatedAt": row.get("updatedAt", "")}
+                for row in coreMissions.stalledMissions(m)]
+        finally:
+            m.close()
+    except Exception as exc:
+        print(f"[scheduler] không tra được sổ mission: "
+              f"{type(exc).__name__}: {exc}", file=sys.stderr)
+
+    return facts
+
+
+def duyet_su_kien(admin: str) -> int:
+    """EV-1 — gom sự cố, đẻ ĐỀ XUẤT, BÁO admin. Không thi hành gì.
+
+    ═══ BA THỨ CA NÀY PHẢI GIỮ, VÀ MỖI THỨ LÀ MỘT HOÁ ĐƠN ═══
+
+    1. **Đề xuất không phải lệnh.** `proposalsAreReadOnly` soát bằng CODE, và
+       nếu có đề xuất việc GHI thì bỏ hết chứ không "lọc bớt" — một bộ luật đã
+       đẻ ra thứ nó không được phép đẻ thì không đáng tin phần còn lại.
+
+    2. **Không nhắn lặp.** `recordIfNew` trả False cho sự cố đã biết, nên 6
+       tiếng sự cố × 15 phút một lần vẫn chỉ một tin. Bẫy 21 tin lúc nửa đêm.
+
+    3. **Báo cho người cần biết.** Vòng nào chạy xong mà người cần biết không
+       biết thì tính là CHƯA XONG — nên nó đẩy tin ra, không chỉ ghi sổ.
+    """
+    facts = _su_that_su_co(None)
+    events = coreEvents.eventsFromFacts(facts)
+    if not events:
+        return 0
+
+    try:
+        conn = coreEvents.openStore()
+    except Exception as exc:
+        print(f"[scheduler] không mở được sổ event: "
+              f"{type(exc).__name__}: {exc}", file=sys.stderr)
+        return 0
+
+    try:
+        moi = [e for e in events if coreEvents.recordIfNew(conn, e)]
+    finally:
+        conn.close()
+    if not moi:
+        return 0
+
+    bus = coreEvents.EventBus()
+    for rule in coreEvents.defaultRules():
+        bus.register(rule)
+
+    de_xuat = []
+    for event in moi:
+        de_xuat.extend(bus.dispatch(event))
+    if not de_xuat:
+        return 0
+
+    # EV-1 bằng code. `riskOf` không bao giờ được gọi với bộ luật hiện tại —
+    # mọi đề xuất đều để trống companyId — nhưng nó phải có mặt, vì luật thứ
+    # tư ai đó thêm vào ngày mai sẽ không đọc lại đoạn chú thích này.
+    pham = coreEvents.proposalsAreReadOnly(tuple(de_xuat), _rui_ro_cua)
+    if pham:
+        print("[scheduler] EV-1 — bỏ TOÀN BỘ đề xuất, có luật đòi việc ghi: "
+              + "; ".join(pham), file=sys.stderr)
+        return 0
+
+    dong = [f"· {p.reason}" for p in de_xuat[:TRAN_DE_XUAT_MOI_TIN]]
+    if len(de_xuat) > TRAN_DE_XUAT_MOI_TIN:
+        dong.append(f"· … còn {len(de_xuat) - TRAN_DE_XUAT_MOI_TIN} việc nữa")
+    _send(admin, "Em thấy mấy chuyện này, chưa làm gì cả:\n" + "\n".join(dong))
+    return len(de_xuat)
+
+
+def _rui_ro_cua(companyId: str, capability: str):
+    """riskTier của một năng lực, đọc từ MANIFEST trên đĩa.
+
+    core/ không đọc file company (W3′), nên phép tra này nằm ở đây và được
+    truyền vào. Không đọc được thì trả `irreversible` — mức NẶNG NHẤT, để một
+    manifest hỏng làm đề xuất bị chặn chứ không làm nó lọt.
+    """
+    from core.contracts import RiskTier
+    try:
+        with open(os.path.join(ROOT, "companies", companyId,
+                               "companySpec.yaml"), encoding="utf-8") as fh:
+            spec = yaml.safe_load(fh) or {}
+        for cap in spec.get("capabilities", []):
+            if cap.get("name") == capability:
+                return RiskTier(cap["riskTier"])
+    except Exception:
+        pass
+    return RiskTier.irreversible
+
+
+def don_phieu_secret() -> int:
+    """Dọn phiếu secret cũ của bộ đo. Luật nằm ở `core/secrets.prune`.
+
+    Ở đây chỉ có DÂY DẪN: mở sổ, gọi, đóng. Viết lại phép lọc ở đây là tạo bản
+    thứ hai của cùng một luật — đúng thứ vừa phải gom lại ở `isStillValid`.
+
+    O8 — nhịp 15 phút không được sập vì một việc dọn dẹp. Hỏng thì kêu ra
+    stderr rồi đi tiếp: dọn muộn không hại ai, còn scheduler chết thì lời nhắc
+    của admin không kêu.
+    """
+    try:
+        conn = coreSecrets.openStore()
+    except Exception as exc:
+        print(f"[scheduler] không mở được sổ phiếu secret: "
+              f"{type(exc).__name__}: {exc}", file=sys.stderr)
+        return 0
+    try:
+        return coreSecrets.prune(conn)
+    except Exception as exc:
+        print(f"[scheduler] không dọn được phiếu secret: "
+              f"{type(exc).__name__}: {exc}", file=sys.stderr)
+        return 0
+    finally:
+        conn.close()
 
 
 def cmd_hen(args):

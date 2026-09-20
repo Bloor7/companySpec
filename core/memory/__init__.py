@@ -30,7 +30,14 @@ import re
 import sqlite3
 from typing import Optional
 
-from ..contracts import MemoryItem, MemoryKind, MemoryTier, newId, utcNow
+from ..contracts import (
+    MemoryItem, MemoryKind, MemoryTier, isStillValid, newId, utcNow,
+)
+
+# Re-export có chủ ý: định nghĩa gốc của M-2 nằm ở `core.contracts` (tầng thấp
+# nhất, ba nơi cùng đọc được), nhưng người gọi nghĩ về nó như một luật TRÍ NHỚ
+# nên họ tìm nó ở đây. Một định nghĩa, hai lối vào — không phải hai bản.
+__all__ = ["isStillValid"]
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # core/<goi>/ nen lui BA cap
 DEFAULT_STORE = os.path.join(ROOT, "core", "memory.sqlite")
@@ -126,6 +133,34 @@ def remember(conn: sqlite3.Connection, item: MemoryItem,
 _SCOPED_TIERS = (MemoryTier.project, MemoryTier.employee)
 
 
+#: "Chưa rụng" — và định nghĩa nó ở ĐÚNG MỘT CHỖ, vì hai nơi cùng cần
+#: (`recall` và `expiringSoon`). Viết lại phép so lần thứ hai là cách hai bên
+#: lệch nhau, đúng thứ `_VERIFICATION_ACCEPTABLE` đã phải gom lại một lần rồi.
+#:
+#: ═══ VÌ SAO KHÔNG SO THẲNG `expiresAt > ?` ═══
+#:
+#: `expiresAt` là NGÀY (10 ký tự, "2026-10-15"), còn `now` là mốc ISO đầy đủ
+#: (20 ký tự, "2026-09-20T05:00:00Z"). Chuỗi ngắn là tiền tố của chuỗi dài nên
+#: nó LUÔN nhỏ hơn — nghĩa là một điều "đến 15/10" rụng ngay 00:00 ngày 15/10
+#: thay vì cuối ngày. Đo 20/09: 3 trên 4 mốc trong ngày cho kết quả khác
+#: gateway, và cái sai nghiêng về hướng MẤT DỮ LIỆU.
+#:
+#: `[đến 2026-10-15]` trong tiếng Việt nghĩa là **đúng hết ngày 15/10**. Nên
+#: ngày thì so với NGÀY: cắt `now` còn 10 ký tự rồi so `>=`.
+#:
+#: Cùng họ với "so chuỗi ngày nguyên bản" trong bảng bẫy CLAUDE.md, và với
+#: "lọc ngày theo UTC, đối chiếu theo giờ VN" — xem ghi chú về `now` ở `recall`.
+#: Bản SQL của `isStillValid`. Hai thân của MỘT luật, nên chúng có thể lệch —
+#: ca `testSqlAndPythonAnswerTheSameQuestion` đối chiếu trên một ma trận.
+#: Nhánh `expiresAt = ''` có mặt vì bản đầu thiếu nó: chuỗi rỗng ghi vào được
+#: mà không bao giờ đọc ra, và chính ma trận ấy bắt được.
+_NOT_EXPIRED = (
+    "expiresAt IS NULL OR expiresAt = '' "
+    "OR (length(expiresAt) = 10 AND expiresAt >= substr(?, 1, 10)) "
+    "OR (length(expiresAt) > 10 AND expiresAt > ?)"
+)
+
+
 def recall(conn: sqlite3.Connection, tier: MemoryTier, scopeId: str = "",
            kinds: tuple = (), limit: int = 50,
            now: Optional[str] = None) -> list:
@@ -134,12 +169,25 @@ def recall(conn: sqlite3.Connection, tier: MemoryTier, scopeId: str = "",
     Hết hạn thì im lặng biến mất khỏi kết quả, nhưng vẫn nằm trong sổ: xoá
     ngay thì mất dấu vết "hệ từng tin điều này", và đó là thứ cần khi đi lần
     ngược một quyết định cũ.
+
+    ⚠ `now` QUYẾT ĐỊNH ngày nào là "hôm nay", nên MÚI GIỜ của nó là một phần
+    của câu trả lời, không phải chi tiết kỹ thuật. Mặc định `utcNow()` là UTC;
+    người gọi nào tính ngày theo giờ admin thì phải TỰ ĐƯA mốc giờ đó vào —
+    `gateway/telegram/session.py` làm đúng thế.
+
+    Lý do nó không tự biết: core không đọc cấu hình, không đọc đồng hồ ngoài
+    `utcNow()`. Múi giờ là sự thật của thế giới bên ngoài, nên người gọi tra
+    trước rồi đưa vào — cùng luật với `earnedAutonomyLevel` ở Policy.
+
+    Khoảng 00:00–07:00 giờ VN là chỗ hai múi giờ nói hai ngày khác nhau, và
+    bảng bẫy CLAUDE.md đã gọi tên nó một lần với bộ lọc ngày của Notion.
     """
     now = now or utcNow()
     sql = ["SELECT * FROM memoryItem WHERE tier = ?",
-           "AND (expiresAt IS NULL OR expiresAt > ?)",
+           f"AND ({_NOT_EXPIRED})",
            "AND supersededBy IS NULL"]
-    params = [tier.value, now]
+    # `now` vào HAI lần vì `_NOT_EXPIRED` có hai nhánh (ngày trần / mốc đầy đủ).
+    params = [tier.value, now, now]
     if scopeId:
         sql.append("AND scopeId = ?")
         params.append(scopeId)
@@ -173,15 +221,34 @@ def expiringSoon(conn: sqlite3.Connection, withinDays: int = 7,
 
     Không có bước này thì M-2 sửa một lỗi (nhớ mãi thứ đã sai) bằng cách tạo
     một lỗi khác (quên mất thứ vẫn đúng).
+
+    ⚠ `horizon` dựng TỪ `now`, không từ đồng hồ máy. Bản đầu nhận `now` cho
+    cận dưới nhưng lại gọi `datetime.now()` cho cận trên — tức là một nửa phép
+    so đọc đồng hồ thật. Hàm ấy trông y hệt một hàm kiểm được: nhận `now`, có
+    mặc định tử tế, không lỗi bao giờ. Chỉ là truyền `now` vào không đổi được
+    kết quả, nên mọi ca thử viết quanh nó đều đo đồng hồ chứ không đo luật.
     """
     from datetime import datetime, timedelta, timezone
     now = now or utcNow()
-    horizon = (datetime.now(timezone.utc) + timedelta(days=withinDays)
-               ).strftime("%Y-%m-%dT%H:%M:%SZ")
+    try:
+        anchor = datetime.strptime(now[:19], "%Y-%m-%dT%H:%M:%S").replace(
+            tzinfo=timezone.utc)
+    except ValueError as exc:
+        # Ném chứ không lùi về đồng hồ máy: lùi âm thầm là cách con bug cũ
+        # sống sót qua mọi ca thử (O10).
+        raise MemoryValidationError(
+            f"`now` phải là mốc ISO dạng YYYY-MM-DDTHH:MM:SSZ, nhận: {now!r}"
+        ) from exc
+    horizon = (anchor + timedelta(days=withinDays)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ")
+
+    # Cùng phép so ngày-với-ngày như `recall`: một điều "đến 15/10" vẫn còn
+    # đúng hết ngày 15/10, nên nó chưa rụng chứ không phải đã rụng.
+    # sql-an-toan: chỉ ghép `_NOT_EXPIRED` dựng từ hằng viết cứng; giá trị qua `?`
     rows = conn.execute(
         "SELECT * FROM memoryItem WHERE expiresAt IS NOT NULL "
-        "AND expiresAt > ? AND expiresAt <= ? AND supersededBy IS NULL "
-        "ORDER BY expiresAt", (now, horizon))
+        f"AND ({_NOT_EXPIRED}) AND expiresAt <= ? AND supersededBy IS NULL "
+        "ORDER BY expiresAt", (now, now, horizon))
     return [_toItem(row) for row in rows]
 
 

@@ -53,6 +53,14 @@ class SecretLease:
     reason: str = ""
     issuedAt: str = field(default_factory=utcNow)
 
+    #: Trace đã xin phiếu này. Có mặt để TÁCH lưu lượng của bộ đo ra khỏi sổ
+    #: tra, không phải để che nó đi — theo đúng tiền lệ `evl_` ở `ceoRunLog`
+    #: và `reg_` ở báo cáo backOffice.
+    #:
+    #: Một sổ "khoá nào đã bị chạm" mà 90% là dòng của `tests/run.py` thì nó
+    #: vẫn đúng và vẫn vô dụng: không ai đọc nổi để tìm ra lần chạm thật.
+    traceId: str = ""
+
     def isValidAt(self, moment: Optional[str] = None) -> bool:
         return (moment or utcNow()) < self.expiresAt
 
@@ -81,19 +89,28 @@ def openStore(path: str = DEFAULT_STORE) -> sqlite3.Connection:
           reason     TEXT NOT NULL DEFAULT '',
           issuedAt   TEXT NOT NULL,
           expiresAt  TEXT NOT NULL,
-          revokedAt  TEXT
+          revokedAt  TEXT,
+          traceId    TEXT NOT NULL DEFAULT ''
         );
         CREATE INDEX IF NOT EXISTS secretLease_subject
           ON secretLease (subject, issuedAt);
         """
     )
+    # Sổ dựng trước 2026-09-20 chưa có cột `traceId`. Thêm tại chỗ, idempotent
+    # — không thêm thì `issueLease` ném OperationalError ở lời gọi đầu tiên
+    # sau khi cập nhật, tức là cửa vào sập vì một cột thiếu (O8).
+    if "traceId" not in {row[1] for row in
+                         conn.execute("PRAGMA table_info(secretLease)")}:
+        conn.execute("ALTER TABLE secretLease ADD COLUMN traceId TEXT "
+                     "NOT NULL DEFAULT ''")
     conn.commit()
     return conn
 
 
 def issueLease(conn: sqlite3.Connection, request: SecretRequest,
                allowedSecretNames: tuple,
-               leaseSeconds: int = DEFAULT_LEASE_SECONDS) -> SecretLease:
+               leaseSeconds: int = DEFAULT_LEASE_SECONDS,
+               traceId: str = "") -> SecretLease:
     """Cấp phiếu — hoặc từ chối và nói rõ vì sao.
 
     `allowedSecretNames` do NGƯỜI GỌI tra từ manifest/employee rồi đưa vào.
@@ -118,13 +135,13 @@ def issueLease(conn: sqlite3.Connection, request: SecretRequest,
     lease = SecretLease(
         secretName=request.secretName, subject=request.subject,
         expiresAt=expiresAt, projectId=request.projectId,
-        reason=request.reason.strip())
+        reason=request.reason.strip(), traceId=traceId)
 
     conn.execute(
         "INSERT INTO secretLease (leaseId, secretName, subject, projectId, "
-        "reason, issuedAt, expiresAt) VALUES (?,?,?,?,?,?,?)",
+        "reason, issuedAt, expiresAt, traceId) VALUES (?,?,?,?,?,?,?,?)",
         (lease.leaseId, lease.secretName, lease.subject, lease.projectId,
-         lease.reason, lease.issuedAt, lease.expiresAt))
+         lease.reason, lease.issuedAt, lease.expiresAt, lease.traceId))
     conn.commit()
     return lease
 
@@ -161,16 +178,76 @@ def resolveForProcess(leases: tuple, environment: dict,
     return resolved
 
 
-def auditTrail(conn: sqlite3.Connection, limit: int = 50) -> list:
+#: Tiền tố trace của bộ đo. Cùng danh sách với `core.audit.TEST_TRACE_PREFIXES`
+#: — KHÔNG import về để `core.secrets` không phụ thuộc `core.audit` cho một
+#: hằng; nhưng chúng phải khớp, và ca thử ép chúng khớp.
+TEST_TRACE_PREFIXES = ("reg_", "evl_", "e2e_", "demo_")
+
+
+def auditTrail(conn: sqlite3.Connection, limit: int = 50,
+               includeTestTraffic: bool = False) -> list:
     """Ai xin khoá gì, lúc nào, để làm gì.
 
     Đây là câu trả lời cho dòng "Which secrets were accessed?" trong danh sách
     câu hỏi mà BackOffice phải trả lời được (§30 kế hoạch).
+
+    Mặc định BỎ lưu lượng của bộ đo. Mỗi lần chạy `tests/run.py` đi qua hơn 80
+    năng lực, nên không lọc thì sổ này gần như toàn dòng `reg_` và câu hỏi
+    "khoá nào đã bị chạm" trở thành không trả lời nổi — sổ vẫn đúng, và vẫn
+    vô dụng.
+
+    KHÔNG che hẳn: `includeTestTraffic=True` lấy đủ. Bộ đo tự xoá dấu vết của
+    mình là bộ đo không kiểm được — tiền lệ `evl_` ở `ceoRunLog` đã chốt điều
+    đó một lần rồi.
     """
+    columns = ("SELECT leaseId, secretName, subject, projectId, reason, "
+               "issuedAt, expiresAt, revokedAt, traceId FROM secretLease")
+    if includeTestTraffic:
+        # sql-an-toan: chỉ ghép `columns` viết cứng ngay trên; giá trị qua `?`
+        return [dict(r) for r in conn.execute(
+            f"{columns} ORDER BY issuedAt DESC LIMIT ?", (limit,))]
+
+    # sql-an-toan: chỉ ghép `notTest` dựng từ hằng viết cứng; giá trị qua `?`
+    notTest = " AND ".join(f"traceId NOT LIKE '{prefix}%'"
+                           for prefix in TEST_TRACE_PREFIXES)
     return [dict(r) for r in conn.execute(
-        "SELECT leaseId, secretName, subject, projectId, reason, issuedAt, "
-        "expiresAt, revokedAt FROM secretLease ORDER BY issuedAt DESC LIMIT ?",
-        (limit,))]
+        f"{columns} WHERE {notTest} ORDER BY issuedAt DESC LIMIT ?", (limit,))]
+
+
+#: Giữ phiếu ĐÃ HẾT HẠN của bộ đo bao lâu trước khi dọn.
+#:
+#: Một lượt `tests/run.py` đẻ ~190 phiếu. Không dọn thì sổ phình đúng kiểu
+#: `taskLog` của cron từng phình — đo 01/09, cron chiếm 61% số dòng sau MỘT
+#: ngày. Không tốn tiền, nhưng làm mọi câu truy vấn nhiễu đi.
+GIU_NGAY_PHIEU_CA_THU = 2
+
+
+def prune(conn: sqlite3.Connection, keepDays: int = GIU_NGAY_PHIEU_CA_THU,
+          now: Optional[str] = None) -> int:
+    """Dọn phiếu CỦA BỘ ĐO đã hết hạn từ lâu. Trả về số dòng đã xoá.
+
+    BA HÀNG RÀO, mỗi cái chặn một cách hỏng — cùng hình với `don_dong_cron`:
+
+    · chỉ tiền tố của bộ đo. Phiếu THẬT không bao giờ bị dọn: sổ này là câu
+      trả lời cho §30 "khoá nào đã bị chạm", và một câu trả lời tự xoá mình
+      sau vài ngày thì không phải câu trả lời.
+    · chỉ phiếu ĐÃ HẾT HẠN. Phiếu còn hạn có thể đang được dùng.
+    · chỉ cũ hơn `keepDays`, để còn soi được lượt chạy hôm qua.
+
+    Trả về số dòng để chỗ gọi IN RA. Dọn im lặng thì có ngày nó dọn nhầm mà
+    không ai biết.
+    """
+    now = now or utcNow()
+    cutoff = (datetime.strptime(now[:19], "%Y-%m-%dT%H:%M:%S")
+              - timedelta(days=keepDays)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    # sql-an-toan: chỉ ghép `isTest` dựng từ hằng viết cứng; giá trị qua `?`
+    isTest = " OR ".join(f"traceId LIKE '{prefix}%'"
+                         for prefix in TEST_TRACE_PREFIXES)
+    removed = conn.execute(
+        f"DELETE FROM secretLease WHERE ({isTest}) AND expiresAt < ?",
+        (cutoff,)).rowcount
+    conn.commit()
+    return removed
 
 
 def redact(text: str, environment: Optional[dict] = None) -> str:

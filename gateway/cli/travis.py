@@ -29,15 +29,18 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 sys.path.insert(0, ROOT)
 
 import core.audit as coreAudit  # noqa: E402
+import core.secrets as coreSecrets  # noqa: E402
 from core.policy.autonomy import (  # noqa: E402
     describeLevel, earnedAutonomy, explainAutonomy, maxAutonomyFor,
-    recordFromAuditRows,
+    mayActWithoutAsking, recordFromAuditRows,
 )
 from brains.router import (  # noqa: E402
     DataBoundaryError, allowedBrainsFor, explainRouting, loadBrainPolicy,
     routeBrains,
 )
-from core.contracts import DataClassification, MissionStatus, RiskTier  # noqa: E402
+from core.contracts import (  # noqa: E402
+    Capability, DataClassification, MissionStatus, RiskTier,
+)
 from core.permissions import loadEmployees  # noqa: E402
 from core.events import (  # noqa: E402
     NotificationThrottle, silenceIsAnIncident,
@@ -139,10 +142,15 @@ def cmdAutonomy(args) -> int:
     """Mức tự chủ từng năng lực đã KIẾM ĐƯỢC — từ sổ thật, không đặt tay."""
     conn = coreAudit.openStore(BACKOFFICE)
     try:
+        # Cùng danh sách tiền tố mà `trackRecordRows` loại — viết lại bằng tay
+        # ở đây là cách hai bên lệch nhau: bản cũ quên `evl_` và `demo_`, nên
+        # bảng này liệt kê cả những cặp mà mức của chúng tính ra bằng 0 dòng.
+        notTest = " AND ".join(f"traceId NOT LIKE '{prefix}%'"
+                               for prefix in coreAudit.TEST_TRACE_PREFIXES)
+        # sql-an-toan: chỉ ghép `notTest` dựng từ hằng viết cứng; giá trị qua `?`
         pairs = list(conn.execute(
             "SELECT companyId, capability, riskTier, COUNT(*) n FROM taskLog "
-            "WHERE policyDecision IS NOT NULL AND traceId NOT LIKE 'reg_%' "
-            "AND traceId NOT LIKE 'e2e_%' "
+            f"WHERE policyDecision IS NOT NULL AND {notTest} "
             "GROUP BY companyId, capability ORDER BY n DESC LIMIT ?",
             (args.limit,)))
         print("── Mức tự chủ đã kiếm được ──\n")
@@ -167,13 +175,96 @@ def cmdAutonomy(args) -> int:
             print(f"  {row['companyId']}.{row['capability']}")
             print(f"    {describeLevel(level)}  (trần `{risk.value}` = {ceiling})")
             print(f"    {explainAutonomy(record, risk)}")
+            print(f"    {_optInLine(row['companyId'], row['capability'], level, risk)}")
             print()
     finally:
         conn.close()
 
-    print("  ⚠ Hệ thật đang chạy ở MỨC 1 với mọi thứ: `ops/` chưa đọc bảng này")
-    print("    để nới quyền. Thang đã dựng và đã kiểm, chưa ai trèo — và đó là")
-    print("    trạng thái đúng: nới quyền phải là quyết định có chủ ý của admin.")
+    print("  Mức tự chủ CHỈ bớt hỏi admin khi company đã KHAI `autonomyOptIn`")
+    print("  cho đúng năng lực đó trong companySpec.yaml. Không khai thì con số")
+    print("  ở trên là một phép đo, không phải một quyền — và đó là chủ ý:")
+    print("  thống kê nói năng lực chạy ĐÚNG, nó không nói hậu quả một lần sai.")
+    return 0
+
+
+def _optInLine(companyId: str, capability: str, level: int,
+               risk: RiskTier) -> str:
+    """Năng lực này có đang tự chạy thật không — và nếu không thì VÌ SAO.
+
+    Ba câu trả lời khác nhau, và gộp chúng lại là mất đúng thứ người đọc cần:
+    "chưa khai" là việc của người viết manifest, còn "chưa đủ bằng chứng" là
+    việc của thời gian.
+    """
+    import yaml
+    path = os.path.join(ROOT, "companies", companyId, "companySpec.yaml")
+    try:
+        with open(path, encoding="utf-8") as handle:
+            raw = yaml.safe_load(handle) or {}
+    except OSError:
+        return "khai `autonomyOptIn`: (không đọc được manifest)"
+    cap = next((c for c in raw.get("capabilities", [])
+                if c.get("name") == capability), None)
+    if cap is None:
+        return "khai `autonomyOptIn`: (không còn trong manifest)"
+
+    capability_ = Capability.fromManifest(companyId, cap,
+                                          companyResource=raw.get("resource"))
+
+    # Năng lực `read` KHÔNG tốn tiền thì vốn đã đi thẳng (`_ruleReadIsFree`) —
+    # nói "chưa khai → vẫn hỏi admin" ở đây là nói sai, và nói sai theo hướng
+    # làm người đọc đi khai một khoá không đổi được gì.
+    if not capability_.riskTier.needsApprovalByDefault and not capability_.paidApi:
+        return "`read` — vốn đã không phải hỏi; tự chủ không đổi gì ở đây"
+
+    if not capability_.autonomyOptIn:
+        return "CHƯA khai `autonomyOptIn` → vẫn hỏi admin mỗi lần"
+    if not capability_.canEverActOnEarnedAutonomy:
+        return ("đã khai `autonomyOptIn` nhưng KHÔNG BAO GIỜ dùng được: "
+                f"`{risk.value}`/`paidApi` luôn phải hỏi")
+    if mayActWithoutAsking(level, risk):
+        return "▶ ĐANG TỰ CHẠY — không hỏi admin, nhưng bắt buộc có bằng chứng"
+    return (f"đã khai `autonomyOptIn`, chờ bằng chứng: mức {level} < 2 "
+            "→ vẫn hỏi admin")
+
+
+# ══════════════════════════ secrets ══════════════════════════
+
+def cmdSecrets(args) -> int:
+    """§30 — "Which secrets were accessed?" Câu bản cũ KHÔNG trả lời được.
+
+    Trước 2026-09-20 secret đi thẳng từ `os.environ` vào tiến trình con theo
+    danh sách manifest. Cách đó ĐÃ an toàn — company chỉ nhận đúng thứ nó khai
+    — nhưng không để lại dấu vết nào, nên câu hỏi trên chỉ trả lời được bằng
+    cách đọc lại manifest và ĐOÁN xem lần nào đã chạy.
+    """
+    conn = coreSecrets.openStore()
+    try:
+        trail = coreSecrets.auditTrail(
+            conn, limit=args.limit, includeTestTraffic=args.ca_thu)
+        tong = conn.execute("SELECT COUNT(*) FROM secretLease").fetchone()[0]
+        con_han = len(coreSecrets.activeLeases(conn))
+    finally:
+        conn.close()
+
+    print("── Khoá nào đã bị chạm ──\n")
+    if not trail:
+        print("  Chưa có lần chạm nào"
+              + ("" if args.ca_thu else " ngoài bộ đo") + ".")
+    for row in trail:
+        con = "" if row["revokedAt"] else (
+            "  (phiếu còn hạn)" if row["expiresAt"] > coreAudit.utcNow() else "")
+        print(f"  {row['issuedAt']}  {row['secretName']}")
+        print(f"    ai xin   : {row['subject']}")
+        print(f"    để làm gì: {row['reason']}{con}")
+        print(f"    trace    : {row['traceId'] or '(không ghi)'}")
+        print()
+
+    print(f"  Tổng phiếu trong sổ: {tong} · còn hạn: {con_han}")
+    if not args.ca_thu:
+        print("  (đã BỎ lưu lượng bộ đo — `--ca-thu` để lấy đủ)")
+    print()
+    print("  Phiếu mang TÊN biến môi trường, KHÔNG mang giá trị. Giá trị chỉ")
+    print("  được bơm vào môi trường của tiến trình con, đúng lúc chạy (P4).")
     return 0
 
 
@@ -426,6 +517,12 @@ def main() -> int:
     memory.add_argument("--limit", type=int, default=20)
     memory.add_argument("--days", type=int, default=7)
     memory.set_defaults(fn=cmdMemory)
+
+    secrets = sub.add_parser("secrets", help="khoá nào đã bị chạm, ai chạm")
+    secrets.add_argument("--limit", type=int, default=20)
+    secrets.add_argument("--ca-thu", action="store_true",
+                         help="lấy cả lưu lượng của bộ đo (reg_ evl_ e2e_ demo_)")
+    secrets.set_defaults(fn=cmdSecrets)
 
     acquire = sub.add_parser("acquire", help="soi repo lạ, KHÔNG chạy nó")
     acquire.add_argument("path")

@@ -24,6 +24,9 @@ from core.secrets import (  # noqa: E402
     SecretDenied, activeLeases, auditTrail, issueLease, openStore, redact,
     resolveForProcess, revoke,
 )
+import core.secrets as secretsModule  # noqa: E402
+import core.audit as coreAudit  # noqa: E402
+from core.execution import ProcessLimits, buildChildEnvironment  # noqa: E402
 
 EMPLOYEES = loadEmployees()
 
@@ -179,6 +182,103 @@ class TestSecretBroker(SecretTestCase):
         self.assertEqual(trail[0]["subject"], "forge")
         self.assertIn("feature/seo", trail[0]["reason"])
         self.assertNotIn("value", trail[0])
+
+
+class TestBrokerIsLoadBearingNotDecorative(SecretTestCase):
+    """Phiếu phải QUYẾT ĐỊNH cái gì đi vào tiến trình con, không chỉ ghi sổ.
+
+    ═══ VÌ SAO CA NÀY QUAN TRỌNG HƠN VẺ NGOÀI CỦA NÓ ═══
+
+    Cách nối sai — và là cách dễ nối nhất — là: cấp phiếu để có dòng trong sổ,
+    rồi vẫn bơm secret theo danh sách manifest như cũ. Lúc đó `auditTrail()`
+    trả lời rất đẹp cho câu §30 "khoá nào đã bị chạm", trong khi cái phiếu
+    không hề kiểm soát gì. Đó là HÀNG RÀO GIẢ, và hàng rào giả hại hơn không
+    có hàng rào, vì người đọc sổ sau này sẽ tin nó.
+
+    Nên ca này đo đúng một thứ: **secret không có phiếu thì không đi vào môi
+    trường của tiến trình con.**
+    """
+
+    def testEnvironmentIsBuiltFromLeasesNotFromTheManifest(self):
+        lease = issueLease(
+            self.conn,
+            SecretRequest("ceo", "NOTION_TOKEN", reason="chạy x.y"),
+            allowedSecretNames=("NOTION_TOKEN", "GITHUB_TOKEN"))
+
+        # Manifest khai HAI khoá, broker chỉ cấp phiếu cho MỘT.
+        limits = ProcessLimits(
+            timeoutSec=10,
+            allowedSecretNames=tuple(l.secretName for l in (lease,)))
+        parentEnv = {"NOTION_TOKEN": "gt-notion", "GITHUB_TOKEN": "gt-github",
+                     "PATH": "/usr/bin"}
+        childEnv = buildChildEnvironment(limits, parentEnv)
+
+        self.assertEqual(childEnv.get("NOTION_TOKEN"), "gt-notion")
+        self.assertNotIn(
+            "GITHUB_TOKEN", childEnv,
+            "khoá KHÔNG có phiếu vẫn đi vào tiến trình con — phiếu đang là "
+            "một bản ghi trang trí, không phải một cái cổng")
+
+    def testDeniedSecretNeverReachesTheChild(self):
+        """Broker từ chối thì khoá phải VẮNG MẶT, không phải vẫn đi kèm."""
+        with self.assertRaises(SecretDenied):
+            issueLease(self.conn,
+                       SecretRequest("sage", "NOTION_TOKEN", reason="tò mò"),
+                       allowedSecretNames=())
+        childEnv = buildChildEnvironment(
+            ProcessLimits(timeoutSec=10, allowedSecretNames=()),
+            {"NOTION_TOKEN": "gt-notion", "PATH": "/usr/bin"})
+        self.assertNotIn("NOTION_TOKEN", childEnv)
+
+    def testNoLeaseAtAllMeansNoSecretAtAll(self):
+        """Company không khai `secrets` thì tiến trình con trắng khoá."""
+        childEnv = buildChildEnvironment(
+            ProcessLimits(timeoutSec=10, allowedSecretNames=()),
+            {"NOTION_TOKEN": "gt", "GEMINI_API_KEY": "gt2", "PATH": "/usr/bin"})
+        self.assertEqual(
+            [k for k in childEnv if k.endswith(("TOKEN", "KEY"))], [])
+
+
+class TestSecretAuditSeparatesTestTraffic(SecretTestCase):
+    """Sổ "khoá nào đã bị chạm" mà toàn dòng của `tests/run.py` là sổ vô dụng.
+
+    Mỗi lượt `tests/run.py` đi qua hơn 80 năng lực, nên không tách thì lần
+    chạm THẬT chìm mất. Theo đúng tiền lệ `evl_` ở `ceoRunLog`: không che đi,
+    chỉ tách ra — và vẫn lấy đủ được khi cần.
+    """
+
+    def _issue(self, traceId):
+        issueLease(self.conn,
+                   SecretRequest("ceo", "NOTION_TOKEN", reason="chạy x.y"),
+                   allowedSecretNames=("NOTION_TOKEN",), traceId=traceId)
+
+    def testTestTrafficIsHiddenByDefault(self):
+        for prefix in secretsModule.TEST_TRACE_PREFIXES:
+            self._issue(f"{prefix}abc")
+        self._issue("trc_that")
+
+        trail = auditTrail(self.conn)
+        self.assertEqual(
+            [row["traceId"] for row in trail], ["trc_that"],
+            "lưu lượng bộ đo đang lấp sổ tra secret")
+
+    def testNothingIsActuallyHidden(self):
+        """Bộ đo tự xoá dấu vết của mình là bộ đo không kiểm được."""
+        self._issue("reg_abc")
+        self.assertEqual(auditTrail(self.conn), [])
+        self.assertEqual(
+            len(auditTrail(self.conn, includeTestTraffic=True)), 1)
+
+    def testPrefixListMatchesTheAuditLedger(self):
+        """Hai hằng cùng nghĩa ở hai gói — ép chúng khớp, đừng tin là khớp.
+
+        `core.secrets` cố ý KHÔNG import `core.audit` chỉ để lấy một hằng, nên
+        có hai bản. Hai bản của cùng một danh sách thì sớm muộn lệch, và lệch
+        ở đây nghĩa là một loại lưu lượng bộ đo lọt vào sổ mà không ai thấy.
+        """
+        self.assertEqual(
+            tuple(sorted(secretsModule.TEST_TRACE_PREFIXES)),
+            tuple(sorted(coreAudit.TEST_TRACE_PREFIXES)))
 
 
 class TestRedaction(unittest.TestCase):

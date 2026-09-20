@@ -38,8 +38,11 @@ import stt  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(ROOT, "lib"))
+sys.path.insert(0, ROOT)
 import db  # noqa: E402
 import quotaSignal  # noqa: E402
+# Luật trí nhớ (ngày rụng) sống ở core, không viết bản thứ hai ở gateway.
+import core.memory as coreMemory  # noqa: E402
 
 CEO_STORE = os.path.join(ROOT, "ceo", "store.sqlite")
 SYSTEM_PROMPT = os.path.join(ROOT, "ceo", "SYSTEM.md")
@@ -1093,7 +1096,12 @@ def profile_block() -> str:
     # sai schema, không gây lỗi, chỉ dạy CEO một điều vô nghĩa mãi mãi.
     noi_dung = re.sub(r"<!--.*?-->", "", noi_dung, flags=re.S)
 
-    nay = datetime.now(TZ_VN).strftime("%Y-%m-%d")
+    # ĐỒNG HỒ TREO TƯỜNG CỦA ADMIN, không phải UTC — và đưa nguyên mốc đó vào
+    # core chứ không cắt sẵn thành ngày. Ngày của admin là ngày ở Đà Lạt; từ
+    # 00:00 tới 07:00 giờ VN thì UTC vẫn đang ở hôm trước, nên lọc theo UTC là
+    # trả lời cho một ngày admin không hề sống trong đó.
+    bay_gio = datetime.now(TZ_VN).strftime("%Y-%m-%dT%H:%M:%S")
+
     dong = []
     for l in noi_dung.splitlines():
         l = l.rstrip()
@@ -1103,7 +1111,11 @@ def profile_block() -> str:
         if not l.lstrip().startswith("- ("):
             continue
         m = HAN_DONG.match(l)
-        if m and m.group(1) < nay:      # so ngày với ngày, tính cả ngày hết hạn
+        # Luật "chưa rụng" hỏi core/memory, KHÔNG viết lại ở đây. Bản cũ giữ
+        # một phép so riêng, và nó lệch với core đúng một ngày — đo 20/09,
+        # 3 trên 4 mốc trong ngày cho kết quả khác nhau. Hai bản của cùng một
+        # luật thì sớm muộn có người sửa một bên.
+        if m and not coreMemory.isStillValid(m.group(1), bay_gio):
             continue
         dong.append(l)
 

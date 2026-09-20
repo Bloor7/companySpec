@@ -16,13 +16,22 @@ from core.policy.autonomy import (  # noqa: E402
     recordFromAuditRows, requiresVerification,
 )
 from core.contracts import (  # noqa: E402
-    Event, EventKind, IssuedBy, RiskTier, TaskStatus,
+    Capability, Event, EventKind, IssuedBy, PolicyDecision, PolicyRequest,
+    RiskTier, TaskStatus,
+)
+from core.policy import decide  # noqa: E402
+from core.audit import (  # noqa: E402
+    TEST_TRACE_PREFIXES as PREFIXES, trackRecordRows,
 )
 from core.events import (  # noqa: E402
     EventBus, NotificationThrottle, Rule, TaskProposal, defaultRules,
-    proposalsAreReadOnly, record, openStore, recentEvents,
+    deterministicEventId, eventsFromFacts, proposalsAreReadOnly, record,
+    openStore as eventsOpenStore, recentEvents, recordIfNew,
     silenceIsAnIncident,
 )
+
+# Tên cũ, giữ cho phần ca thử đã có từ trước không phải sửa theo.
+openStore = eventsOpenStore
 
 
 class TestEventBus(unittest.TestCase):
@@ -96,6 +105,162 @@ class TestEventsProposeButNeverGrant(unittest.TestCase):
                         proposal.capability, "",
                         "luật mặc định đề xuất thẳng một năng lực — phải để "
                         "admin/Core chọn, không tự chỉ định")
+
+
+class TestEventsAreBornFromFactsNotFromGuesses(unittest.TestCase):
+    """`eventsFromFacts` là hàm THUẦN — sự thật vào, event ra.
+
+    Người gọi tra sqlite rồi đưa vào. Nhờ vậy câu "sự cố này có đẻ ra event
+    không" kiểm được bằng một dòng assert, thay vì phải dựng một lượt
+    scheduler thật với đủ bốn cái sổ.
+    """
+
+    def testNoFactsNoEvents(self):
+        self.assertEqual(eventsFromFacts({}), ())
+        self.assertEqual(eventsFromFacts({"failedTasks": [],
+                                          "quotaHits": [],
+                                          "stalledMissions": [],
+                                          "silence": None}), ())
+
+    def testOneSourceBrokenDoesNotSilenceTheOthers(self):
+        """Thiếu khoá KHÔNG phải lỗi — mỗi nguồn hỏng độc lập với nhau.
+
+        Sổ mission hỏng thì vẫn phải báo được lời gọi hỏng. Gộp chung là để
+        một nguồn câm làm câm cả bộ phát hiện — đúng thứ 61 giờ im lặng đã
+        dạy một lần.
+        """
+        events = eventsFromFacts({"failedTasks": [{"taskId": "tsk_1"}]})
+        self.assertEqual([e.kind for e in events], [EventKind.taskFailed])
+
+    def testEveryKindIsCovered(self):
+        events = eventsFromFacts({
+            "failedTasks": [{"taskId": "tsk_1", "companyId": "aCompany",
+                             "capability": "doIt"}],
+            "quotaHits": [{"hitId": 7, "loai": "session"}],
+            "stalledMissions": [{"missionId": "msn_1", "title": "x",
+                                 "updatedAt": "2026-09-01T00:00:00Z"}],
+            "silence": {"hours": 61, "since": "2026-08-14T00:00:00Z"},
+        })
+        self.assertEqual(
+            sorted(e.kind.value for e in events),
+            sorted(["taskFailed", "quotaHit", "missionStalled",
+                    "productionDown"]))
+
+
+class TestTheSameIncidentNeverNotifiesTwice(unittest.TestCase):
+    """Bẫy 21 tin lúc nửa đêm, chặn bằng KHOÁ CHÍNH chứ không bằng bảng trạng thái.
+
+    "Cron 15 phút/lần × sự cố 6 tiếng = 21 tin giống hệt lúc nửa đêm, dạy
+    admin bỏ qua thông báo." Cách chống rẻ nhất là làm `eventId` tất định theo
+    NỘI DUNG sự cố: lần quét thứ hai đụng khoá chính và bị bỏ qua. Không có
+    trạng thái thứ hai nào để lệch.
+    """
+
+    def setUp(self):
+        self.folder = tempfile.TemporaryDirectory()
+        self.conn = eventsOpenStore(
+            os.path.join(self.folder.name, "event.sqlite"))
+
+    def tearDown(self):
+        self.conn.close()
+        self.folder.cleanup()
+
+    def testTwentyOneSweepsOfOneIncidentGiveOneEvent(self):
+        facts = {"failedTasks": [{"taskId": "tsk_hong", "companyId": "a",
+                                  "capability": "b"}]}
+        moi = 0
+        for _ in range(21):          # 6 tiếng sự cố, quét mỗi 15 phút
+            for event in eventsFromFacts(facts):
+                if recordIfNew(self.conn, event):
+                    moi += 1
+        self.assertEqual(
+            moi, 1,
+            "cùng một sự cố báo nhiều lần — đúng bẫy 21 tin lúc nửa đêm")
+
+    def testSilenceKeyIsTheStartNotTheDuration(self):
+        """Số giờ TĂNG mỗi lần quét, nên khoá theo nó là đẻ event mới mãi.
+
+        Đây là chỗ dễ sai nhất: `{"hours": 1}` rồi `{"hours": 2}` trông như
+        hai sự cố, thật ra là một sự cố đang kéo dài.
+        """
+        moi = 0
+        for gio in range(1, 8):
+            facts = {"silence": {"hours": gio, "since": "2026-08-14T00:00:00Z"}}
+            for event in eventsFromFacts(facts):
+                if recordIfNew(self.conn, event):
+                    moi += 1
+        self.assertEqual(moi, 1)
+
+    def testAMissionThatStallsAgainIsANewIncident(self):
+        """Chiều kia: đừng chống lặp quá tay thành ra im lặng vĩnh viễn.
+
+        Mission đứng bánh → nhúc nhích → lại đứng bánh là HAI sự cố, và admin
+        cần biết lần thứ hai. Khoá chỉ theo `missionId` thì lần hai không bao
+        giờ tới tai ai.
+        """
+        for updatedAt in ("2026-09-01T00:00:00Z", "2026-09-15T00:00:00Z"):
+            for event in eventsFromFacts({"stalledMissions": [
+                    {"missionId": "msn_1", "title": "x",
+                     "updatedAt": updatedAt}]}):
+                recordIfNew(self.conn, event)
+        self.assertEqual(len(recentEvents(self.conn)), 2)
+
+    def testDifferentIncidentsDoNotCollide(self):
+        for taskId in ("tsk_1", "tsk_2", "tsk_3"):
+            for event in eventsFromFacts({"failedTasks": [{"taskId": taskId}]}):
+                recordIfNew(self.conn, event)
+        self.assertEqual(len(recentEvents(self.conn)), 3)
+
+
+class TestShippedRulesStillProposeNothingButReading(unittest.TestCase):
+    """EV-1 áp cho bộ luật ĐANG CHẠY, không chỉ cho bộ luật lúc viết ra.
+
+    Bộ luật vừa thêm hai cái (`taskFailedThenTell`, `silenceThenAlert`). Ca
+    này chạy MỌI luật với event thật rồi soát kết quả — nếu ai đó thêm luật
+    thứ sáu đề xuất một việc ghi, nó đỏ ở đây chứ không đỏ lúc 3 giờ sáng.
+    """
+
+    def testEveryDefaultRuleProposesOnlyReadWork(self):
+        bus = EventBus()
+        for rule in defaultRules():
+            bus.register(rule)
+
+        proposals = []
+        for event in eventsFromFacts({
+                "failedTasks": [{"taskId": "t", "companyId": "a",
+                                 "capability": "b"}],
+                "quotaHits": [{"hitId": 1}],
+                "stalledMissions": [{"missionId": "m", "updatedAt": "u"}],
+                "silence": {"hours": 61, "since": "s"}}):
+            proposals.extend(bus.dispatch(event))
+
+        self.assertTrue(proposals, "không luật nào khớp — bus đang câm")
+        self.assertEqual(
+            proposalsAreReadOnly(tuple(proposals),
+                                 lambda c, k: RiskTier.irreversible), [],
+            "có luật đề xuất việc GHI — EV-1 nói event ĐỀ XUẤT, không CẤP QUYỀN")
+
+    def testNoRuleProposesRetryingTheFailedCall(self):
+        """Tự thử lại khi chưa biết vì sao hỏng là cách biến lỗi thành vòng lặp.
+
+        Đó là đặc quyền của mức tự chủ 3, và hôm nay không năng lực nào đạt
+        tới đó. Nên luật `taskFailed` phải dừng ở BÁO, không đề xuất chạy lại.
+        """
+        bus = EventBus()
+        for rule in defaultRules():
+            bus.register(rule)
+        proposals = []
+        for event in eventsFromFacts({"failedTasks": [
+                {"taskId": "t", "companyId": "aCompany",
+                 "capability": "doIt"}]}):
+            proposals.extend(bus.dispatch(event))
+
+        for proposal in proposals:
+            with self.subTest(reason=proposal.reason):
+                self.assertEqual(proposal.companyId, "")
+                self.assertEqual(proposal.capability, "")
+                for tu in ("chạy lại", "thử lại", "retry"):
+                    self.assertNotIn(tu, proposal.reason.lower())
 
 
 class TestNotificationThrottle(unittest.TestCase):
@@ -245,6 +410,221 @@ class TestAutonomyGates(unittest.TestCase):
         """Tự thử lại khi chưa biết vì sao hỏng là cách biến lỗi thành vòng lặp."""
         self.assertFalse(mayRetryAfterFailure(2))
         self.assertTrue(mayRetryAfterFailure(3))
+
+
+class TestPolicyReadsEarnedAutonomy(unittest.TestCase):
+    """A-1 — Policy bớt hỏi khi mức đã KIẾM ĐƯỢC, và chỉ khi company KHAI.
+
+    ═══ ĐÂY LÀ CA CANH MỘT LẦN NỚI QUYỀN ═══
+
+    Trước 2026-09-20 mọi việc `write` đều hỏi admin, không có ngoại lệ nào
+    ngoài whitelist và chữ ký. Cửa này là ngoại lệ thứ ba, nên nó phải chứng
+    minh được hai chiều chứ không phải một:
+
+      · chiều MỞ — có khai, có bằng chứng thì đi được (không thì cửa là hàng
+        rào giả: khai một khoá mà không ai đọc);
+      · chiều ĐÓNG — `irreversible` và `paidApi` KHÔNG BAO GIỜ đi được, dù
+        thống kê đẹp tới đâu; và không khai thì cũng không đi được, dù mức 4.
+
+    Chiều ĐÓNG mới là chiều quan trọng, vì nó hỏng trong IM LẶNG: một năng lực
+    lẽ ra phải hỏi mà tự chạy thì không có dòng lỗi nào, chỉ có một việc đã làm
+    xong mà admin không biết.
+    """
+
+    @staticmethod
+    def _capability(risk=RiskTier.write, optIn=True, paid=None):
+        return Capability(
+            companyId="caGiaCompany", name="ghiThu",
+            description="ghi một dòng vào sổ của chính nó",
+            riskTier=risk, maxDurationSec=20,
+            autonomyOptIn=optIn, paidApi=paid)
+
+    @staticmethod
+    def _ask(capability, level):
+        return decide(PolicyRequest(
+            identity=IssuedBy.ceo, capability=capability,
+            inputValue={"label": "alpha"}, earnedAutonomyLevel=level))
+
+    # ─────────────────── chiều MỞ ───────────────────
+
+    def testEarnedLevelTwoStopsAskingForWrite(self):
+        """Có khai + mức 2 thì đi thẳng, KHÔNG hỏi admin nữa."""
+        outcome = self._ask(self._capability(), 2)
+        self.assertIs(outcome.decision, PolicyDecision.allowWithVerify)
+        self.assertIn("tự chủ", outcome.reason)
+
+    def testItNeverBecomesAPlainAllow(self):
+        """Được tự do hơn thì phải chứng minh NHIỀU hơn, không phải ít hơn.
+
+        `allow` trần nghĩa là chạy xong không ai đòi bằng chứng. Nếu cửa này
+        ra `allow` thì mức tự chủ sẽ trôi lên dựa trên một quá khứ không còn ai
+        đo được — đúng vòng lặp mà `requiresVerification` sinh ra để cắt.
+        """
+        outcome = self._ask(self._capability(), 2)
+        self.assertIsNot(outcome.decision, PolicyDecision.allow)
+        self.assertTrue(requiresVerification(2))
+
+    # ─────────────────── chiều ĐÓNG ───────────────────
+
+    def testWithoutOptInItStillAsksEvenAtLevelFour(self):
+        """Không khai = không bao giờ. Thống kê không thay được một lời khai."""
+        outcome = self._ask(self._capability(optIn=False), 4)
+        self.assertIs(outcome.decision, PolicyDecision.allowWithApproval)
+
+    def testLevelOneStillAsks(self):
+        outcome = self._ask(self._capability(), 1)
+        self.assertIs(outcome.decision, PolicyDecision.allowWithApproval)
+
+    def testIrreversibleNeverRunsWithoutAsking(self):
+        """Hàng rào quan trọng nhất, nên nó đứng bằng HAI chân độc lập.
+
+        `maxAutonomyFor(irreversible)` là 0, VÀ `canEverActOnEarnedAutonomy`
+        loại thẳng nó. Gỡ một chân thì chân kia vẫn giữ — đó là chủ ý, vì một
+        lần sai ở đây không có đường về.
+        """
+        cap = self._capability(risk=RiskTier.irreversible)
+        self.assertFalse(cap.canEverActOnEarnedAutonomy)
+        self.assertEqual(maxAutonomyFor(RiskTier.irreversible), 0)
+        for level in (0, 1, 2, 3, 4):
+            with self.subTest(level=level):
+                self.assertIs(self._ask(cap, level).decision,
+                              PolicyDecision.allowWithApproval)
+
+    def testPaidApiNeverRunsWithoutAsking(self):
+        """G9 cho ví: "luôn cho phép tiêu tiền" là câu không ai muốn nói."""
+        cap = self._capability(
+            paid={"nhaCungCap": "nhà nào đó", "giaUocVnd": 5000})
+        self.assertFalse(cap.canEverActOnEarnedAutonomy)
+        for level in (2, 3, 4):
+            with self.subTest(level=level):
+                self.assertIs(self._ask(cap, level).decision,
+                              PolicyDecision.allowWithApproval)
+
+    def testHighRiskNeverRunsWithoutAsking(self):
+        """Trần của `high` là 1, nên `mayActWithoutAsking` chặn dù đã khai."""
+        cap = self._capability(risk=RiskTier.high)
+        self.assertTrue(cap.canEverActOnEarnedAutonomy)
+        for level in (2, 3, 4):
+            with self.subTest(level=level):
+                self.assertIs(self._ask(cap, level).decision,
+                              PolicyDecision.allowWithApproval)
+
+    def testAutonomyDoesNotOpenTheCronDoor(self):
+        """S3 đứng ĐẦU hàng luật, nên mức tự chủ không nâng được nó.
+
+        Cron không có quyền gì để mà nới. Nếu ca này đỏ thì thứ tự luật trong
+        `core/policy.decide` đã bị đảo, và một lịch chạy 5 phút/lần vừa có
+        quyền ghi vào sổ của admin lúc 3h sáng.
+        """
+        outcome = decide(PolicyRequest(
+            identity=IssuedBy.scheduledTrigger,
+            capability=self._capability(),
+            inputValue={"label": "alpha"},
+            earnedAutonomyLevel=4))
+        self.assertIs(outcome.decision, PolicyDecision.deny)
+        self.assertIn("S3", outcome.reason)
+
+    def testDefaultRequestKeepsTheOldBehaviour(self):
+        """Người gọi nào quên tra mức thì nhận về hành vi CŨ.
+
+        Mặc định phải sai về phía CHẶT. Nếu `earnedAutonomyLevel` mặc định là
+        một số ≥2 thì mọi người gọi chưa sửa sẽ lặng lẽ được nới quyền.
+        """
+        outcome = decide(PolicyRequest(
+            identity=IssuedBy.ceo, capability=self._capability(),
+            inputValue={"label": "alpha"}))
+        self.assertIs(outcome.decision, PolicyDecision.allowWithApproval)
+
+    # ─────────────────── ai đã khai, tính tới hôm nay ───────────────────
+
+    @staticmethod
+    def _storeWithRows(folder, traceIds):
+        """Một sổ tạm với những dòng HOÀN HẢO: chạy xong và đã kiểm chứng.
+
+        Hoàn hảo là có chủ ý — ca ở dưới hỏi "lưu lượng nào được TÍNH", không
+        hỏi "chạy đúng hay sai". Trộn hai câu đó lại thì một bộ lọc hỏng vẫn
+        xanh nhờ mấy dòng trượt.
+        """
+        conn = sqlite3.connect(os.path.join(folder, "store.sqlite"))
+        conn.executescript(
+            """
+            CREATE TABLE taskLog (
+              taskId TEXT PRIMARY KEY, traceId TEXT, companyId TEXT,
+              capability TEXT, status TEXT, startedAt TEXT,
+              policyDecision TEXT, verificationJson TEXT);
+            """)
+        conn.row_factory = sqlite3.Row
+        for index, traceId in enumerate(traceIds):
+            conn.execute(
+                "INSERT INTO taskLog (taskId, traceId, companyId, capability, "
+                "status, startedAt, policyDecision, verificationJson) "
+                "VALUES (?,?,?,?,?,?,?,?)",
+                (f"tsk_{index}", traceId, "caGiaCompany", "ghiThu", "ok",
+                 "2026-09-20T00:00:00Z", "allowWithVerify",
+                 '{"status": "verified"}'))
+        conn.commit()
+        return conn
+
+    def testTestTrafficNeverEarnsAutonomy(self):
+        """Chạy bộ ca thử KHÔNG phải là bằng chứng rằng hệ đáng tin hơn.
+
+        Đo 2026-09-20, TRƯỚC khi vá: 227 dòng của
+        `travisSelfTestCompany.recordWrite` gồm 194 dòng `e2e_` và 33 dòng
+        `demo_` — không một lời gọi thật nào, mà bảng `travis.py autonomy` in
+        ra mức 2. Chừng nào con số ấy chỉ để NHÌN thì đó là một phép đo bẩn;
+        từ lúc `core/policy` đọc nó để bớt hỏi admin thì nó thành một cái cửa
+        mở được bằng `python3 tests/run.py`.
+
+        Ca này THỬ PHÁ chứ không đọc mã rồi tin: nó đổ vào sổ 50 dòng hoàn hảo
+        mang nhãn bộ đo và đòi mức phải ĐỨNG YÊN ở 1.
+        """
+        with tempfile.TemporaryDirectory() as folder:
+            conn = self._storeWithRows(
+                folder,
+                [f"{PREFIXES[index % len(PREFIXES)]}{index}"
+                 for index in range(50)])
+
+            rows = trackRecordRows(conn, "caGiaCompany", "ghiThu")
+            self.assertEqual(
+                rows, [],
+                "lưu lượng của bộ đo lọt vào phép tính mức tự chủ")
+
+            level = earnedAutonomy(
+                recordFromAuditRows("caGiaCompany", "ghiThu", rows),
+                RiskTier.write)
+            self.assertEqual(level, 1)
+            self.assertFalse(mayActWithoutAsking(level, RiskTier.write))
+            conn.close()
+
+    def testRealTrafficStillEarnsIt(self):
+        """Chiều kia của cùng một ca: loại bộ đo mà đừng loại luôn việc thật.
+
+        Không có ca này thì một bộ lọc quá tay — chẳng hạn loại mọi dòng — vẫn
+        xanh, và cái thang thành thứ không ai trèo được. Hỏng theo hướng CHẶT
+        thì im lặng, nên nó cần một ca riêng đi tìm.
+        """
+        with tempfile.TemporaryDirectory() as folder:
+            conn = self._storeWithRows(
+                folder, [f"trc_{index}" for index in range(12)])
+
+            rows = trackRecordRows(conn, "caGiaCompany", "ghiThu")
+            self.assertEqual(len(rows), 12)
+            level = earnedAutonomy(
+                recordFromAuditRows("caGiaCompany", "ghiThu", rows),
+                RiskTier.write)
+            self.assertEqual(level, 2)
+            self.assertTrue(mayActWithoutAsking(level, RiskTier.write))
+            conn.close()
+
+    def testOptInIsDeclaredInManifestNotInCode(self):
+        """Đọc từ manifest THẬT — khai bằng code là khai ở chỗ không ai soát."""
+        raw = {"name": "ghiThu", "riskTier": "write", "autonomyOptIn": True}
+        self.assertTrue(
+            Capability.fromManifest("caGiaCompany", raw).autonomyOptIn)
+        self.assertFalse(
+            Capability.fromManifest(
+                "caGiaCompany", {"name": "x", "riskTier": "write"}
+            ).autonomyOptIn)
 
 
 class TestTrackRecordFromAudit(unittest.TestCase):

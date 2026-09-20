@@ -10,7 +10,7 @@
 ## 1. Chạy ba lệnh này trước khi tin bất cứ điều gì dưới đây
 
 ```bash
-python3 tests/run.py            # 218 ca — từng mảnh + cả dây chuyền
+python3 tests/run.py            # cả bộ — từng mảnh + cả dây chuyền (nó tự in số ca)
 python3 ops/codemap.py --check  # luật kiến trúc
 python3 gateway/cli/travisDemo.py   # nhìn một lời gọi đi hết dây chuyền
 ```
@@ -36,51 +36,96 @@ gateway/cli/dispatch.py
 
 Tra lại bất kỳ lời gọi nào: `python3 gateway/cli/travis.py why <taskId>`.
 
-**§43 Definition of Done:** 19 ✅ · 4 🔶 · 1 ⬜ —
-xem [DEFINITION_OF_DONE.md](DEFINITION_OF_DONE.md), nó có **cách tự kiểm từng ô**.
+**§43 Definition of Done:** xem [DEFINITION_OF_DONE.md](DEFINITION_OF_DONE.md),
+nó có **cách tự kiểm từng ô** (đừng chép số ô vào đây — số chép tay thì lặng
+lẽ cũ đi).
 
 ---
 
-## 3. Bốn việc tiếp theo, xếp theo giá trị
+## 2b. Vừa xong 2026-09-20: Policy đọc mức tự chủ (mục (a) cũ)
 
-### a. Để Policy ĐỌC mức tự chủ rồi bớt hỏi admin
+Admin chốt hàng rào **OPT-IN**: company phải tự khai `autonomyOptIn` cho từng
+năng lực trong `companySpec.yaml`. Không khai = không bao giờ tự chạy, dù
+thống kê đẹp tới đâu. Chi tiết ba điều kiện: DEFINITION_OF_DONE.md.
 
-Thang **đã leo được thật** (`travis.py autonomy`): `nhacCompany.dsNhac` đạt
-mức 4 với 200/200 lần đã kiểm chứng. Nhưng `core/policy.decide()` chưa đọc nó,
-nên mọi việc `write` vẫn hỏi.
+**Nhưng phần đáng đọc là cái phát hiện ra lúc nối dây.**
 
-Việc: thêm `earnedAutonomyLevel` vào `PolicyRequest`, và ở
-`_ruleApprovalToken`/trước đó, cho phép bỏ qua cửa duyệt khi
-`mayActWithoutAsking(level, riskTier)`.
+`trackRecordRows` đang đếm cả lưu lượng của bộ đo. `recordWrite` có 227 dòng
+thì 194 là `e2e_`, 33 là `demo_` — không một lời gọi thật nào, mà bảng in ra
+mức 2. Chừng nào con số ấy chỉ để NHÌN thì nó là một phép đo bẩn; từ lúc
+Policy đọc nó thì nó là **một cánh cửa mở được bằng `python3 tests/run.py`**.
 
-⚠ Đây là **nới quyền**. Phải là quyết định có chủ ý của admin, không phải thứ
-tự xảy ra vì code đã sẵn sàng. Làm xong phải có ca thử chứng minh
-`irreversible` vẫn không bao giờ tự chạy.
+Đã loại `reg_ evl_ e2e_ demo_` khỏi phép tính. Hậu quả: `xuongCompany.nhanViec`
+tụt 77% → 20%, `ghiBuoc` 69% → 0%. **Con số cũ đẹp phần lớn là của bộ đo** —
+đó mới là tỉ lệ thật, và nó nói xuongCompany còn xa mức tự chủ.
 
-### b. Nối Memory vào phiên CEO
+Hôm nay chưa năng lực `write` nào tự chạy. Năng lực duy nhất khai opt-in là
+`travisSelfTestCompany.recordWriteAuto` và nó đang ở mức 1.
 
-`core/memory/` đã có phân tầng, nhãn `fact/decision/inference`, ngày rụng, và
-chặn secret ở cửa vào. `gateway/telegram/session.py` vẫn giữ trí nhớ riêng.
+⚠ `recordWrite` **cố ý KHÔNG khai** opt-in: nó là chốt canh cho ba ca
+`TestWritePathNeedsASignature`. Đừng khai cho nó — đặt chốt canh lên chính
+cánh cửa nó canh thì ca thử sẽ xanh theo cửa đang mở.
 
-⚠ Đây là thứ đang giữ trí nhớ của admin. **Phải có test đối chiếu trước**,
-giống `tests/regression/testPolicyParity.py` đã làm cho policy — chứng minh
-hai bên trả về cùng một thứ trước khi chuyển người gọi.
+---
 
-### c. Nối Secret broker
+## 2c. Cũng xong 2026-09-20: Memory · Secret broker · Event bus
 
-`core/secrets/` cấp phiếu mang TÊN (không mang giá trị), có hạn 5 phút, có sổ
-tra. `core/execution` hiện bơm secret thẳng từ `os.environ` theo manifest
-(C2.4) — cách đó **đã an toàn**, broker là cải tiến chứ không phải vá lỗ.
+Ba mục (b)(c)(d) của bản HANDOFF cũ. Chi tiết ở
+[DEFINITION_OF_DONE.md](DEFINITION_OF_DONE.md); ở đây chỉ ghi thứ người sau
+cần biết trước khi chạm vào.
 
-Giá trị thật: `auditTrail()` trả lời được câu §30 "secret nào đã bị chạm".
+**Memory — gom LUẬT, cố ý KHÔNG dời DỮ LIỆU.** Viết test đối chiếu trước như
+HANDOFF dặn, và nó đỏ ngay: 3/4 mốc trong một ngày cho kết quả khác nhau giữa
+`core/memory` và `session.profile_block`. Nay luật ngày rụng ở
+`contracts.isStillValid`, ba nơi cùng đọc.
 
-### d. Event bus đẻ Task
+⚠ **Kho thì vẫn tách, và đừng "dọn" nó.** PROFILE.md thuộc `profileCompany`,
+có đường ghi qua nút duyệt, admin sửa tay được. Dời vào sqlite là phá C2 và
+lấy mất khả năng sửa tay. Trí nhớ phiên (`message`, `threadSummary`) cũng ở
+lại: năm nơi đang đọc, và nó không cần tầng/nhãn/ngày rụng.
 
-`core/events/` đã có luật chống nhắn lặp (đang chạy trong scheduler) và bản
-soát tuần. Phần `EventBus` + `TaskProposal` chưa ai gọi.
+**Secret broker — phiếu GÁNH VIỆC.** `allowedSecretNames` dựng từ PHIẾU, không
+từ manifest, nên broker từ chối thì khoá không vào tiến trình con. Tra bằng
+`travis.py secrets`.
 
-⚠ EV-1: event **đề xuất** Task, không **cấp quyền**. Task do event đẻ ra vẫn
-qua đúng cánh cửa Policy — `proposalsAreReadOnly()` canh chuyện đó.
+⚠ Cách nối SAI và dễ hơn: cấp phiếu chỉ để có dòng trong sổ, vẫn bơm theo
+manifest. Lúc đó §30 trả lời rất đẹp trong khi phiếu không kiểm soát gì.
+
+**Event bus — chỉ đề xuất.** Chạy trong nhịp 15 phút sẵn có. Chống nhắn lặp
+bằng `eventId` TẤT ĐỊNH theo nội dung sự cố, không bằng bảng trạng thái thứ
+hai.
+
+⚠ Đừng nhét mốc thời gian quét vào `deterministicEventId` — mỗi lần quét sẽ
+đẻ một id mới, tức là quay lại đúng 21 tin lúc nửa đêm, chỉ khác là lần này
+có cả một hàm trông như đang chống lặp.
+
+---
+
+## 3. Việc tiếp theo
+
+**§43 chỉ còn một ô ⬜: sandbox cứng** (container/VM, cgroup, netns, seccomp).
+§41 xếp nó vào nhóm KHÔNG làm sớm, và `isolationMaturity()` nói thẳng cái chưa
+có. Một hệ nói dối về mức cô lập nguy hiểm hơn hệ không cô lập gì.
+
+Hai ô 🔶 còn lại đều là **quyết định**, không phải nợ — đọc lý do trong
+DEFINITION_OF_DONE trước khi "hoàn thiện" chúng.
+
+Việc đáng làm hơn, xếp theo giá trị:
+
+**a. Cho một năng lực `write` THẬT leo thang tự chủ.** Cửa đã dựng và đã kiểm
+hai chiều, nhưng chưa ai trèo: năng lực duy nhất khai `autonomyOptIn` là
+company nội bộ. Ứng viên gần nhất là `nhacCompany.datNhac` — nhưng nó đang ở
+mức 1, và `xuongCompany` thì tỉ lệ đạt thật chỉ 20%. Việc thật ở đây là **đi
+tìm vì sao tỉ lệ đạt thấp**, không phải nới hàng rào.
+
+**b. Soát lại những con số đang được tin.** Hai lần trong một ngày 20/09, một
+phép đo bẩn lộ ra ngay lúc có ai đó định dùng nó để quyết định. Còn con số nào
+trong hệ đang được đọc mà chưa ai hỏi "ai đã ghi những dòng này"?
+
+**c. Thêm luật cho event bus.** Bộ luật hiện có năm cái, đều chỉ BÁO. Luật thứ
+sáu phải qua `proposalsAreReadOnly` — và ca thử
+`testEveryDefaultRuleProposesOnlyReadWork` chạy mọi luật với event thật, nên
+nó đỏ ở bàn làm việc chứ không đỏ lúc 3 giờ sáng.
 
 ---
 
@@ -124,14 +169,27 @@ mốc thời gian đều là 2026-09-19T19:02.
    vô nghĩa (20% → 77% sau khi sửa), và cái sai nghiêng về phía CHẶT nên nó
    im lặng.
 
+   ⚠ **Con số 77% đó đã bị chính đợt 20/09 bác bỏ** — đừng đọc nó như trạng
+   thái hiện tại. Nó chỉ đúng chừng nào còn đếm cả lưu lượng bộ đo; lọc
+   `reg_ evl_ e2e_ demo_` ra thì `xuongCompany.nhanViec` quay về **20%**.
+   Tức là lần sửa ấy đúng về LUẬT (needsApproval không phải trượt) nhưng con
+   số nó khoe ra lại đến từ một mẫu bẩn. Hai cái sai ngược chiều nhau che mất
+   nhau, và cả hai đều không có dòng lỗi nào. Xem mục 2b.
+
 Cả bốn cùng một họ với bảng bẫy trong [../CLAUDE.md](../CLAUDE.md) — **đọc
 bảng đó trước khi viết mã đụng vào cùng chỗ.**
 
 ---
 
-## 7. Repo CHƯA đẩy lên GitHub
+## 7. Repo ĐÃ đẩy lên GitHub — `Bloor7/companySpec`, PRIVATE
+
+> Dòng cũ ở đây ghi "CHƯA đẩy". Sai từ lúc nào không rõ, và không ai phát
+> hiện vì không ai chạy `git remote -v` — đúng loại tài liệu chép tay rồi
+> lặng lẽ cũ đi mà `CLAUDE.md` đã dặn tránh. Cách biết là CHẠY, không phải đọc.
 
 Theo luật trong `CLAUDE.md`: chỉ đẩy khi admin bảo, và chỉ kho `companySpec`.
+Không đụng kho nào khác của `Bloor7` — nhất là `handoff_panharmon`.
+
 Soát trước mỗi lần đẩy:
 
 ```bash
@@ -141,3 +199,10 @@ git ls-files | grep -iE '\.env|secret|token'
 ```
 
 `404` = private (đúng). `200` = **PUBLIC, DỪNG LẠI**.
+
+Và một phép soát nữa, rẻ, trả lời câu "đẩy lần này có ghi đè của ai không":
+
+```bash
+git fetch origin
+git merge-base --is-ancestor origin/main HEAD && echo "đẩy thẳng được"
+```

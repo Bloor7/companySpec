@@ -292,39 +292,100 @@ class TestFailuresNeverSlamTheDoor(unittest.TestCase):
 # ══════════════════════════ AUTONOMY đọc từ sổ THẬT ══════════════════════════
 
 class TestAutonomyReadsRealHistory(unittest.TestCase):
-    """Mức tự chủ tính từ lịch sử ĐO ĐƯỢC, không nhận từ model."""
+    """Mức tự chủ tính từ lịch sử ĐO ĐƯỢC, không nhận từ model.
 
-    def testTrackRecordComesFromTheLedger(self):
+    ⚠ CA NÀY ĐÃ ĐỔI TIỀN ĐỀ NGÀY 2026-09-20 — đọc trước khi sửa.
+
+    Bản cũ gọi dispatch ba lần rồi đòi `trackRecordRows` PHẢI thấy ba dòng đó.
+    Nó xanh, và nó sai: `trackRecordRows` lúc ấy đếm cả lưu lượng của bộ đo.
+    Đo ra 227 dòng cho `recordWrite`, trong đó 194 `e2e_` và 33 `demo_` —
+    không một lời gọi thật nào, mà bảng mức tự chủ in ra mức 2.
+
+    Chừng nào con số ấy chỉ để NHÌN thì đó là một phép đo bẩn. Từ lúc
+    `core/policy` đọc nó để BỚT HỎI ADMIN thì nó thành một cánh cửa, và cánh
+    cửa ấy mở được bằng `python3 tests/run.py` chạy vài lần. Một ca thử tự
+    kiếm quyền cho hệ là ca thử nguy hiểm hơn không có ca nào.
+
+    Nên ca này giờ canh HAI chiều, và chiều thứ hai mới là lý do nó tồn tại.
+    """
+
+    def testEvidenceReachesTheLedger(self):
+        """Chiều một: Verification có thật sự ghi bằng chứng vào sổ không.
+
+        Đây là phần e2e còn nguyên giá trị, chỉ là nó phải hỏi thẳng cái sổ
+        thay vì hỏi qua `trackRecordRows` — vốn cố ý không nhìn thấy ba lời
+        gọi này.
+
+        `taskLog.status` vẫn là `ok`: đổi nó thành `completed` sẽ làm gãy năm
+        chỗ đang đọc đúng chuỗi ấy (trần whitelist ngày, trí nhớ CEO, dọn dòng
+        cron…). Nên "xong" được SUY RA từ `verificationJson`. Đó là V-1 đóng
+        thành code — một KẾT LUẬN từ bằng chứng, không phải một chuỗi ai đó gõ.
+        """
+        taskIds = []
         for index in range(3):
-            callDispatch("echoRead", {"message": f"lan {index}"},
-                         traceSuffix=f"_auto{index}")
+            result = callDispatch("echoRead", {"message": f"lan {index}"},
+                                  traceSuffix=f"_auto{index}")
+            taskIds.append(result["taskId"])
 
+        for taskId in taskIds:
+            with self.subTest(taskId=taskId):
+                row = rowFor(taskId)
+                self.assertEqual(row.get("status"), "ok")
+                self.assertTrue(
+                    row.get("verificationJson"),
+                    "lời gọi chạy xong mà sổ không có bằng chứng nào")
+                self.assertEqual(
+                    json.loads(row["verificationJson"]).get("status"),
+                    "verified")
+
+    def testThisTestRunEarnsNoAutonomy(self):
+        """Chiều hai: ba lời gọi vừa rồi KHÔNG được góp vào mức tự chủ.
+
+        Ca này thử phá bằng cách chạy thật, không bằng cách đọc mã. Nếu bộ lọc
+        tiền tố bị gỡ thì đây là chỗ đỏ — và nó đỏ TRƯỚC khi một năng lực thật
+        nào đó được nới quyền nhờ chính bộ đo.
+        """
         conn = coreAudit.openStore(STORE)
         try:
-            rows = coreAudit.trackRecordRows(conn, COMPANY, "echoRead")
+            rows = conn.execute(
+                "SELECT taskId FROM taskLog WHERE traceId LIKE ?",
+                (f"{TRACE_PREFIX}{RUN_TOKEN}%",)).fetchall()
+            self.assertTrue(rows, "lượt chạy này chưa ghi dòng nào — ca vô nghĩa")
+
+            counted = {r["taskId"] for r in conn.execute(
+                "SELECT taskId FROM taskLog WHERE companyId = ?", (COMPANY,))}
+            tracked = coreAudit.trackRecordRows(conn, COMPANY, "echoRead")
         finally:
             conn.close()
 
-        self.assertGreaterEqual(len(rows), 3)
-        record = recordFromAuditRows(COMPANY, "echoRead", rows)
-        self.assertGreaterEqual(record.totalRuns, 3)
+        self.assertTrue(counted, "không đọc được sổ")
+        # `trackRecordRows` không trả taskId, nên so bằng SỐ LƯỢNG: nó phải ít
+        # hơn hẳn tổng số dòng `echoRead`, vì gần như tất cả là của bộ đo.
+        self.assertLess(
+            len(tracked), 50,
+            "lưu lượng `e2e_`/`demo_` đang lọt vào phép tính mức tự chủ — "
+            "bộ đo tự kiếm quyền cho hệ")
 
-        # `completed` SUY RA TỪ BẰNG CHỨNG, không từ tên trạng thái.
-        #
-        # `taskLog.status` vẫn là `ok` — đổi nó thành `completed` sẽ làm gãy
-        # năm chỗ đang đọc đúng chuỗi ấy (trần whitelist ngày, trí nhớ CEO,
-        # dọn dòng cron…). Nên `core/audit.trackRecordRows` đọc
-        # `verificationJson` và chỉ gọi là `completed` khi có bằng chứng.
-        #
-        # Đây là V-1 đóng thành code: "xong" là một KẾT LUẬN từ bằng chứng,
-        # không phải một chuỗi ai đó gõ vào.
-        self.assertGreater(
-            record.verifiedSuccesses, 0,
-            "không dòng nào được suy ra là `completed` — Verification đang "
-            "sinh bằng chứng mà sổ không đọc nó")
+    def testTheLadderStillClimbsForRealTraffic(self):
+        """Loại bộ đo mà đừng loại luôn việc thật — hỏng kiểu đó thì im lặng.
+
+        Dùng một năng lực CÓ lưu lượng thật (`nhacCompany.dsNhac`, nhãn
+        `trc_`) để chứng minh cái thang vẫn trèo được sau khi vá. Không có ca
+        này thì một bộ lọc quá tay vẫn xanh, và thang thành thứ không ai trèo.
+        """
+        conn = coreAudit.openStore(STORE)
+        try:
+            rows = coreAudit.trackRecordRows(conn, "nhacCompany", "dsNhac")
+        finally:
+            conn.close()
+        if not rows:
+            self.skipTest("sổ chưa có lời gọi thật nào cho nhacCompany.dsNhac")
+
+        record = recordFromAuditRows("nhacCompany", "dsNhac", rows)
+        self.assertGreater(record.verifiedSuccesses, 0)
         self.assertGreaterEqual(
             earnedAutonomy(record, RiskTier.read), 1,
-            "thang tự chủ không leo được dù đã có bằng chứng")
+            "thang tự chủ không leo được dù đã có bằng chứng thật")
 
 
 # ══════════════════════════ không có đường vòng ══════════════════════════

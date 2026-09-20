@@ -21,6 +21,7 @@ lúc 3 giờ sáng ghi nhầm vào sổ tiền của admin, và không có ai th
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import sqlite3
 from dataclasses import dataclass, field
@@ -271,6 +272,115 @@ def record(conn: sqlite3.Connection, event: Event) -> Event:
     return event
 
 
+def recordIfNew(conn: sqlite3.Connection, event: Event) -> bool:
+    """Ghi event, trả về True nếu nó CHƯA TỪNG có. Trùng thì bỏ qua im lặng.
+
+    ═══ ĐÂY LÀ BỘ CHỐNG NHẮN LẶP, VIẾT BẰNG KHOÁ CHÍNH ═══
+
+    Bẫy cũ: "Lỗi hạ tầng lặp lại nhắn mỗi lần — cron 15 phút/lần × sự cố 6
+    tiếng = 21 tin giống hệt lúc nửa đêm, dạy admin bỏ qua thông báo."
+
+    Cách chống rẻ nhất và chắc nhất không phải là một bảng trạng thái thứ hai,
+    mà là làm `eventId` TẤT ĐỊNH theo nội dung (xem `deterministicEventId`).
+    Cùng một sự cố thì cùng một id, nên lần quét thứ hai đụng khoá chính và
+    `INSERT OR IGNORE` bỏ qua. Không có trạng thái nào để lệch.
+
+    Trả về bool chứ không phải None: chỗ gọi cần biết "có gì MỚI không" để
+    quyết định có nhắn hay không. Trả None rồi bắt người gọi tự đếm là mời họ
+    dựng bản trạng thái thứ hai.
+    """
+    import json
+    cursor = conn.execute(
+        "INSERT OR IGNORE INTO eventLog (eventId, kind, source, payload, "
+        "createdAt) VALUES (?,?,?,?,?)",
+        (event.eventId, event.kind.value, event.source,
+         json.dumps(event.payload, ensure_ascii=False), event.createdAt))
+    conn.commit()
+    return cursor.rowcount > 0
+
+
+def deterministicEventId(kind: EventKind, *parts) -> str:
+    """Id dựng TỪ NỘI DUNG, để cùng một sự cố luôn ra cùng một id.
+
+    Chọn `parts` là thứ định danh SỰ CỐ, không phải thứ định danh LẦN QUÉT.
+    Nhét mốc thời gian quét vào đây là làm mỗi lần quét đẻ một id mới — tức là
+    quay lại đúng 21 tin lúc nửa đêm, chỉ khác là lần này có cả một hàm trông
+    như đang chống lặp.
+    """
+    material = "|".join([kind.value] + [str(p) for p in parts])
+    return "evt_" + hashlib.sha1(material.encode("utf-8")).hexdigest()[:20]
+
+
+def eventsFromFacts(facts: dict) -> tuple:
+    """Biến SỰ THẬT đã tra được thành Event. Hàm THUẦN — không I/O, không giờ.
+
+    Người gọi tra sqlite rồi đưa vào, đúng luật của `core/`: nhờ vậy "sự cố
+    này có đẻ ra event không" kiểm được bằng một dòng assert, thay vì phải
+    dựng một lượt scheduler thật.
+
+    `facts` nhận bốn khoá, thiếu khoá nào thì coi như không có sự thật loại
+    đó — KHÔNG phải lỗi, vì mỗi nguồn hỏng độc lập với nhau:
+
+      failedTasks     [{taskId, companyId, capability, startedAt}]
+      quotaHits       [{hitId, loai, resetLuc, createdAt}]
+      stalledMissions [{missionId, title, updatedAt}]
+      silence         {"hours": float, "since": str} hoặc None
+    """
+    events = []
+
+    for row in facts.get("failedTasks") or ():
+        # Khoá theo taskId: một lời gọi hỏng là MỘT sự cố, quét lại bao nhiêu
+        # lần cũng vẫn là nó.
+        events.append(Event(
+            kind=EventKind.taskFailed,
+            source="taskLog",
+            eventId=deterministicEventId(EventKind.taskFailed,
+                                         row.get("taskId", "")),
+            payload={"taskId": row.get("taskId", ""),
+                     "companyId": row.get("companyId", ""),
+                     "capability": row.get("capability", ""),
+                     "startedAt": row.get("startedAt", "")}))
+
+    for row in facts.get("quotaHits") or ():
+        events.append(Event(
+            kind=EventKind.quotaHit,
+            source="quotaHit",
+            eventId=deterministicEventId(EventKind.quotaHit,
+                                         row.get("hitId", "")),
+            payload={"loai": row.get("loai", ""),
+                     "resetLuc": row.get("resetLuc") or "",
+                     "createdAt": row.get("createdAt", "")}))
+
+    for row in facts.get("stalledMissions") or ():
+        # Khoá theo (missionId, updatedAt): mission đứng bánh rồi NHÚC NHÍCH
+        # rồi lại đứng bánh là hai sự cố khác nhau, và admin cần biết lần thứ
+        # hai. Khoá chỉ theo missionId thì lần thứ hai im lặng mãi mãi.
+        events.append(Event(
+            kind=EventKind.missionStalled,
+            source="mission",
+            eventId=deterministicEventId(EventKind.missionStalled,
+                                         row.get("missionId", ""),
+                                         row.get("updatedAt", "")),
+            payload={"missionId": row.get("missionId", ""),
+                     "title": row.get("title", ""),
+                     "updatedAt": row.get("updatedAt", "")}))
+
+    silence = facts.get("silence")
+    if silence:
+        # Khoá theo mốc BẮT ĐẦU im lặng, không theo số giờ: số giờ tăng mỗi
+        # lần quét, nên khoá theo nó là đẻ một event mới mỗi 15 phút suốt sự
+        # cố — đúng con bug 21 tin.
+        events.append(Event(
+            kind=EventKind.productionDown,
+            source="heartbeat",
+            eventId=deterministicEventId(EventKind.productionDown,
+                                         silence.get("since", "")),
+            payload={"hours": silence.get("hours", 0),
+                     "since": silence.get("since", "")}))
+
+    return tuple(events)
+
+
 def recentEvents(conn: sqlite3.Connection, kind: Optional[EventKind] = None,
                  limit: int = 50) -> list:
     if kind:
@@ -310,6 +420,31 @@ def defaultRules() -> tuple:
                 companyId="", capability="",
                 inputValue={},
                 reason="chạm trần hạn mức — báo admin kèm mốc mở lại"),),
+        ),
+        Rule(
+            name="taskFailedThenTell",
+            eventKind=EventKind.taskFailed,
+            description="Lời gọi hỏng thì BÁO admin, không tự chạy lại",
+            # Cố ý KHÔNG đề xuất chạy lại. "Tự thử lại khi chưa biết vì sao
+            # hỏng là cách biến một lỗi thành một vòng lặp" — đó là đặc quyền
+            # của mức tự chủ 3, và không năng lực nào của hệ đạt tới đó.
+            propose=lambda event: (TaskProposal(
+                companyId="", capability="",
+                inputValue={"taskId": event.payload.get("taskId", "")},
+                reason=(f"{event.payload.get('companyId', '?')}."
+                        f"{event.payload.get('capability', '?')} hỏng — "
+                        "báo admin, chờ admin quyết")),),
+        ),
+        Rule(
+            name="silenceThenAlert",
+            eventKind=EventKind.productionDown,
+            description="Im lặng quá lâu thì báo — 61 giờ đã xảy ra một lần",
+            propose=lambda event: (TaskProposal(
+                companyId="", capability="",
+                inputValue={},
+                reason=(f"hệ im lặng {event.payload.get('hours', 0):.0f} giờ "
+                        f"từ {event.payload.get('since', '?')} — kiểm xem "
+                        "poller còn sống không")),),
         ),
         Rule(
             name="missionStalledThenAsk",

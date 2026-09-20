@@ -208,10 +208,34 @@ def trackRecordRows(conn: sqlite3.Connection, companyId: str,
     Chỉ trả về dòng ĐÃ CÓ quyết định policy: dòng cũ hơn mốc di trú không có
     bằng chứng nào, và đếm chúng như thành công là trao quyền dựa trên một quá
     khứ ta không đo được.
+
+    ═══ BỘ ĐO KHÔNG ĐƯỢC TỰ KIẾM QUYỀN CHO CHÍNH NÓ ═══
+
+    Loại thẳng `reg_` `evl_` `e2e_` `demo_`. Đo ngày 2026-09-20: trong 227 dòng
+    của `travisSelfTestCompany.recordWrite` thì 194 là `e2e_` và 33 là `demo_`
+    — KHÔNG có một lời gọi thật nào. Mức 2 mà bảng `travis.py autonomy` in ra
+    hoàn toàn do bộ ca thử đẻ ra, và `nhacCompany.dsNhac` cũng có 136 dòng
+    `reg_` góp vào mức 4 của nó.
+
+    Chừng nào con số này chỉ để NHÌN thì đó là một phép đo bẩn. Từ lúc
+    `core/policy` đọc nó để bớt hỏi admin thì nó thành một cái cửa — và cái cửa
+    ấy sẽ được mở bằng chính việc chạy `python3 tests/run.py` vài lần. Chạy bộ
+    kiểm thử không phải là bằng chứng rằng hệ đáng được tin thêm.
+
+    Cùng họ với hai tiền lệ đã có trong bảng bẫy: nhãn `evl_` ở `ceoRunLog`, và
+    `reg_` bị tách khỏi báo cáo backOffice. Khác một điểm, và điểm đó là lý do
+    dòng này quan trọng hơn cả hai: ở đây con số không đi vào một bản báo cáo,
+    nó đi vào một quyết định quyền hạn.
     """
+    # sql-an-toan: chỉ ghép `notTest` dựng từ hằng TEST_TRACE_PREFIXES viết
+    # cứng trong file này; mọi giá trị vẫn đi qua tham số `?`.
+    notTest = " AND ".join(f"traceId NOT LIKE '{prefix}%'"
+                           for prefix in TEST_TRACE_PREFIXES)
+    # sql-an-toan: chỉ ghép `notTest` dựng từ hằng viết cứng; giá trị qua `?`
     rows = conn.execute(
         "SELECT status, verificationJson, startedAt FROM taskLog "
         "WHERE companyId = ? AND capability = ? AND policyDecision IS NOT NULL "
+        f"AND {notTest} "
         "ORDER BY startedAt DESC LIMIT ?", (companyId, capability, limit))
 
     out = []

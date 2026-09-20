@@ -78,6 +78,48 @@ capabilities:
     # `label` là từ vựng ĐÓNG và nhỏ — đúng nhóm "có nghĩa, ít và đếm được"
     # mà whitelist cần. Ba giá trị nghĩa là admin bấm nhiều nhất ba lần.
     whitelistScope: [label]
+    # ⚠ KHÔNG khai `autonomyOptIn` ở đây, và đó là CỐ Ý.
+    #
+    # Năng lực này là CHỐT CANH cửa duyệt: ba ca trong
+    # tests/integration/testEndToEnd.py dùng đúng nó để chứng minh rằng việc
+    # GHI thì dừng lại và hỏi. Cho nó một đường tự chạy là đặt cái chốt canh
+    # lên chính cánh cửa nó đang canh — và khi cửa mở, ca thử sẽ xanh theo.
+    #
+    # Muốn thử đường tự chủ thì dùng `recordWriteAuto` bên dưới.
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [label, value]
+      properties:
+        label: { enum: [alpha, beta, gamma] }
+        value: { type: string, minLength: 1, maxLength: 200 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [entryId, label, value]
+      properties:
+        entryId: { type: string }
+        label:   { type: string }
+        value:   { type: string }
+
+  - name: recordWriteAuto
+    description: >
+      Giống `recordWrite`, nhưng KHAI `autonomyOptIn` — đây là năng lực GHI
+      đầu tiên của hệ được phép tự chạy khi đã kiếm đủ bằng chứng.
+      Chọn nó làm nơi thử vì hậu quả của một lần sai là MỘT DÒNG THỪA trong sổ
+      sqlite của chính company này: không Notion, không ví, không lịch, không
+      một tin nhắn nào ra ngoài. Đó đúng là câu mà `autonomyOptIn` hỏi — không
+      phải "nó có hay chạy đúng không", mà "một lần sai thì mất gì".
+    riskTier: write
+    maxDurationSec: 20
+    whitelistScope: [label]
+    # Khai ở đây KHÔNG có nghĩa là nó đang tự chạy. Nó mới chỉ mở cửa cho bằng
+    # chứng: `core/policy` còn đòi mức đã KIẾM ĐƯỢC ≥ 2, và mức đó tính từ sổ
+    # audit thật, đã LOẠI mọi lưu lượng của bộ đo (`reg_ evl_ e2e_ demo_`).
+    # Nghĩa là chạy `tests/run.py` một nghìn lần cũng không nâng nó lên.
+    # Hỏng vài lần thì nó tự tụt về mức 1 và cửa duyệt quay lại — không cần ai
+    # sửa file này.
+    autonomyOptIn: true
     inputSchema:
       type: object
       additionalProperties: false

@@ -151,6 +151,47 @@ class TestNoFakeFences(unittest.TestCase):
                         "Nếu đó là ý định thì bỏ hẳn khoá này đi; nếu không thì "
                         "kể tên các trường làm phạm vi.")
 
+    def testAutonomyOptInIsNeverDeclaredFalse(self):
+        """Cùng họ với `whitelistScope: []` — giá trị RỖNG nghĩa là ĐÓNG.
+
+        `autonomyOptIn: false` đọc y hệt như không khai, nhưng nó để lại trong
+        manifest một dòng trông như đang bật thứ gì đó. Người đọc sáu tuần sau
+        sẽ tin cái dòng ấy — đúng kiểu hại của một hàng rào giả.
+
+        Muốn đóng thì BỎ HẲN khoá đi.
+        """
+        for companyId, spec in MANIFESTS.items():
+            for name, cap in capabilitiesOf(spec).items():
+                if "autonomyOptIn" not in cap:
+                    continue
+                with self.subTest(company=companyId, capability=name):
+                    self.assertTrue(
+                        cap["autonomyOptIn"],
+                        f"{companyId}.{name}: `autonomyOptIn: false` nghĩa là "
+                        "ĐÓNG, y như không khai. Bỏ hẳn khoá này đi.")
+
+    def testAutonomyOptInNeverOnIrreversibleOrPaid(self):
+        """Khai tự chủ cho việc không hoàn tác được là khai một thứ vô nghĩa.
+
+        `core/policy` đã chặn ở hai chân độc lập, nên khai vào đây không mở
+        được gì — nhưng nó VIẾT RA một ý định nguy hiểm, và dòng chữ đó sẽ
+        được ai đó đọc như một sự cho phép. Chặn ở manifest để nó không bao
+        giờ tồn tại trên mặt giấy.
+        """
+        for companyId, spec in MANIFESTS.items():
+            for name, cap in capabilitiesOf(spec).items():
+                if not cap.get("autonomyOptIn"):
+                    continue
+                with self.subTest(company=companyId, capability=name):
+                    self.assertNotEqual(
+                        cap.get("riskTier"), "irreversible",
+                        f"{companyId}.{name}: `irreversible` không bao giờ tự "
+                        "chạy — bỏ `autonomyOptIn` đi.")
+                    self.assertIsNone(
+                        cap.get("paidApi"),
+                        f"{companyId}.{name}: việc tốn TIỀN THẬT phải hỏi mỗi "
+                        "lần — bỏ `autonomyOptIn` đi.")
+
     def testWhitelistScopeFieldsExist(self):
         """Phạm vi whitelist phải trỏ vào trường CÓ THẬT trong inputSchema."""
         for companyId, spec in MANIFESTS.items():

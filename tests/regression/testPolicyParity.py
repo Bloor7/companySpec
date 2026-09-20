@@ -31,6 +31,10 @@ from core.contracts import (  # noqa: E402
     Capability, IssuedBy, PolicyDecision, PolicyRequest,
 )
 from core.policy import decide  # noqa: E402
+from core.policy.autonomy import (  # noqa: E402
+    earnedAutonomy, recordFromAuditRows,
+)
+import core.audit as coreAudit  # noqa: E402
 
 # Bỏ company `internal: true` — xem ghi chú trong testDryRunAllCapabilities.py.
 MANIFESTS = loadManifests(includeInternal=False)
@@ -64,6 +68,30 @@ def _whitelistRuleFor(companyId: str, name: str, payload: dict):
     except Exception:
         return None
     return rule["ruleId"] if rule else None
+
+
+def _earnedLevelFor(capability: Capability) -> int:
+    """Mức tự chủ đã kiếm được, ĐỌC ĐÚNG SỔ mà dispatch đọc.
+
+    Cùng lý lẽ với `_whitelistRuleFor`: hỏi core mà GIẤU nó thông tin dispatch
+    có thì phép so không nói lên điều gì. Bản đầu của ca này đã sai đúng thế
+    với whitelist, nên lần này mức tự chủ đi cùng đường.
+
+    Trả 0 khi company chưa khai `autonomyOptIn` — giống hệt dispatch, vốn
+    không thèm mở sqlite cho những năng lực không khai.
+    """
+    if not capability.canEverActOnEarnedAutonomy:
+        return 0
+    conn = coreAudit.openStore(
+        os.path.join(REPO_ROOT, "backOffice", "store.sqlite"))
+    try:
+        rows = coreAudit.trackRecordRows(conn, capability.companyId,
+                                         capability.name)
+    finally:
+        conn.close()
+    return earnedAutonomy(
+        recordFromAuditRows(capability.companyId, capability.name, rows),
+        capability.riskTier)
 
 
 def _capabilitiesToCheck():
@@ -128,7 +156,8 @@ class TestApprovalParity(unittest.TestCase):
                 # Đây là chỗ bản đầu sai: hỏi core mà GIẤU nó thông tin
                 # whitelist mà dispatch có. Hai bên biết khác nhau thì so sánh
                 # không nói lên điều gì.
-                whitelistGrant=rule))
+                whitelistGrant=rule,
+                earnedAutonomyLevel=_earnedLevelFor(capability)))
 
             if rule:
                 granted += 1
@@ -176,7 +205,8 @@ class TestApprovalParity(unittest.TestCase):
             outcome = decide(PolicyRequest(
                 identity=IssuedBy.admin,
                 capability=capability,
-                inputValue=payload))
+                inputValue=payload,
+                earnedAutonomyLevel=_earnedLevelFor(capability)))
             if outcome.canWhitelist != dispatchSaysCan:
                 mismatches.append(
                     f"{companyId}.{name}: core={outcome.canWhitelist} · "

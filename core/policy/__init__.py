@@ -28,6 +28,7 @@ from ..contracts import (
     Capability, IssuedBy, PolicyDecision, PolicyOutcome, PolicyRequest,
     RiskTier, canonicalJson,
 )
+from .autonomy import describeLevel, mayActWithoutAsking
 
 
 def decide(request: PolicyRequest) -> PolicyOutcome:
@@ -45,7 +46,8 @@ def decide(request: PolicyRequest) -> PolicyOutcome:
                  _ruleReadIsFree,
                  _ruleScheduleMustWait,
                  _ruleWhitelistGrant,
-                 _ruleApprovalToken):
+                 _ruleApprovalToken,
+                 _ruleEarnedAutonomy):
         outcome = rule(request, capability)
         if outcome is not None:
             return outcome
@@ -185,6 +187,46 @@ def _ruleApprovalToken(request: PolicyRequest, capability: Capability):
         decision=PolicyDecision.allowWithVerify,
         reason=f"admin đã duyệt ({request.approvalId})",
         approvalId=request.approvalId)
+
+
+def _ruleEarnedAutonomy(request: PolicyRequest, capability: Capability):
+    """A-1 — năng lực đã KIẾM ĐƯỢC mức tự chủ thì thôi hỏi, nhưng vẫn phải kiểm.
+
+    ═══ VÌ SAO LUẬT NÀY ĐỨNG CUỐI HÀNG ═══
+
+    Nó đứng SAU whitelist và SAU chữ ký admin, và thứ tự đó là có chủ ý. Cả ba
+    đều ra `allowWithVerify`, nên đổi chỗ không đổi hành vi — nhưng nó đổi
+    `reason`, tức là đổi câu mà sổ audit trả lời sáu tuần sau cho câu hỏi "vì
+    sao việc này được phép". Một hành động admin làm THẬT (bấm duyệt, cấp quyền
+    đứng) là câu trả lời đúng hơn một mức hệ tự suy từ thống kê. Suy luận chỉ
+    nên được ghi công khi không còn ai khác để ghi công.
+
+    Nó cũng đứng sau MỌI luật chặn: S3 (cron chỉ được đọc) và L8 (trần tiền
+    thật) đã trả lời xong từ đầu hàng. Nghĩa là mức tự chủ KHÔNG mở được cửa
+    cho cron ghi, dù thống kê có đẹp tới đâu — cron không có quyền gì để mà nới.
+
+    ═══ BA HÀNG RÀO, VÀ CHÚNG ĐỘC LẬP VỚI NHAU ═══
+
+      · `canEverActOnEarnedAutonomy` — company phải tự khai, không tiêu tiền
+        thật, không `irreversible`.
+      · `mayActWithoutAsking` — mức phải ≥ 2 VÀ trần rủi ro phải cho phép.
+      · `requiresVerification` — được tự chạy thì BẮT BUỘC có bằng chứng, nên
+        kết quả là `allowWithVerify`, không bao giờ là `allow` trần.
+
+    Nghịch lý có chủ ý ở dòng cuối: càng được tự do thì càng phải chứng minh
+    nhiều. Ngược lại — tự do hơn, kiểm ít hơn — là công thức để mức tự chủ trôi
+    lên dựa trên một quá khứ không ai đo được nữa.
+    """
+    if not capability.canEverActOnEarnedAutonomy:
+        return None
+    level = request.earnedAutonomyLevel
+    if not mayActWithoutAsking(level, capability.riskTier):
+        return None
+    return PolicyOutcome(
+        decision=PolicyDecision.allowWithVerify,
+        reason=(f"tự chủ {describeLevel(level)} — đã kiếm được từ sổ, và "
+                f"company khai `autonomyOptIn` cho năng lực này"),
+    )
 
 
 # ══════════════════════════ dựng câu hỏi duyệt ══════════════════════════
