@@ -32,7 +32,7 @@ Ba mức, và sự khác nhau giữa chúng là điều quan trọng nhất ở 
 
 | | Mục §43 | Ở đâu | Tự kiểm |
 |---|---|---|---|
-| ✅ | Employee có identity riêng | `employees/` | `travis.py employees` |
+| ✅ | Employee có identity riêng | `employees/` | `travis.py employees` · và từ 20/09 employee NẰM TRÊN đường chạy: `travis.py why <taskId>` in tên người gọi, không còn "(CEO gọi thẳng)" |
 | ✅ | Brain độc lập với Employee | `brains/` | đổi `brains.preferred` không mất employee |
 | ✅ | Data boundary theo classification | `brains/router.py` | `travis.py brains sensitive` |
 | ✅ | Brain Council có kiểm soát | `brains/council.py` | `unsourcedClaims` nêu tên số không nguồn |

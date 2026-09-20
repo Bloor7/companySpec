@@ -101,6 +101,35 @@ có cả một hàm trông như đang chống lặp.
 
 ---
 
+## 2d. Cũng xong 2026-09-20 (đợt chiều): bốn chỗ hỏng THẬT + Employee lên đường chạy
+
+Đợt này **không xây thêm tính năng** — đi soát, và soát ra bốn chỗ hỏng mà ba
+bộ kiểm đều xanh suốt:
+
+| Hỏng | Triệu chứng |
+|---|---|
+| `poller.GATEWAY` trỏ vào file chưa từng tồn tại | **Mọi tin nhắn admin** ra "Hệ gặp lỗi khi xử lý", từ §36 |
+| `session.py` tự gọi lại mình qua tên cũ | "Bức tranh hiện tại" không bao giờ làm mới — `Popen` nuốt cả stderr |
+| `codemap` tìm ca thử ở thư mục cũ | Hàng rào **tự tắt**, bỏ qua 29 ca, vẫn in "SOÁT LUẬT: sạch" |
+| Thợ hỏi "có việc không?" bằng lệnh GHI | **294 thẻ duyệt/ngày** cho một xưởng trống |
+
+⚠ Cái đầu nằm im **không ai biết** vì admin chưa nhắn lần nào sau khi đổi tên
+— journal có ĐÚNG 0 dòng `gateway lỗi`. Bài học chung: **ca thử xanh chỉ
+chứng minh thứ nó chạy qua; nó không chứng minh đường thật có chạy.**
+
+**Employee lên đường chạy.** Đo được: 6/6.146 lời gọi thật mang `employeeId`
+— 0,1%. Nay `dispatch` mặc định `employeeId = ceo`, và `employees/ceo/
+employee.yaml` khai quyền **đo từ cả danh mục**, không từ lưu lượng.
+
+⚠ Mặc định nằm ở **dispatcher**, không ở prompt — CEO tự gõ lệnh và `guard.py`
+chỉ cho vài cờ, nên một luật sống trong lời dặn là luật model phá được.
+
+⚠ Kèm theo: manifest nay khai được `action:` (`riskTier` nói NẶNG CỠ NÀO,
+`action` nói LÀM GÌ). Không khai thì vẫn suy như cũ — 87 năng lực còn lại
+không đổi hành vi.
+
+---
+
 ## 3. Việc tiếp theo
 
 **§43 chỉ còn một ô ⬜: sandbox cứng** (container/VM, cgroup, netns, seccomp).
