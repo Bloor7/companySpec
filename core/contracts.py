@@ -255,6 +255,24 @@ class Capability:
     #: của chính nó hoặc vào Notion, tức là `database`.
     resource: Optional[ResourceKind] = None
 
+    #: Năng lực này LÀM GÌ với tài nguyên đó. Khai được trong manifest; không
+    #: khai thì suy từ `riskTier`.
+    #:
+    #: ═══ VÌ SAO PHẢI KHAI ĐƯỢC, THAY VÌ LUÔN SUY RA ═══
+    #:
+    #: Bảng suy ép `irreversible` → `delete`. Nên `panharmonCompany.dangBai`
+    #: — ĐĂNG một bài lên web — bị soát quyền như thể nó XOÁ CẢ KHO. Hệ quả:
+    #: muốn CEO đăng được bài thì phải cấp cho nó `repository.delete`, một
+    #: quyền vừa sai nghĩa vừa đáng sợ, và `forge`/`sentinel` đang bị cấm
+    #: đúng quyền ấy vì lý do hoàn toàn khác.
+    #:
+    #: Gốc rễ: `riskTier` nói NẶNG CỠ NÀO, `action` nói LÀM GÌ. Hai câu khác
+    #: nhau, và suy câu này từ câu kia thì có ngày ra một câu vô nghĩa. Bằng
+    #: chứng: bốn trong bảy giá trị `ActionKind` (`create`, `publish`, `send`,
+    #: `deploy`) trước đây KHÔNG THỂ xuất hiện — kể cả `publish`, thứ mà bảng
+    #: duyệt §7 gọi tên riêng thành một dòng "Publish public content".
+    action: Optional[ActionKind] = None
+
     #: Company TỰ KHAI rằng năng lực này được phép tự chạy khi đã KIẾM ĐƯỢC
     #: mức tự chủ (xem core/policy/autonomy.py). Không khai = không bao giờ,
     #: kể cả khi thống kê đẹp tới đâu.
@@ -282,7 +300,9 @@ class Capability:
         sai thì `codemap --check` bắt, vì tên phải khớp enum.
         """
         resource = self.resource or ResourceKind.database
-        action = {
+        # Manifest khai thì NGHE manifest. Chỉ suy khi không ai nói gì —
+        # xem ghi chú ở trường `action` để biết vì sao suy là chưa đủ.
+        action = self.action or {
             RiskTier.read: ActionKind.read,
             RiskTier.low: ActionKind.read,
             RiskTier.write: ActionKind.modify,
@@ -355,6 +375,9 @@ class Capability:
             # một `resource: repositry` bị nuốt sẽ lặng lẽ thành `database`, và
             # quyền của employee được soát trên một tài nguyên sai (O10).
             resource=ResourceKind(declaredResource) if declaredResource else None,
+            # Khai sai tên thì NÉM ngay lúc nạp, y như `resource` — nuốt thành
+            # mặc định là soát quyền trên một hành động sai (O10).
+            action=ActionKind(raw["action"]) if raw.get("action") else None,
             # Không khai = False. Đó là mặc định ĐÓNG, và nó đúng chiều: quên
             # khai thì hệ hỏi admin như cũ, không phải tự chạy trong im lặng.
             autonomyOptIn=bool(raw.get("autonomyOptIn")),

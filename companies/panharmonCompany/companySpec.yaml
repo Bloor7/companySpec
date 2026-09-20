@@ -104,6 +104,11 @@ capabilities:
     # G1 — người khác nhìn thấy được thì là irreversible, kể cả khi gỡ xuống
     # được. Gỡ xuống không thu hồi được thứ đã có người đọc hoặc Google đã cache.
     riskTier: irreversible
+    # `riskTier` nói NẶNG CỠ NÀO; `action` nói LÀM GÌ. Không khai thì bảng suy
+    # ép `irreversible` → `delete`, và việc ĐĂNG một bài bị soát quyền như thể
+    # nó XOÁ CẢ KHO — sai nghĩa, và bắt phải cấp một quyền không ai muốn cấp.
+    # `publish` là đúng thứ bảng duyệt §7 gọi tên: "Publish public content".
+    action: publish
     maxDurationSec: 90
     inputSchema:
       type: object

@@ -423,6 +423,13 @@ def cmd_call(args) -> dict:
     # này được gọi từ nhiều nhánh khác nhau.
     lastPolicy = [None, ""]
 
+    # Khởi tạo SỚM vì `bail` là closure đọc nó, mà `bail` gọi được từ những
+    # cổng chặn nằm TRƯỚC chỗ giải employee (C2.1 — company không tồn tại).
+    # Không có dòng này thì đúng lúc cần báo lỗi tử tế, hệ ném
+    # `NameError: free variable referenced before assignment` — cùng họ với
+    # bài học "đổi tên trường mà quên câu báo lỗi".
+    employeeId = None
+
     def bail(reason, status="rejected", extra=None):
         """Từ chối, nhưng vẫn để lại dấu vết (O5). Lần bị chặn cũng là dữ liệu.
 
@@ -443,7 +450,7 @@ def cmd_call(args) -> dict:
         log_outcome(conn, task_id, trace_id, args.company, args.capability,
                     risk, fingerprint, res,
                     policy_decision=decision, policy_reason=why,
-                    employee_id=getattr(args, "employee", None))
+                    employee_id=employeeId)
         conn.close()
         return res
 
@@ -502,13 +509,31 @@ def cmd_call(args) -> dict:
     identity = (IssuedBy.scheduledTrigger
                 if args.issued_by == "scheduledTrigger" else IssuedBy.ceo)
 
-    # ─── EMPLOYEE (tuỳ chọn) ───
+    # ─── EMPLOYEE — KHÔNG CÒN LÀ TUỲ CHỌN ───
     #
-    # Không có `--employee` thì giữ nguyên hành vi cũ: CEO gọi thẳng. Có thì
-    # quyền của người đó được soát TRƯỚC Policy, và `cannot` thắng mọi thứ
+    # Quyền của người gọi được soát TRƯỚC Policy, và `cannot` thắng mọi thứ
     # (E-2). Soát trước vì đây là câu hỏi rẻ hơn và dứt khoát hơn: "người này
     # có được phép làm loại việc này không" không phụ thuộc nội dung lời gọi.
-    employeeId = getattr(args, "employee", None)
+    #
+    # ═══ VÌ SAO MẶC ĐỊNH LÀ `ceo`, VÀ VÌ SAO NÓ NẰM Ở ĐÂY ═══
+    #
+    # Đo 2026-09-20: trong 6.146 lời gọi THẬT của bảy ngày, đúng **6** lời gọi
+    # mang `employeeId` — 0,1%. Tầng Employee đã dựng, đã kiểm, và gần như
+    # không nằm trên đường chạy. Hệ có hai hình: hình trên giấy (Task →
+    # Employee → Policy) và hình đang chạy (CEO → Policy), và chỉ hình thứ
+    # hai mới đúng.
+    #
+    # Mặc định phải nằm ở DISPATCHER chứ không phải ở prompt của CEO: CEO tự
+    # gõ lệnh Bash, `ceo/hooks/guard.py` chỉ cho đúng vài cờ, và một luật chỉ
+    # sống trong lời dặn thì model phá lúc nào cũng được mà không ai biết.
+    # Đặt ở đây thì không có đường nào vòng qua, kể cả khi ai đó sửa SYSTEM.md.
+    #
+    # Đây là THẮT LẠI, không phải nới: trước đây CEO gọi với quyền ngầm định
+    # vô hạn và chưa từng bị `mayDo()` soát lần nào. Ca
+    # `tests/regression/testCeoAsEmployee.py` đối chiếu trước khi chuyển —
+    # nó duyệt toàn bộ danh mục và đòi hồ sơ `ceo` cho qua từng năng lực.
+    employeeId = getattr(args, "employee", None) or (
+        "ceo" if args.issued_by == "ceo" else None)
     if employeeId:
         try:
             employees = loadEmployees()
@@ -766,7 +791,10 @@ def cmd_call(args) -> dict:
         "employeeId) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         (task_id, trace_id, args.company, args.capability, risk,
          fingerprint, "running", now(),
-         lastPolicy[0], lastPolicy[1], getattr(args, "employee", None)),
+         # `employeeId` đã giải ra ở trên (mặc định `ceo`), KHÔNG phải cờ thô
+         # `args.employee`. Ghi cờ thô là soát quyền bằng một người mà sổ ghi
+         # là người khác — `travis why` sẽ không trả lời nổi câu "ai làm".
+         lastPolicy[0], lastPolicy[1], employeeId),
     )
     conn.commit()
 

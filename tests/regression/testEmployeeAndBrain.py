@@ -33,9 +33,31 @@ POLICY = loadBrainPolicy()
 
 class TestManifestsAreSound(unittest.TestCase):
 
-    def testFiveEmployeesLoad(self):
-        self.assertEqual(
-            sorted(EMPLOYEES), ["atlas", "forge", "iris", "sage", "sentinel"])
+    def testEveryEmployeeOnDiskLoads(self):
+        """Mọi hồ sơ trong `employees/` phải nạp được, không sót cái nào.
+
+        Bản cũ viết cứng danh sách năm người. Nó đỏ ngày 2026-09-20 khi `ceo`
+        được khai thành employee — đúng loại ca thử bắt người ta phải sửa ca
+        thử mỗi lần thêm một thứ hợp lệ, và sửa mãi thì có ngày sửa bừa.
+
+        Nay soát TÍNH CHẤT: có bao nhiêu thư mục thì phải nạp được bấy nhiêu.
+        Thêm employee không phải sửa ca này; để sót một hồ sơ hỏng thì đỏ.
+        """
+        import glob
+        thuMuc = sorted(
+            os.path.basename(os.path.dirname(p)) for p in
+            glob.glob(os.path.join(REPO_ROOT, "employees", "*", "employee.yaml")))
+        self.assertEqual(sorted(EMPLOYEES), thuMuc)
+        self.assertGreaterEqual(len(EMPLOYEES), 5)
+
+    def testCeoIsOnTheList(self):
+        """CEO phải là một employee CÓ KHAI BÁO, không phải một ngoại lệ ngầm.
+
+        Đo 20/09: 6/6.146 lời gọi thật mang `employeeId` — tầng Employee đã
+        dựng mà gần như không nằm trên đường chạy, vì CEO đi vòng qua nó với
+        quyền ngầm định vô hạn.
+        """
+        self.assertIn("ceo", EMPLOYEES)
 
     def testEveryEmployeeDeclaresSomethingItCannotDo(self):
         """Không ai được là toàn năng.
