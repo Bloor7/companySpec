@@ -174,3 +174,23 @@ schedules:
     capability: progressReport   # riskTier phải là read, dispatcher tự kiểm (S3)
     input: {}
     quietIfEmpty: false
+
+  # §21 — BẢN SOÁT TUẦN. Chủ nhật tối, khi tuần đã đủ dài để nhìn ra xu hướng.
+  #
+  # Khác báo cáo sáng ở câu nó trả lời. Báo cáo sáng nói "hôm nay có gì";
+  # bản này nói "có thứ gì đang hỏng dần mà nhìn từng ngày không thấy không".
+  #
+  # Nó tự tìm: năng lực trượt quá 20% trong tuần, năng lực bắt admin bấm duyệt
+  # quá nhiều lần, mission đứng bánh, mission xong mà chưa ai báo.
+  #
+  # Đề xuất của nó dừng ở CHỮ — không Task nào sinh ra từ đây, không quyền nào
+  # được cấp. §34 cố ý dừng ở đó: hệ tự phát hiện vấn đề là một chuyện, hệ tự
+  # sửa mà không ai nhìn là chuyện khác hẳn.
+  - scheduleId: weeklyReview
+    displayName: "Soát tuần"
+    enabled: true
+    at: "20:00"
+    days: [8]                    # 8 = Chủ nhật
+    kind: digest
+    sections: [soattuan]
+    quietIfEmpty: false          # tuần nào cũng gửi, kể cả tuần yên ắng

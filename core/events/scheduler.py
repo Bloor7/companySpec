@@ -740,11 +740,30 @@ def section_hocnhac() -> tuple[str, bool]:
     return "\n".join(d), True
 
 
+def section_soattuan() -> tuple[str, bool]:
+    """§21 — bản soát TUẦN. Khác báo cáo ngày ở câu nó trả lời.
+
+    Báo cáo ngày: "hôm qua có gì". Bản tuần: "có thứ gì đang hỏng dần mà nhìn
+    từng ngày không thấy không?"
+
+    Hai loại hỏng chỉ lộ ra ở thang tuần: một năng lực trượt 30% (mỗi ngày một
+    lần thì trông như tai nạn lẻ), và một mission đứng bánh (không ngày nào nó
+    "hỏng", nó chỉ không nhúc nhích). Cả hai đều IM LẶNG.
+    """
+    # Đường TUYỆT ĐỐI, không phải `from .review`: file này được chạy như một
+    # SCRIPT (`python3 gateway/cli/scheduler.py`), nên nó nạp thành module
+    # top-level `scheduler`, không thành `core.events.scheduler`. Import tương
+    # đối khi đó ném `attempted relative import with no known parent package`.
+    from core.events.review import weeklyReview
+    return weeklyReview(), True
+
+
 SECTIONS = {"agenda": section_agenda, "tienbac": section_tienbac,
             "hocsang": section_hocsang, "hocnhac": section_hocnhac,
             "quota": section_quota,
             "activity": section_activity, "approvals": section_approvals,
-            "permissions": section_permissions, "plan": section_plan}
+            "permissions": section_permissions, "plan": section_plan,
+            "soattuan": section_soattuan}
 
 
 # ───────────────────────── chạy ─────────────────────────

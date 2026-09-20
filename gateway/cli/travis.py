@@ -22,6 +22,7 @@ import argparse
 import json
 import os
 import sqlite3
+from datetime import datetime, timedelta, timezone
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -379,8 +380,14 @@ def main() -> int:
     health = sub.add_parser("health", help="hệ có còn sống không")
     health.add_argument("--hours", type=int, default=6,
                         help="im lặng quá ngần này giờ là sự cố")
-    health.add_argument("--since", default="2026-09-19",
-                        help="soát lời gọi không qua Policy từ mốc này")
+    # Mốc mặc định TỰ TRƯỢT theo thời gian, không viết cứng một ngày: một ngày
+    # viết cứng thì sang tháng nó vẫn "đúng" một cách tình cờ, rồi có lúc sai
+    # mà không ai biết. Đây là cùng bài học với `policyColumnFloor`.
+    health.add_argument(
+        "--since",
+        default=(datetime.now(timezone.utc) - timedelta(days=7)
+                 ).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        help="soát lời gọi không qua Policy từ mốc này (mặc định: 7 ngày)")
     health.set_defaults(fn=cmdHealth)
 
     why = sub.add_parser("why", help="vì sao lời gọi đó được phép")

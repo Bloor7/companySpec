@@ -274,5 +274,117 @@ class TestTrackRecordFromAudit(unittest.TestCase):
         self.assertIn(describeLevel(1), text)
 
 
+class TestWeeklyReview(unittest.TestCase):
+    """§21 — bản soát tuần trả lời câu mà báo cáo ngày không trả lời được."""
+
+    def setUp(self):
+        import tempfile
+        self.path = os.path.join(tempfile.mkdtemp(prefix="travisRev"),
+                                 "store.sqlite")
+        conn = sqlite3.connect(self.path)
+        conn.executescript(
+            """
+            CREATE TABLE taskLog (
+              taskId TEXT PRIMARY KEY, traceId TEXT, companyId TEXT,
+              capability TEXT, status TEXT, startedAt TEXT,
+              policyDecision TEXT, costUsd REAL);
+            CREATE TABLE ceoRunLog (
+              runId INTEGER PRIMARY KEY AUTOINCREMENT, traceId TEXT,
+              createdAt TEXT, isError INTEGER, loi TEXT, costUsd REAL);
+            """)
+        self.conn = conn
+
+    def _addCall(self, taskId, status, *, capability="doThing",
+                 policyDecision="allow", traceId="trc_x",
+                 startedAt="2026-09-19T10:00:00Z"):
+        self.conn.execute(
+            "INSERT INTO taskLog (taskId, traceId, companyId, capability, "
+            "status, startedAt, policyDecision, costUsd) VALUES (?,?,?,?,?,?,?,0)",
+            (taskId, traceId, "someCompany", capability, status, startedAt,
+             policyDecision))
+        self.conn.commit()
+
+    def tearDown(self):
+        self.conn.close()
+
+    def testFailingCapabilityIsNamed(self):
+        from core.events.review import collect, weakSpots
+        for index in range(8):
+            self._addCall(f"t{index}",
+                          "failed" if index < 4 else "ok")
+        spots = weakSpots(collect(since="2026-09-01", storePath=self.path))
+        self.assertTrue(any("someCompany.doThing" in s for s in spots))
+
+    def testTinySampleIsNotAnAlarm(self):
+        """1/2 là 50% nhưng nó chỉ có nghĩa "chạy hai lần".
+
+        Báo động vì một mẫu quá nhỏ thì sớm muộn admin bỏ qua mọi báo động.
+        """
+        from core.events.review import collect, weakSpots
+        self._addCall("a", "failed")
+        self._addCall("b", "ok")
+        self.assertEqual(
+            weakSpots(collect(since="2026-09-01", storePath=self.path)), [])
+
+    def testOldRowsWithoutPolicyColumnAreNotAlarmed(self):
+        """⚠ Bẫy đã dính thật: bản đầu đếm CẢ dòng cũ hơn ngày thêm cột
+        `policyDecision`, ra "5288 lời gọi không qua policy".
+
+        Những dòng ấy KHÔNG THỂ có giá trị — cột chưa tồn tại lúc chúng được
+        ghi. Báo động về quá khứ là báo động sai, và một cảnh báo đúng luật
+        nhưng sai chỗ thì cũng dạy người ta bỏ qua cảnh báo.
+        """
+        from core.events.review import collect
+        # Dòng CŨ: chưa có quyết định, ghi trước khi cột ra đời.
+        self._addCall("old1", "ok", policyDecision=None,
+                      startedAt="2026-09-01T10:00:00Z")
+        self._addCall("old2", "ok", policyDecision=None,
+                      startedAt="2026-09-02T10:00:00Z")
+        # Dòng MỚI: cột đã có.
+        self._addCall("new1", "ok", policyDecision="allow",
+                      startedAt="2026-09-19T10:00:00Z")
+
+        data = collect(since="2026-08-01", storePath=self.path)
+        self.assertEqual(
+            data["unexplained"], 0,
+            "đếm cả dòng cũ hơn cột policyDecision — báo động về quá khứ")
+
+    def testTrulyUnexplainedCallIsAlarmed(self):
+        """Nhưng dòng MỚI mà thiếu quyết định thì PHẢI kêu — đó là đường vào
+        hệ không qua cửa, thứ nguy hiểm nhất có thể tồn tại ở đây."""
+        from core.events.review import collect, proposals
+        self._addCall("new1", "ok", policyDecision="allow",
+                      startedAt="2026-09-19T10:00:00Z")
+        self._addCall("sneaky", "ok", policyDecision=None,
+                      startedAt="2026-09-19T11:00:00Z")
+
+        data = collect(since="2026-08-01", storePath=self.path)
+        self.assertEqual(data["unexplained"], 1)
+        self.assertTrue(any("KHÔNG có quyết định policy" in p
+                            for p in proposals(data)))
+
+    def testTestTrafficIsExcluded(self):
+        """Bộ đo không được làm hỏng phép đo."""
+        from core.events.review import collect
+        for prefix in ("reg_", "evl_", "e2e_", "demo_"):
+            self._addCall(f"x{prefix}", "failed", traceId=f"{prefix}abc")
+        data = collect(since="2026-09-01", storePath=self.path)
+        self.assertEqual(data["byCapability"], [])
+
+    def testProposalsNeverPromiseAction(self):
+        """§34 dừng ở CHỮ. Không Task nào sinh ra từ bản soát."""
+        from core.events.review import collect, render
+        self._addCall("a", "ok")
+        text = render(collect(since="2026-09-01", storePath=self.path))
+        self.assertIn("ĐỀ XUẤT, không phải việc đã làm", text)
+
+    def testEmptyWeekSaysSoHonestly(self):
+        """"Không thấy gì" KHÁC "mọi thứ tốt" — nói đúng cái mình biết."""
+        from core.events.review import collect, proposals
+        items = proposals(collect(since="2026-09-01", storePath=self.path))
+        self.assertTrue(any("KHÔNG có nghĩa là mọi thứ tốt" in p
+                            for p in items))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

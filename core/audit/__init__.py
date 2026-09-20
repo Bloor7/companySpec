@@ -36,6 +36,12 @@ DEFAULT_STORE = os.path.join(ROOT, "backOffice", "store.sqlite")
 #:
 #: Thứ tự trong dict là thứ tự thêm; thêm cột mới thì nối vào CUỐI, đừng chèn
 #: giữa — sqlite không quan tâm, nhưng người đọc diff thì có.
+#: Nhãn traceId của lời gọi do BỘ ĐO sinh ra, không phải việc thật của admin.
+#:
+#: `trc_` KHÔNG nằm ở đây: đó là tiền tố mặc định của mọi lời gọi thật. Bộ đo
+#: nào còn dùng `trc_` thì phải tự đặt nhãn cho mình — xem `tests/evals/`.
+TEST_TRACE_PREFIXES = ("reg_", "evl_", "e2e_", "demo_")
+
 ADDED_COLUMNS = {
     "policyDecision": "TEXT",
     "policyReason": "TEXT",
@@ -135,6 +141,17 @@ def whyWasThisAllowed(conn: sqlite3.Connection, taskId: str) -> Optional[dict]:
     return answer
 
 
+def policyColumnFloor(conn: sqlite3.Connection) -> Optional[str]:
+    """Mốc cột `policyDecision` bắt đầu có nghĩa — SUY TỪ DỮ LIỆU.
+
+    Dòng đầu tiên CÓ quyết định là lúc cột ra đời. Viết cứng ngày thì sang năm
+    nó vẫn đúng một cách tình cờ, rồi có ngày sai mà không ai biết.
+    """
+    return conn.execute(
+        "SELECT MIN(startedAt) FROM taskLog WHERE policyDecision IS NOT NULL"
+    ).fetchone()[0]
+
+
 def unexplainedCalls(conn: sqlite3.Connection, since: str,
                      limit: int = 50) -> list:
     """Lời gọi KHÔNG có quyết định policy nào kèm theo.
@@ -142,13 +159,33 @@ def unexplainedCalls(conn: sqlite3.Connection, since: str,
     Rỗng là điều ta muốn. Không rỗng nghĩa là có đường đi vào hệ mà không qua
     Policy — và một đường như thế là thứ nguy hiểm nhất có thể tồn tại ở đây.
 
-    Dòng cũ (trước khi thêm cột) cũng hiện ra, nên `since` phải đặt sau mốc di
-    trú; bằng không ta đi tìm một vấn đề không có thật.
+    ⚠ CHỈ ĐẾM TỪ LÚC CỘT ẤY TỒN TẠI. Dòng ghi trước ngày thêm cột
+    `policyDecision` vốn KHÔNG THỂ có giá trị — đếm chúng là báo động về quá
+    khứ. Bản đầu không có sàn này và `travis health` kêu "10 lời gọi không qua
+    cửa" về những dòng chỉ đơn giản là cũ hơn cái cột.
+
+    Một cảnh báo đúng luật nhưng sai chỗ thì cũng dạy người ta bỏ qua cảnh
+    báo — hệt như 21 tin giống hệt lúc nửa đêm.
     """
+    floor = policyColumnFloor(conn)
+    if floor is None:
+        # Chưa dòng nào có quyết định → cột vừa thêm, chưa chạy lần nào.
+        # KHÔNG phải "tất cả đều lọt cửa".
+        return []
+    # Bỏ lời gọi của BỘ ĐO: bộ ca thử dùng một dispatcher GIẢ
+    # (`tests/evals/shim/`) vốn không ghi quyết định policy — đó là chủ ý, nó
+    # không phải cổng thật. Đếm chúng là báo động về chính cái thước.
+    #
+    # sql-an-toan: chỉ ghép `notTest`, dựng từ hằng TEST_TRACE_PREFIXES viết
+    # cứng trong file này; mọi giá trị vẫn đi qua tham số `?`.
+    notTest = " AND ".join(f"traceId NOT LIKE '{prefix}%'"
+                           for prefix in TEST_TRACE_PREFIXES)
+    # sql-an-toan: chỉ ghép `notTest` dựng từ hằng viết cứng; giá trị qua `?`
     return [dict(r) for r in conn.execute(
         "SELECT taskId, companyId, capability, status, startedAt "
-        "FROM taskLog WHERE startedAt >= ? AND policyDecision IS NULL "
-        "ORDER BY startedAt DESC LIMIT ?", (since, limit))]
+        f"FROM taskLog WHERE startedAt >= ? AND policyDecision IS NULL "
+        f"AND {notTest} ORDER BY startedAt DESC LIMIT ?",
+        (max(since, floor), limit))]
 
 
 def trackRecordRows(conn: sqlite3.Connection, companyId: str,
