@@ -17,7 +17,7 @@ CHỈ DÙNG THƯ VIỆN CHUẨN, cùng lý do với lib/notionClient.py: kéo SD
 gọi một endpoint là đổi một phụ thuộc lấy tiện lợi không đáng.
 
 CHƯA ĐO ĐƯỢC GÌ NHIỀU ở file này (viết 2026-08-27). Con số duy nhất đáng tin là
-thứ `ops/nao.py kiem` in ra lúc chạy thật; mọi giá tiền trong registry/models.yaml
+thứ `brains/fallback.py kiem` in ra lúc chạy thật; mọi giá tiền trong registry/models.yaml
 đều là tra tài liệu, chưa đối chiếu hoá đơn.
 """
 import json
@@ -109,7 +109,7 @@ def boc_json(chu: str):
     về người gọi, vì mỗi nơi chờ một hình dạng khác nhau.
 
     GOM VỀ MỘT CHỖ (2026-08-31): đúng tám dòng này từng nằm hai bản, một trong
-    `ops/nao.py` và một trong `hoiDongCompany`. Chép hai bản thì sớm muộn một
+    `brains/fallback.py` và một trong `hoiDongCompany`. Chép hai bản thì sớm muộn một
     bản học được cách bóc một định dạng lạ mà bản kia không — và cái hỏng sẽ
     chỉ hiện ra ở một trong hai đường, tức là loại lỗi khó ngờ nhất.
     """

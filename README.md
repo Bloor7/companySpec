@@ -40,7 +40,7 @@ Không cần bot — nạp thẳng một Update giả vào gateway:
 ```bash
 export COMPANYSPEC_ADMIN_CHAT_ID=<chatId>
 echo '{"message":{"chat":{"id":<chatId>},"text":"Tớ có ghi chú nào?"}}' \
-  | python3 ops/gateway.py handle
+  | python3 gateway/telegram/session.py handle
 ```
 
 Hoặc dùng bản dòng lệnh cũ, không qua Telegram:
@@ -52,9 +52,9 @@ python3 ops/ask.py "Tớ đang có những ghi chú nào?"
 Gọi thẳng dispatcher, không qua CEO — dùng khi cần kiểm tra guardrail:
 
 ```bash
-python3 ops/dispatch.py list
-python3 ops/dispatch.py call --company notesCompany --capability listNotes --input '{}'
-python3 ops/dispatch.py call --company notesCompany --capability addNote \
+python3 gateway/cli/dispatch.py list
+python3 gateway/cli/dispatch.py call --company notesCompany --capability listNotes --input '{}'
+python3 gateway/cli/dispatch.py call --company notesCompany --capability addNote \
   --input '{"text":"ghi chú thử"}' --dry-run
 ```
 
@@ -64,19 +64,19 @@ python3 ops/dispatch.py call --company notesCompany --capability addNote \
 
 | Thành phần | Vai | Nguyên tắc |
 |---|---|---|
-| `ops/gateway.py` | **adminGateway.** sessionPolicy R1–R4, nút duyệt, whitelist, nhớ 10 tin gần nhất khi mở phiên mới (giữ 7 ngày), đọc nội dung tin admin bấm Reply, bức tranh hiện tại (cache 10 phút, làm mới ở nền) | T1, §12 Q2 |
-| `ops/approvals.py` | Kho phê duyệt (2 đồng hồ) + whitelist có hạn, có scope | G7–G11 |
-| `ops/scheduler.py` | Việc định kỳ (§12c). systemd timer gọi 15 phút/lần | S1–S7 |
-| `ops/telegram.py` | Đường ra Telegram duy nhất | T1 |
+| `gateway/telegram/session.py` | **adminGateway.** sessionPolicy R1–R4, nút duyệt, whitelist, nhớ 10 tin gần nhất khi mở phiên mới (giữ 7 ngày), đọc nội dung tin admin bấm Reply, bức tranh hiện tại (cache 10 phút, làm mới ở nền) | T1, §12 Q2 |
+| `core/policy/approvals.py` | Kho phê duyệt (2 đồng hồ) + whitelist có hạn, có scope | G7–G11 |
+| `core/events/scheduler.py` | Việc định kỳ (§12c). systemd timer gọi 15 phút/lần | S1–S7 |
+| `gateway/telegram/telegram.py` | Đường ra Telegram duy nhất | T1 |
 | `ceo/SYSTEM.md` | System prompt của CEO. Tiếng Việt | Q10 |
 | `ceo/settings.json` | Deny rules — lớp phòng thủ thứ hai | P2 |
 | `ceo/hooks/guard.py` | **Hàng rào thật.** Chặn mọi lệnh Bash không phải dispatcher | P2 |
-| `ops/media.py` | Đọc **ảnh** admin gửi bằng một tiến trình RIÊNG, quyền hẹp hơn CEO (`ceo/settings-media.json`). Hỏng thì thử lại 1 lần, ghi lý do vào `backOffice/media-loi.jsonl` | P2 |
+| `gateway/telegram/media.py` | Đọc **ảnh** admin gửi bằng một tiến trình RIÊNG, quyền hẹp hơn CEO (`ceo/settings-media.json`). Hỏng thì thử lại 1 lần, ghi lý do vào `backOffice/media-loi.jsonl` | P2 |
 | `searchCompany` | Tra web NHANH, trả chữ thẳng vào Telegram (~20s, ~$0,06). Quyền hẹp nhất hệ: chỉ WebSearch/WebFetch, không Read/Write/Bash | RP3, B6 |
 | `researchCompany` | Nghiên cứu SÂU: nhiều luồng đọc song song, ghi báo cáo HTML rồi trả đường dẫn (5–15 phút, ~$1). Tách khỏi `searchCompany` để hai khoản tiền rất lệch nhau nằm hai dòng riêng trong backOffice | RP3, D1 |
-| `lib/skillRun.py` | Chạy phiên Claude nhốt kín cho company. Giữ ở một chỗ vì nó chứa luật "`permission_denials` không rỗng = kết quả KHÔNG đáng tin" | C4.1, O3 |
-| `ops/stt.py` | Nghe **tin thoại**, đổi thành chữ. Mô hình chạy tại máy — giọng nói không rời máy | F2 |
-| `ops/dispatch.py` | **Dispatcher.** Điểm nghẽn cố ý — nơi nói KHÔNG | T2 |
+| `core/execution/brainRunner.py` | Chạy phiên Claude nhốt kín cho company. Giữ ở một chỗ vì nó chứa luật "`permission_denials` không rỗng = kết quả KHÔNG đáng tin" | C4.1, O3 |
+| `gateway/telegram/stt.py` | Nghe **tin thoại**, đổi thành chữ. Mô hình chạy tại máy — giọng nói không rời máy | F2 |
+| `gateway/cli/dispatch.py` | **Dispatcher.** Điểm nghẽn cố ý — nơi nói KHÔNG | T2 |
 | `companies/*/companySpec.yaml` | Hợp đồng của company. Không có file này thì company không tồn tại | C2.1 |
 | `companies/*/store.sqlite` | Dữ liệu riêng từng company, không ai đọc của ai | C3 |
 | `ops/snapshot.py` | Chụp/so lệch/dựng lại một sổ Notion. **Chạy `save` trước mọi phép thử chạm dữ liệu** | W7 |

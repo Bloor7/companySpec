@@ -17,7 +17,7 @@ sys.path.insert(0, REPO_ROOT)
 from core.contracts import (  # noqa: E402
     CheckStatus, MissionStatus, TaskStatus, Verification, VerificationCheck,
 )
-from core.mission import (  # noqa: E402
+from core.missions import (  # noqa: E402
     MissionError, attachTask, closeMission, createMission, markReported,
     missionProgress, missionsAwaitingReport, openStore, recordMetric,
     stalledMissions,

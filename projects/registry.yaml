@@ -1,0 +1,22 @@
+# Danh mục dự án ngoài mà hệ được phép làm việc cùng.
+#
+# VÌ SAO LÀ FILE CHỨ KHÔNG PHẢI COMPANY: dự án là DỮ LIỆU, không phải một tầng
+# trong sơ đồ gọi. P3 cấm company gọi company, nên "tầng quản lý dự án" không
+# được phép tồn tại dưới dạng một company đứng giữa. Nó tồn tại ở đây, dưới dạng
+# một khối khai báo mà mọi project company đều tra được.
+#
+# Thêm dự án thứ hai = thêm một khối trong file này. Không đẻ company mới, không
+# đụng CEO, không đụng dispatcher (C4).
+#
+# KHÔNG chứa secret (F2). Repo phải là repo công khai, hoặc token nằm ở ops/.env
+# và khai tên biến qua `secretToken` — không bao giờ khai giá trị ở đây.
+
+# Danh mục dự án. Mỗi tên ở đây ứng với một file projects/<tên>.yaml.
+#
+# VÌ SAO CÓ FILE DANH MỤC RIÊNG: để biết dự án nào ĐANG hoạt động mà
+# không phải đọc hết thư mục. Một file bỏ quên trong projects/ mà không
+# có tên ở đây là dự án đã ngừng — và nói ra được điều đó thì hơn là để
+# người đọc tự đoán từ việc file còn nằm đó.
+
+projects:
+  - panharmon

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Đối chiếu core/policy với ops/dispatch.py — cho MỌI năng lực thật.
+"""Đối chiếu core/policy với gateway/cli/dispatch.py — cho MỌI năng lực thật.
 
 VÌ SAO CA NÀY LÀ BẮT BUỘC
 
@@ -9,7 +9,7 @@ trả giá cho đúng chuyện đó: "hạn mức ăn uống còn bao nhiêu" ra
 CEO và 4.789.000đ theo báo cáo tối. Cả hai đều chạy, đều không lỗi, và admin
 không có cách nào biết tin cái nào.
 
-Nên chừng nào `ops/dispatch.py` còn là bản đang chạy, ca này phải xanh.
+Nên chừng nào `gateway/cli/dispatch.py` còn là bản đang chạy, ca này phải xanh.
 
 Nó cũng là điều kiện để BỎ bản cũ: khi dispatch đã gọi vào core/policy thì ca
 này thành phép kiểm hồi quy bình thường, không còn là phép đối chiếu.
@@ -51,11 +51,11 @@ def tearDownModule():
 def _whitelistRuleFor(companyId: str, name: str, payload: dict):
     """Quyền đứng admin đã cấp cho đúng lời gọi này, hoặc None.
 
-    Hỏi thẳng `ops/approvals.py` chứ không tự đọc lại whitelist.jsonl: viết bản
+    Hỏi thẳng `core/policy/approvals.py` chứ không tự đọc lại whitelist.jsonl: viết bản
     thứ hai của cùng một phép so là tạo ra nguồn sự thật thứ hai, và nó sẽ lệch
     đúng vào hôm ai đó sửa một bên.
     """
-    sys.path.insert(0, os.path.join(REPO_ROOT, "ops"))
+    sys.path.insert(0, os.path.join(REPO_ROOT, "core", "policy"))
     import approvals  # noqa: E402
 
     raw = capabilitiesOf(MANIFESTS[companyId])[name]
@@ -107,7 +107,7 @@ class TestApprovalParity(unittest.TestCase):
         được admin whitelist nên dispatch không hỏi mà thi hành luôn.
 
         Lần đó không mất gì, nhờ hai lớp may mắn chứ không nhờ thiết kế:
-        `ops/dispatch.py` KHÔNG nạp `ops/.env`, nên chạy từ shell trần là không
+        `gateway/cli/dispatch.py` KHÔNG nạp `ops/.env`, nên chạy từ shell trần là không
         có `NOTION_TOKEN` và mọi company dùng Notion ngã ở cửa token trước khi
         chạm mạng. Đừng dựa vào điều đó: `xuongCompany` chỉ dùng sqlite local,
         và nó ĐÃ chạy thật.

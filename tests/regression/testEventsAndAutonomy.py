@@ -10,7 +10,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, REPO_ROOT)
 
-from core.autonomy import (  # noqa: E402
+from core.policy.autonomy import (  # noqa: E402
     MIN_RUNS_FOR_PROMOTION, TrackRecord, describeLevel, earnedAutonomy,
     explainAutonomy, maxAutonomyFor, mayActWithoutAsking, mayRetryAfterFailure,
     recordFromAuditRows, requiresVerification,

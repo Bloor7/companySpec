@@ -89,12 +89,12 @@ echo
 echo "════════════════════════════════════════════════════════"
 echo " Xong. Chạy hệ:"
 echo
-echo "   set -a && source ops/.env && set +a && python3 ops/poller.py"
+echo "   set -a && source ops/.env && set +a && python3 gateway/telegram/poller.py"
 echo
 echo " Rồi nhắn cho @${USERNAME} trên Telegram."
 echo
 echo " Chạy nền vĩnh viễn:"
-echo "   cp ops/companyspec-gateway.service ~/.config/systemd/user/"
+echo "   cp ops/companyspec-session.service ~/.config/systemd/user/"
 echo "   systemctl --user daemon-reload"
 echo "   systemctl --user enable --now companyspec-gateway"
 echo "════════════════════════════════════════════════════════"

@@ -25,7 +25,7 @@
 # ngay, ghi dọn sau — hai việc khác nhau, đừng gộp.
 #
 # ── Vì sao `buocKeTiep` do CODE viết, không do model tóm tắt ─────────────
-# Đúng lẽ đã dùng cho `gateway.dong_phien()`: lúc hệ hỏng nhất cũng là lúc lời
+# Đúng lẽ đã dùng cho `session.dong_phien()`: lúc hệ hỏng nhất cũng là lúc lời
 # gọi tóm tắt sẽ hỏng theo. Câu "làm gì tiếp" phải sống sót được cảnh mất điện,
 # mất mạng và hết hạn mức — nên nó là một chuỗi ngắn do kẻ thực thi ghi lại
 # bằng tay ở mỗi bước, không phải một đoạn văn nhờ model nghĩ hộ lúc kết thúc.
@@ -40,7 +40,7 @@ companyId: xuongCompany
 displayName: "Xưởng ý tưởng"
 version: 0.1.0
 
-# Dòng này được IN VÀO PROMPT CEO (gateway.danh_muc_block). Nó tồn tại vì một
+# Dòng này được IN VÀO PROMPT CEO (session.danh_muc_block). Nó tồn tại vì một
 # lần hỏng có thật, 18/09: admin nhắn "làm thử cái todolist phong cách AoT đi
 # em", CEO thêm 7 đầu việc vào sổ Notion rồi bảo "em không viết file HTML
 # được, cần mở phiên code" — trong khi xưởng và cái hộp làm được đúng việc ấy.

@@ -28,7 +28,12 @@ COMPANY = os.path.abspath(os.path.join(HERE, ".."))
 SETTINGS = os.path.join(COMPANY, "settings.json")
 sys.path.insert(0, os.path.join(COMPANY, "..", "..", "lib"))
 import db  # noqa: E402
-import skillRun  # noqa: E402
+
+# §36 — `lib/skillRun.py` đã sang `core/execution/brainRunner.py`. Ngoại lệ hẹp
+# của luật "company chỉ phụ thuộc lib/", ghi tên trong ops/codemap.py
+# (`NGOAI_LE_CORE_CHO_COMPANY`) để nó soát được. CHỈ brainRunner.
+sys.path.insert(0, os.path.join(COMPANY, "..", "..", "core", "execution"))
+import brainRunner  # noqa: E402
 
 STORE = os.path.join(COMPANY, "store.sqlite")
 
@@ -106,7 +111,7 @@ def tra_nhanh(inp: dict, deadline_sec: int) -> tuple:
         "nguồn ghi ngày nào.\n"
         "Nếu không tra ra, viết đúng một câu nói là không tra ra và vì sao."
     )
-    data = skillRun.chay(prompt, settings=SETTINGS, tools=TOOLS,
+    data = brainRunner.chay(prompt, settings=SETTINGS, tools=TOOLS,
                          max_turns=MAX_TURNS, system_prompt=DAN_CHUNG,
                          cwd=COMPANY, timeout=deadline_sec)
     tra_loi = data["result"].strip()
@@ -159,7 +164,7 @@ def main() -> int:
 
     except ValueError as exc:
         result.update(status="needsInput", error=str(exc), summary=str(exc))
-    except Exception as exc:  # O3 — gồm cả skillRun.SkillError
+    except Exception as exc:  # O3 — gồm cả brainRunner.SkillError
         # L7.1 — phiên hỏng vẫn đốt hạn mức. Không lấy lại con số này thì cầu
         # dao L7 đếm thiếu, và càng hỏng nhiều nó càng tưởng hệ đang rảnh.
         cost = getattr(exc, "cost_usd", 0.0) or cost

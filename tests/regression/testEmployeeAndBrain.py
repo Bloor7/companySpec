@@ -14,7 +14,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, REPO_ROOT)
 
-from core.brainRouter import (  # noqa: E402
+from brains.router import (  # noqa: E402
     DataBoundaryError, allowedBrainsFor, classificationForPrivacyLevel,
     explainRouting, filterProviderChain, loadBrainPolicy, routeBrains,
 )
@@ -22,7 +22,7 @@ from core.contracts import (  # noqa: E402
     ActionKind, DataClassification, Employee, Environment, Permission,
     ResourceKind,
 )
-from core.employeeRegistry import (  # noqa: E402
+from core.permissions import (  # noqa: E402
     EMPLOYEES_DIR, EmployeeManifestError, loadEmployee, loadEmployees,
     maxDataClassificationOf, whoCanDo,
 )
@@ -278,7 +278,7 @@ class TestRoutingCannotEscalate(unittest.TestCase):
 
 
 class TestPrivacyLevelMapsToClassification(unittest.TestCase):
-    """`nao.riengTu` quyết định prompt bị cắt tới đâu → quyết định gửi cho ai."""
+    """`fallback.riengTu` quyết định prompt bị cắt tới đâu → quyết định gửi cho ai."""
 
     def testMoreCuttingMeansMoreOpen(self):
         """Cắt NHIỀU hơn thì được gửi RỘNG hơn — thứ tự phải đúng chiều.

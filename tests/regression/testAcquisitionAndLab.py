@@ -23,7 +23,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, REPO_ROOT)
 
-from core.acquisition import (  # noqa: E402
+from core.lab.acquisition import (  # noqa: E402
     formatReport, inspectRepository,
 )
 from core.lab import (  # noqa: E402
@@ -167,7 +167,7 @@ class TestScannerNeverExecutes(unittest.TestCase):
     """
 
     def testAcquisitionModuleImportsNoProcessRunner(self):
-        path = os.path.join(REPO_ROOT, "core", "acquisition.py")
+        path = os.path.join(REPO_ROOT, "core", "lab", "acquisition.py")
         with open(path, encoding="utf-8") as fh:
             source = fh.read()
         for forbidden in ("import subprocess", "from subprocess",

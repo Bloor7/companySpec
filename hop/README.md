@@ -1,7 +1,7 @@
 # `hop/` — cái hộp: kẻ thực thi ngồi riêng, nối vào hệ bằng đúng một cửa
 
 CEO là **bộ não**: nó nghĩ, nó nói chuyện với admin, và nó chỉ có đúng một
-quyền — `Bash(python3 ops/dispatch.py:*)`. Hộp là **đôi tay**: nó sửa mã, chạy
+quyền — `Bash(python3 gateway/cli/dispatch.py:*)`. Hộp là **đôi tay**: nó sửa mã, chạy
 lệnh, mở trình duyệt, làm những việc dài mà bộ não cố ý không được phép làm.
 
 Trang này là hợp đồng giữa hai thứ đó. Đọc hết trước khi nới bất cứ điều gì —
@@ -100,7 +100,7 @@ timer 5 phút trong hộp (hop-tho.timer)
             │
             ├─ làm trên ~/work/companySpec, nhánh y/<mã việc>
             ├─ mỗi bước: xuongCompany.ghiBuoc   (cũng là một nhịp tim)
-            ├─ tự kiểm: codemap --check → ops/evals/run.py → chạy thử
+            ├─ tự kiểm: codemap --check → tests/evals/run.py → chạy thử
             │
             ├─ hết hạn mức / mất mạng ─► xuongCompany.tamDung + tiepLuc
             ├─ mất điện ───────────────► không ai ghi gì; nhịp tim tắt
@@ -141,7 +141,7 @@ viết vội, mỗi chỗ một cơ hội hỏng vì lý do chẳng liên quan g
 
 ## Thực đơn `/tay` — nói chuyện với xưởng mà không đánh thức CEO
 
-`ops/poller.py` bắt tiền tố `/tay` và gọi thẳng company, không mở phiên CEO:
+`gateway/telegram/poller.py` bắt tiền tố `/tay` và gọi thẳng company, không mở phiên CEO:
 
 | Gõ | Làm gì |
 |---|---|
@@ -164,7 +164,7 @@ cách làm thì viết thẳng), **rõ** (thực đơn đếm được).
 ## Cách kiểm
 
 ```bash
-python3 ops/dispatch.py list                    # hộp có xuất hiện không
+python3 gateway/cli/dispatch.py list                    # hộp có xuất hiện không
 python3 ops/codemap.py --check                  # luật kiến trúc
 wsl.exe -l -v                                   # distro openclaw có sống không
 ```

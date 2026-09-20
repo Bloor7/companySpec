@@ -114,9 +114,9 @@ taskRouting:
 # xếp nó vào ghế, và ghế đó hỏng lúc cuộc họp đã bắt đầu.
 #
 # Ghế ngồi xuống rồi mới hỏng là ghế MẤT TRẮNG. Nên thứ tự thật phải theo kết
-# quả `python3 ops/nao.py kiem` ĐO ĐƯỢC, đẩy nhà đang hỏng xuống cuối hàng.
+# quả `python3 brains/fallback.py kiem` ĐO ĐƯỢC, đẩy nhà đang hỏng xuống cuối hàng.
 healthCheck:
-  command: "python3 ops/nao.py kiem"
+  command: "python3 brains/fallback.py kiem"
   # Quá hạn này mà chưa đo lại thì coi thứ tự trên là CHƯA KIỂM CHỨNG.
   # Nhà cung cấp rút model mà không báo ai — xem models.yaml.
   staleAfterDays: 7

@@ -3,7 +3,7 @@
 # KHÔNG chứa secret và KHÔNG chứa định danh cá nhân (F2).
 # Token bot  → ops/.env (chmod 600, .gitignore chặn).
 # adminChatId → biến môi trường COMPANYSPEC_ADMIN_CHAT_ID, hoặc file
-#               registry/gateway.local.yaml (đã bị .gitignore chặn).
+#               registry/session.local.yaml (đã bị .gitignore chặn).
 #
 # Bỏ trống có chủ đích: hệ phải từ chối chạy khi chưa được cấu hình, thay vì
 # chạy với một giá trị đoán được.

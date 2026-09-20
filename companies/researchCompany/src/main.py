@@ -32,7 +32,18 @@ SETTINGS = os.path.join(COMPANY, "settings.json")
 OUT = os.path.join(COMPANY, "out")
 sys.path.insert(0, os.path.join(COMPANY, "..", "..", "lib"))
 import db  # noqa: E402
-import skillRun  # noqa: E402
+
+# §36 — `lib/skillRun.py` đã sang `core/execution/brainRunner.py`.
+#
+# Đây là NGOẠI LỆ DUY NHẤT của luật "company chỉ phụ thuộc lib/", và nó hẹp có
+# chủ ý: company này cần chạy một phiên LLM nhốt kín, mà cách chạy một bộ não
+# thì thuộc về tầng execution. Ngoại lệ được ghi TÊN trong `ops/codemap.py`
+# (`NGOAI_LE_CORE_CHO_COMPANY`) nên nó soát được, không phải một lỗ hổng lặng lẽ.
+#
+# Chỉ `brainRunner` — company vẫn KHÔNG được chạm core/policy, core/audit hay
+# bất cứ thứ gì khác trong core/.
+sys.path.insert(0, os.path.join(COMPANY, "..", "..", "core", "execution"))
+import brainRunner  # noqa: E402
 
 STORE = os.path.join(COMPANY, "store.sqlite")
 TZ = timezone(timedelta(hours=7))
@@ -112,7 +123,7 @@ def nghien_cuu(inp: dict, deadline_sec: int) -> tuple:
     # "success" nhưng `result` RỖNG. Bản trước coi đó là hỏng và ném lỗi ngay,
     # nên nếu phiên đã kịp ghi báo cáo thì cũng vứt đi luôn mà không ai biết.
     # Giờ hỏi ĐĨA, không hỏi lời model nói.
-    data = skillRun.chay(prompt, settings=SETTINGS, tools=TOOLS,
+    data = brainRunner.chay(prompt, settings=SETTINGS, tools=TOOLS,
                          max_turns=MAX_TURNS, system_prompt=DAN_CHUNG,
                          cwd=COMPANY, timeout=deadline_sec, require_result=False)
     bao = (data.get("result") or "").strip()
@@ -121,7 +132,7 @@ def nghien_cuu(inp: dict, deadline_sec: int) -> tuple:
     # tin lời nó nói — trả về một reportPath không tồn tại là để admin mở ra
     # thấy trống, sau khi đã chờ 10 phút.
     if not os.path.isfile(path):
-        raise skillRun.SkillError(
+        raise brainRunner.SkillError(
             f"phiên nghiên cứu không ghi ra {os.path.basename(path)} "
             f"({data.get('num_turns')} lượt, "
             f"{round((data.get('duration_ms') or 0)/1000)}s, "
@@ -193,7 +204,7 @@ def main() -> int:
 
     except ValueError as exc:
         result.update(status="needsInput", error=str(exc), summary=str(exc))
-    except Exception as exc:  # O3 — gồm cả skillRun.SkillError
+    except Exception as exc:  # O3 — gồm cả brainRunner.SkillError
         # L7.1 — phiên hỏng vẫn đốt hạn mức. Đo được 2026-08-13: 133 giây cháy
         # sạch mà backOffice ghi $0.00 — cầu dao L7 đếm bằng con số đó nên nó
         # mù hẳn với mọi lần hỏng.

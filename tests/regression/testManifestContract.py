@@ -19,7 +19,7 @@ from harness import (  # noqa: E402
 
 MANIFESTS = loadManifests()
 
-# Từ khoá schema mà ops/dispatch.py:validate() THẬT SỰ đỡ.
+# Từ khoá schema mà gateway/cli/dispatch.py:validate() THẬT SỰ đỡ.
 #
 # Khai một từ khoá ngoài danh sách này là dựng hàng rào giả: người đọc manifest
 # sau này sẽ tin nó, mà bộ soát thì chưa từng đọc tới. Đã xảy ra với `pattern`.
@@ -94,7 +94,7 @@ class TestNoFakeFences(unittest.TestCase):
                 if key in SUPPORTED_SCHEMA_KEYWORDS:
                     continue
                 self.fail(f"{where}: từ khoá schema `{key}` không được "
-                          "ops/dispatch.py:validate() đỡ. Hoặc bỏ nó đi, hoặc "
+                          "gateway/cli/dispatch.py:validate() đỡ. Hoặc bỏ nó đi, hoặc "
                           "mở validate() ra đọc nó — cùng một lần sửa.")
             for key, sub in (schema.get("properties") or {}).items():
                 walk(sub, f"{where}.{key}")
@@ -134,7 +134,7 @@ class TestNoFakeFences(unittest.TestCase):
     def testWhitelistScopeIsNeverEmptyList(self):
         """`whitelistScope: []` là ĐÓNG, không phải mở.
 
-        gateway.canWhitelist đọc `bool(cap.get("whitelistScope"))` — danh sách
+        session.canWhitelist đọc `bool(cap.get("whitelistScope"))` — danh sách
         rỗng là falsy, nên nút "Luôn cho phép" KHÔNG BAO GIỜ hiện, và admin
         bấm "cho phép 1 lần" mãi mãi mà không ai báo lỗi gì.
 

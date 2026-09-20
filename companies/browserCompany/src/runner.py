@@ -83,7 +83,7 @@ def chon_llm():
     # cái đầu tiên nghẽn; và một model bị rút thì lời gọi hỏng ngay từ câu đầu.
     # Cả hai kiểu hỏng đều KHÔNG có dòng lỗi nào cho tới lúc admin gọi duyetWeb
     # và nhận về một câu "không dựng được LLM". Ghim tên cụ thể, và soát lại
-    # bằng `python3 ops/nao.py kiem` khi thấy lạ.
+    # bằng `python3 brains/fallback.py kiem` khi thấy lạ.
     model = (os.environ.get("BROWSER_GEMINI_MODEL")
              or "gemini-3.1-flash-lite").strip()
     try:

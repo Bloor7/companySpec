@@ -2,7 +2,7 @@
   "$comment": "Deny rules của CEO. P2 — model không sửa được file này. Model ghim ở đây để CEO không đổi theo settings global của máy.",
   "permissions": {
     "allow": [
-      "Bash(python3 ops/dispatch.py:*)"
+      "Bash(python3 gateway/cli/dispatch.py:*)"
     ],
     "deny": [
       "Write",

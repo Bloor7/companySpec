@@ -186,7 +186,7 @@ class Task:
     def toEnvelope(self, budget: "Budget", policy: "PolicyOutcome") -> dict:
         """Hợp đồng C1 — thứ đi vào stdin của company.
 
-        Giữ NGUYÊN hình dạng mà ops/dispatch.py đang gửi. Đổi hình ở đây là bắt
+        Giữ NGUYÊN hình dạng mà gateway/cli/dispatch.py đang gửi. Đổi hình ở đây là bắt
         cả 22 company sửa cùng lúc, và đó đúng là thứ W3′ cấm.
         """
         return {
@@ -327,7 +327,7 @@ class Capability:
 class PolicyDecision(str, Enum):
     """Đúng SÁU câu trả lời. Không có câu thứ bảy, không có "tuỳ".
 
-    Hôm nay sáu câu này nằm rải trong một hàm dài ở ops/dispatch.py và chỉ đọc
+    Hôm nay sáu câu này nằm rải trong một hàm dài ở gateway/cli/dispatch.py và chỉ đọc
     ra được bằng cách chạy thật. Đặt tên cho chúng là bước đầu để kiểm chúng
     bằng một dòng assert.
     """

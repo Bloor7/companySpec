@@ -21,7 +21,7 @@
 # 52 nhóm. Không cài gì, không thêm phụ thuộc: kéo file chữ về rồi bóc.
 #
 # MẤY CỘT ẤY LÀ LỜI KHAI, KHÔNG PHẢI PHÉP ĐO. "HTTPS: Yes" do người đóng góp
-# tự điền, không ai kiểm. Muốn chắc thì `kiemApi` — cùng lẽ với `nao.py kiem`
+# tự điền, không ai kiểm. Muốn chắc thì `kiemApi` — cùng lẽ với `fallback.py kiem`
 # hỏi thật nhà cung cấp thay vì tin tên model chép trong tài liệu.
 #
 # DANH MỤC CÓ HẠN SỬ DỤNG. API chết mà không nhà nào báo ai, y hệt chuyện tên
@@ -111,7 +111,7 @@ capabilities:
     riskTier: write
     maxDurationSec: 90
     # Sửa 2026-09-19: trước đây là `whitelistScope: []`, mà rỗng nghĩa là ĐÓNG
-    # chứ không phải "không giới hạn" — `gateway.can_whitelist` đọc
+    # chứ không phải "không giới hạn" — `session.can_whitelist` đọc
     # `bool(whitelistScope)`, nên nút "Luôn cho phép" chưa từng hiện.
     # `batBuoc` là boolean nên phạm vi này có ĐÚNG HAI giá trị: admin bấm nhiều
     # nhất hai lần rồi thôi. Đó là nhóm "có nghĩa, ít và đếm được".

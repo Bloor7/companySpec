@@ -31,38 +31,38 @@ chứng, và hệ học được từ đó.
 Đây là phần **đo được**, không phải phần mong muốn.
 
 ```text
-Telegram ──> ops/poller.py ──> ops/gateway.py ──> phiên CEO (Claude CLI)
+Telegram ──> gateway/telegram/poller.py ──> gateway/telegram/session.py ──> phiên CEO (Claude CLI)
                                      │                    │
-                                     │                    └──> ops/dispatch.py
+                                     │                    └──> gateway/cli/dispatch.py
                                      │                              │
-                              ops/approvals.py <────────────────────┤
+                              core/policy/approvals.py <────────────────────┤
                                      │                              ↓
                               admin bấm nút                  companies/<x>/src/main.py
                                                                     │
                                                              backOffice/store.sqlite
 ```
 
-Cửa vào thứ hai là `ops/scheduler.py` (cron), cửa thứ ba là `ops/cau.py`
+Cửa vào thứ hai là `core/events/scheduler.py` (cron), cửa thứ ba là `gateway/telegram/cau.py`
 (từ hộp `hop/`).
 
 ### Cái đã có, và có tốt
 
-`ops/dispatch.py` hôm nay **đã là một policy engine**, chỉ là chưa ai gọi nó
+`gateway/cli/dispatch.py` hôm nay **đã là một policy engine**, chỉ là chưa ai gọi nó
 bằng tên đó. Nó đã làm đủ:
 
 | Thứ Travis cần | Đã có ở đâu |
 |---|---|
 | Task envelope (`taskId`, `traceId`, budget, policy) | `dispatch.cmdCall` |
 | Risk tier lấy từ manifest, không từ model | `dispatch` G3 |
-| Approval khoá vào nội dung bằng hash | `ops/approvals.py` G4 |
+| Approval khoá vào nội dung bằng hash | `core/policy/approvals.py` G4 |
 | Whitelist có phạm vi và trần ngày | `approvals.whitelistMatch` G8 |
 | Audit: `taskLog`, `sideEffectLog` | `backOffice/store.sqlite` |
 | Secret theo phạm vi company | `dispatch` C2.4 |
 | Chống lặp vô hạn | `dispatch` L4 |
 | Cầu dao tiền thật | `dispatch` L8 |
 | Kiểm schema hai chiều | `dispatch.validate` C2.3 |
-| Bộ não thay được + chuỗi dự phòng | `ops/nao.py` |
-| Đo hành vi bằng ca thử | `ops/evals/` |
+| Bộ não thay được + chuỗi dự phòng | `brains/fallback.py` |
+| Đo hành vi bằng ca thử | `tests/evals/` |
 | Danh mục dự án | `registry/projects.yaml` |
 
 Đây là lý do **không rewrite**. Phần khó nhất — ranh giới quyền và dấu vết —
@@ -81,7 +81,7 @@ chạy trong hệ thật", và nhầm hai thứ đó là cách một tài liệu
 | `Verification` | `core/verification.py` | **RỒI** — mỗi lời gọi company sinh bằng chứng |
 | `Audit` có `policyDecision` | `core/audit.py` | **RỒI** — `travis why <taskId>` |
 | `Employee` + quyền có phạm vi | `employees/` + `core/employeeRegistry.py` | **RỒI** — `dispatch --employee` |
-| Ranh giới dữ liệu | `core/brainRouter.py` | **RỒI** — `nao.py` lọc chuỗi dự phòng |
+| Ranh giới dữ liệu | `core/brainRouter.py` | **RỒI** — `fallback.py` lọc chuỗi dự phòng |
 | Chống nhắn lặp | `core/events.decideNotification` | **RỒI** — `scheduler.py` |
 | 15 primitive | `core/contracts.py` | phần lớn |
 | `Autonomy` | `core/autonomy.py` | **đọc được** (`travis autonomy`), **chưa áp** |
@@ -101,7 +101,7 @@ hai con số khác nhau mà cả hai đều không lỗi.
 
 Mỗi lần chuyển đi theo đúng một khuôn: interface → adapter → **test đối chiếu**
 → chuyển người gọi → xoá bản cũ. `testPolicyParity` là ví dụ: nó chứng minh
-`core/policy` và `ops/dispatch.py` trả lời giống hệt nhau trên **mọi** năng lực
+`core/policy` và `gateway/cli/dispatch.py` trả lời giống hệt nhau trên **mọi** năng lực
 thật, trên bốn trục.
 
 ### Một lời gọi hôm nay đi qua những đâu
@@ -109,7 +109,7 @@ thật, trên bốn trục.
 ```text
 CEO / cron / terminal
         ↓
-ops/dispatch.py
+gateway/cli/dispatch.py
         ├─ C2.1/C2.2  company và năng lực có khai không
         ├─ Employee   quyền có phạm vi, `cannot` thắng tất  (nếu có --employee)
         ├─ core/policy  6 quyết định tường minh
@@ -121,7 +121,7 @@ ops/dispatch.py
         └─ core/audit   ghi: quyết định · vì sao · ai · bằng chứng
 ```
 
-Tra lại bất kỳ lời gọi nào: `python3 ops/travis.py why <taskId>`.
+Tra lại bất kỳ lời gọi nào: `python3 gateway/cli/travis.py why <taskId>`.
 
 ---
 
@@ -209,45 +209,64 @@ là hợp đồng đang rò. Sửa hợp đồng, đừng sửa Core.
 
 ---
 
-## 4. Cấu trúc đích
+## 4. Cấu trúc — §35, ĐÃ DỰNG XONG 2026-09-20
+
+Đây không còn là đích. Đây là cây thư mục thật; `ls` ra đúng thế này.
 
 ```text
 companySpec/
-├── core/                  ← hệ điều hành: luật, quyền, execution
-│   ├── contracts.py           15 primitive, dataclass + enum
-│   ├── policy/                quyết định allow/deny/approval
-│   ├── permission/            quyền có phạm vi
-│   ├── execution/             tiến trình, timeout, retry, rollback
-│   ├── verification/          bằng chứng
-│   ├── memory/                phân tầng + phân loại
-│   ├── secret/                broker, credential sống ngắn
-│   ├── event/                 event bus
-│   ├── mission/               mục tiêu dài hạn
-│   ├── audit/                 sổ không sửa được
-│   └── registry/              nạp manifest, project, employee
+├── core/                  ← hệ điều hành: LUẬT, quyền, execution
+│   ├── contracts.py           §3 — từ vựng chung, 15 primitive
+│   ├── task/                  vòng đời Task, bảng bước nhảy hợp lệ
+│   ├── policy/                6 quyết định + approvals + autonomy
+│   ├── permissions/           quyền có phạm vi + isolation
+│   ├── registry/              nạp manifest project
+│   ├── execution/             tiến trình, hạn giờ, brainRunner
+│   ├── verification/          BẰNG CHỨNG
+│   ├── memory/                phân tầng + phân loại + ngày rụng
+│   ├── secrets/               broker, credential sống ngắn
+│   ├── events/                event bus + scheduler (động cơ)
+│   ├── audit/                 sổ: quyết định · vì sao · bằng chứng
+│   ├── missions/              mục tiêu dài hạn
+│   └── lab/                   cách ly + soi repo lạ
 │
-├── gateway/               ← cửa vào
-│   ├── telegram/
-│   └── cli/
+├── gateway/               ← CỬA VÀO
+│   ├── telegram/              poller · session · cầu · media · stt
+│   └── cli/                   dispatch · travis · scheduler · demo
 │
-├── brains/                ← bộ não, thay được
-│   ├── claude/  gemini/  gpt/  local/
+├── brains/                ← bộ não, THAY ĐƯỢC
+│   ├── base.py  router.py  council.py  fallback.py
+│   └── claude/  gemini/  gpt/  local/
 │
-├── employees/             ← người
-│   ├── atlas/  forge/  iris/  sage/  sentinel/
+├── employees/             ← NGƯỜI
+│   └── atlas/  forge/  iris/  sage/  sentinel/
 │
-├── companies/             ← công cụ thực thi (giữ nguyên)
-├── projects/              ← nơi làm việc
+├── companies/             ← công cụ thực thi
+├── projects/              ← nơi làm việc, mỗi dự án MỘT file (§15)
 ├── missions/              ← mục tiêu
-├── lab/                   ← nơi thử
-│   ├── quarantine/  sandboxes/  experiments/
-│   ├── benchmarks/  candidates/  rejected/
+├── lab/  ↔  main/         ← nơi thử ↔ vùng tin được
 ├── backOffice/            ← theo dõi và báo cáo
+├── lib/                   ← kỹ thuật thuần
+├── ops/                   ← công cụ cho NGƯỜI PHÁT TRIỂN (xem ops/README.md)
 ├── tests/
-│   ├── regression/            đóng băng hành vi cũ
-│   └── security/              chứng minh hàng rào đứng
+│   ├── regression/            từng mảnh
+│   ├── integration/           CẢ DÂY CHUYỀN
+│   └── evals/                 đo hành vi model
 └── docs/
 ```
+
+### Hai điều đã học khi dựng cây này
+
+**Đừng đặt module trùng tên gói.** Có `gateway/` và `gateway.py` cùng lúc thì
+Python thấy thư mục trước, coi nó là namespace package, và `import gateway`
+trả về một gói **rỗng**. Không lỗi lúc nạp — chỉ vỡ ở chỗ dùng đầu tiên, bằng
+`AttributeError: module 'gateway' has no attribute 'run_ceo'`. Vì vậy module
+ấy tên `session.py`, đúng chữ §36 đã dùng.
+
+**`core/` không được là người vận chuyển.** §36 đẩy `scheduler` vào
+`core/events/`, và codemap bắt ngay vì nó `import telegram`. Cách chữa không
+phải nới luật mà là tách: động cơ ở `core/events/scheduler.py`, dây dẫn ở
+`gateway/cli/scheduler.py` — nó tiêm hàm gửi tin vào rồi mới chạy.
 
 `ops/` **không biến mất**. Nó co lại thành lớp vỏ mỏng gọi vào `core/`.
 
@@ -259,12 +278,12 @@ Không rewrite. Mỗi dòng là một đường đi, không phải một lần x
 
 | Hôm nay | Đích | Cách đi |
 |---|---|---|
-| `ops/dispatch.py` | `core/policy` + `core/execution` | Bóc hàm thuần ra trước, `dispatch` gọi vào |
-| `ops/approvals.py` | `core/policy/approval` | Đổi chỗ, giữ nguyên bảng sqlite |
-| `ops/gateway.py` | `gateway/telegram` + `core/memory/session` | Bóc từng khối, file này to nhất nên đi cuối |
-| `ops/scheduler.py` | `core/event/scheduler` | Giữ nguyên tới khi có event bus |
-| `ops/nao.py` | `brains/` + `core/brainRouter` | Interface trước, mới chuyển |
-| `lib/skillRun.py` | `core/execution/brainRunner` | |
+| `gateway/cli/dispatch.py` | `core/policy` + `core/execution` | Bóc hàm thuần ra trước, `dispatch` gọi vào |
+| `core/policy/approvals.py` | `core/policy/approval` | Đổi chỗ, giữ nguyên bảng sqlite |
+| `gateway/telegram/session.py` | `gateway/telegram` + `core/memory/session` | Bóc từng khối, file này to nhất nên đi cuối |
+| `core/events/scheduler.py` | `core/event/scheduler` | Giữ nguyên tới khi có event bus |
+| `brains/fallback.py` | `brains/` + `core/brainRouter` | Interface trước, mới chuyển |
+| `core/execution/brainRunner.py` | `core/execution/brainRunner` | |
 | `backOffice/store.sqlite` | `core/audit` | Không đổi schema, chỉ đổi người ghi |
 | `companies/*` | giữ nguyên | Đây là phần đang chạy tốt |
 | `ceo/SYSTEM.md` | `employees/` + system policy | CEO thành một employee, không phải trời |

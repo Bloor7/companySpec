@@ -7,7 +7,7 @@ bất cứ skill hay plugin nào vào đây.
 ## Vì sao phải nói rõ ranh giới
 
 CEO chạy bằng `claude -p ... --setting-sources project` với `cwd` là gốc repo
-(`ops/gateway.py`). Nghĩa là thư mục này **nằm trong tầm đọc của phiên CEO** —
+(`gateway/telegram/session.py`). Nghĩa là thư mục này **nằm trong tầm đọc của phiên CEO** —
 một điều không hiển nhiên, và là lý do trang này tồn tại. Trước 2026-08-31 repo
 không hề có `.claude/`, nên cờ đó vô hại; từ lúc có thì nó thành một đường vào.
 
@@ -37,7 +37,7 @@ Ba lớp đang giữ, xếp từ trong ra:
 
 1. `--tools Bash` — tool khác không được NẠP, kể cả `Skill`.
 2. `ceo/settings.json` deny-list — có `"Skill"` trong đó.
-3. `ceo/hooks/guard.py` — chặn mọi thứ trừ `python3 ops/dispatch.py list|call`.
+3. `ceo/hooks/guard.py` — chặn mọi thứ trừ `python3 gateway/cli/dispatch.py list|call`.
    Đây là lớp đã đo ở trên, và là lớp không đi vòng được.
 
 ## Skill KHÔNG nằm trong git — dựng lại thế nào

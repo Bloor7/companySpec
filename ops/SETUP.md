@@ -49,7 +49,7 @@ Bảng kế hoạch do cậu tự dựng — script chỉ nhận lại, không t
 
 ```bash
 mkdir -p ~/.config/systemd/user
-cp ops/companyspec-gateway.service ops/companyspec-scheduler.{service,timer} \
+cp ops/companyspec-session.service ops/companyspec-scheduler.{service,timer} \
    ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now companyspec-gateway companyspec-scheduler.timer
@@ -75,5 +75,5 @@ Polling thì ngược lại: máy tự hỏi Telegram, không ai gọi vào đư
 | Bot im lặng | `journalctl --user -u companyspec-gateway -f` |
 | Sai chatId | `ops/.env` — sai thì gateway bỏ qua, đúng thiết kế |
 | Lịch không chạy | `systemctl --user list-timers companyspec-scheduler.timer` |
-| Muốn xem hệ nghĩ gì | `python3 ops/gateway.py check` |
+| Muốn xem hệ nghĩ gì | `python3 gateway/telegram/session.py check` |
 | Có việc gì đang chạy | `pgrep -af "claude -p"` |

@@ -3,7 +3,7 @@
 
 Hợp đồng (C1): taskEnvelope trên stdin → companyResult trên stdout.
 
-CÔNG TY NÀY KHÔNG GỬI TIN. Nó chỉ giữ sổ. Gửi tin là việc của `ops/telegram.py`
+CÔNG TY NÀY KHÔNG GỬI TIN. Nó chỉ giữ sổ. Gửi tin là việc của `gateway/telegram/telegram.py`
 — T1, đường ra duy nhất — và scheduler là thứ đọc sổ này rồi gọi đường đó. Tách
 ra vì một lý do đo được: nếu company tự gửi tin thì mỗi company sau này lại có
 một đường ra riêng, và cái ngày admin muốn tắt tiếng thì phải đi tìm từng chỗ.

@@ -16,7 +16,7 @@ nhắc lại ở đây vì người sửa mã thường không mở manifest:
    đường ghi thì một hệ ngủ ba ngày sẽ suốt ba ngày báo "đang làm".
 
 3. `buocKeTiep` DO CODE GIỮ, KHÔNG DO MODEL NGHĨ. Nó chỉ là chuỗi mà kẻ thực
-   thi ghi lại lúc còn tỉnh. Cùng lẽ với `gateway.dong_phien()`: lúc hệ hỏng
+   thi ghi lại lúc còn tỉnh. Cùng lẽ với `session.dong_phien()`: lúc hệ hỏng
    nhất cũng đúng là lúc một lời gọi tóm tắt sẽ hỏng theo.
 """
 import json

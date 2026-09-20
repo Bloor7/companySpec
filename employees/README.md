@@ -69,7 +69,7 @@ Thêm **dữ liệu**, không sửa Core (W3′):
 ```bash
 mkdir employees/<tên>
 $EDITOR employees/<tên>/employee.yaml
-python3 -c "from core.employeeRegistry import loadEmployees; loadEmployees()"
+python3 -c "from core.permissions import loadEmployees; loadEmployees()"
 python3 tests/regression/run.py --only employee
 ```
 

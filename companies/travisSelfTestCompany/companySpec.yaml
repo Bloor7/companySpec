@@ -18,7 +18,7 @@
 # ═══════════════════════════════════════════════════════════════════════
 #
 # C5 — CEO không nhìn thấy và không gọi được, kể cả khi đoán ra tên. Đã soát
-# cả ba chỗ: `dispatch.cmd_list` lọc, `gateway.danh_muc_block` lọc, và
+# cả ba chỗ: `dispatch.cmd_list` lọc, `session.danh_muc_block` lọc, và
 # `dispatch.cmd_call` chặn trừ khi có cờ `--allow-internal` (chỉ dùng từ
 # terminal, CEO không có cờ đó).
 #

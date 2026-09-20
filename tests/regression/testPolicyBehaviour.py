@@ -2,10 +2,10 @@
 """Hành vi Policy — đóng băng những quyết định quyền hạn đang có.
 
 Đây là bộ ca quan trọng nhất của lưới: nó nói "lời gọi như thế này thì hệ trả
-lời thế kia". Lát nữa khi bóc policy ra khỏi ops/dispatch.py sang core/policy,
+lời thế kia". Lát nữa khi bóc policy ra khỏi gateway/cli/dispatch.py sang core/policy,
 những câu trả lời đó phải KHÔNG ĐỔI.
 
-Chạy thật, qua đúng cổng thật (ops/dispatch.py), không có cờ nào chỉ dành cho
+Chạy thật, qua đúng cổng thật (gateway/cli/dispatch.py), không có cờ nào chỉ dành cho
 test — bài học "bộ đo tự đứng ngoài phép đo".
 """
 import os

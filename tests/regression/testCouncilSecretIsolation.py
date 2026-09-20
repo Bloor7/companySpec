@@ -11,16 +11,16 @@ REPO_ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, REPO_ROOT)
 
 from core.contracts import SecretRequest  # noqa: E402
-from core.council import (  # noqa: E402
+from brains.council import (  # noqa: E402
     CouncilMisuse, Proposal, assertProposalsWereIndependent,
     assertWorthConvening, buildResult, formatForAdmin, unsourcedClaims,
 )
-from core.employeeRegistry import loadEmployees  # noqa: E402
-from core.isolation import (  # noqa: E402
+from core.permissions import loadEmployees  # noqa: E402
+from core.permissions.isolation import (  # noqa: E402
     IsolationBreach, SandboxPolicy, assertWithinPolicy, hostIsAllowed,
     isolationMaturity, pathIsAllowed, policyFromEmployee, processIsAllowed,
 )
-from core.secretBroker import (  # noqa: E402
+from core.secrets import (  # noqa: E402
     SecretDenied, activeLeases, auditTrail, issueLease, openStore, redact,
     resolveForProcess, revoke,
 )

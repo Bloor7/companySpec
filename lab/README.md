@@ -74,7 +74,7 @@ không phải lý do.
 ```bash
 python3 -c "
 import sys; sys.path.insert(0, '.')
-from core.acquisition import inspectRepository, formatReport
+from core.lab.acquisition import inspectRepository, formatReport
 print(formatReport(inspectRepository('lab/quarantine/<tên>')))
 "
 ```

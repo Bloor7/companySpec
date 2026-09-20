@@ -2,7 +2,7 @@
 """thợ — vòng làm việc của HỘP. Chạy TRONG distro openclaw, không chạy ở hệ.
 
 Một vòng: nhận việc → làm trên bản sao → tự kiểm → đẩy nhánh → đóng việc.
-Mọi lời gọi vào hệ đều qua cây cầu có khoá (`ops/cau.py`); thợ không có
+Mọi lời gọi vào hệ đều qua cây cầu có khoá (`gateway/telegram/cau.py`); thợ không có
 `ops/.env`, không có khoá SSH, và không đẩy được vào main — hook của kho gương
 chặn bằng mã.
 

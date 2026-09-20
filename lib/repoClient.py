@@ -28,7 +28,10 @@ import subprocess
 import yaml
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DANH_MUC = os.path.join(ROOT, "registry", "projects.yaml")
+# §15/§35 — mỗi dự án MỘT FILE trong projects/, kèm một danh mục.
+# Tách ra từ registry/projects.yaml ngày 2026-09-20.
+DU_AN_DIR = os.path.join(ROOT, "projects")
+DANH_MUC = os.path.join(DU_AN_DIR, "registry.yaml")
 WORKSPACES = os.path.join(ROOT, "workspaces")
 
 GIT_TIMEOUT = 180
@@ -50,16 +53,21 @@ def doc_du_an(project_id: str) -> dict:
     Thà chết lúc đọc cấu hình còn hơn chết giữa chừng khi đã clone xong và đang
     cầm nửa trạng thái.
     """
-    try:
-        with open(DANH_MUC, encoding="utf-8") as fh:
-            danh_muc = yaml.safe_load(fh) or {}
-    except FileNotFoundError:
-        raise RepoError(f"Chưa có danh mục dự án: {DANH_MUC}")
+    co = danh_sach_du_an()
+    if project_id not in co:
+        raise RepoError(
+            f"Không có dự án '{project_id}' trong danh mục. Đang có: "
+            + (", ".join(co) or "chưa có dự án nào"))
 
-    du_an = (danh_muc.get("projects") or {}).get(project_id)
-    if not du_an:
-        co = ", ".join(sorted((danh_muc.get("projects") or {}))) or "chưa có dự án nào"
-        raise RepoError(f"Không có dự án '{project_id}' trong danh mục. Đang có: {co}")
+    # Danh mục nói có mà file không có thì hỏng NGAY, đừng trả về rỗng: một dự
+    # án biến mất trong im lặng là thứ không ai phát hiện cho tới lúc cần nó.
+    duong_dan = os.path.join(DU_AN_DIR, f"{project_id}.yaml")
+    try:
+        with open(duong_dan, encoding="utf-8") as fh:
+            du_an = yaml.safe_load(fh) or {}
+    except FileNotFoundError:
+        raise RepoError(
+            f"Danh mục khai dự án '{project_id}' nhưng không có {duong_dan}")
 
     for field in ("repo", "nhanhBaoVe"):
         if not du_an.get(field):

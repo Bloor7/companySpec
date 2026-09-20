@@ -50,7 +50,12 @@ def cac_tep_py() -> dict:
 #: Thư mục gốc được coi là GÓI. Cần vì `from core.policy import decide` không
 #: có module nào tên `core.py` để nhận ra.
 GOI_NOI_BO = {"core", "ops", "lib", "companies", "backOffice", "hop",
-              "employees", "tests"}
+              "employees", "tests", "gateway", "brains"}
+
+#: Module trong core/ mà company ĐƯỢC PHÉP import. Danh sách này phải ở lại
+#: rất ngắn — mỗi cái thêm vào là một sợi dây nối company với Core, và cả điểm
+#: của P3 là company không có sợi dây nào ngoài dispatcher.
+NGOAI_LE_CORE_CHO_COMPANY = {"brainRunner"}
 
 
 def phu_thuoc(tep: dict) -> dict:
@@ -59,7 +64,7 @@ def phu_thuoc(tep: dict) -> dict:
 
     ⚠ SỬA 2026-09-19 — BỘ QUÉT NÀY TỪNG MÙ VỚI IMPORT DẠNG GÓI.
 
-    Bản cũ chỉ so tên module PHẲNG (`import db`). Với `from ops import gateway`
+    Bản cũ chỉ so tên module PHẲNG (`import db`). Với `from ops import session`
     thì `n.module` là "ops", mà không có file nào tên `ops.py`, nên nó không
     khớp gì cả và cạnh phụ thuộc BIẾN MẤT. `from core.policy import decide`
     cũng vậy.
@@ -94,7 +99,7 @@ def phu_thuoc(tep: dict) -> dict:
             if isinstance(n, ast.ImportFrom):
                 for phan in (n.module or "").split("."):
                     nhan(phan)
-                # `from ops import gateway` — thứ bị lôi ra cũng là phụ thuộc.
+                # `from ops import session` — thứ bị lôi ra cũng là phụ thuộc.
                 for a in n.names:
                     nhan(a.name)
         canh[rel] = goi
@@ -108,6 +113,10 @@ def tang_cua(rel: str) -> str:
         return "lib"
     if rel.startswith("core/"):
         return "core"
+    if rel.startswith("brains/"):
+        return "brains"
+    if rel.startswith("gateway/"):
+        return "gateway"
     if rel.startswith("ops/"):
         return "ops"
     if rel.startswith("backOffice/"):
@@ -231,7 +240,7 @@ def soat_ten_truong(tep: dict) -> list:
                 s["companyId"], s["capability"], set((s.get("input") or {}).keys()),
                 hd, f"schedules.yaml:{s.get('scheduleId', '?')}")
 
-    # (3) Ca thử: ops/evals/cases.yaml khai tên company, tên năng lực và tên
+    # (3) Ca thử: tests/evals/cases.yaml khai tên company, tên năng lực và tên
     # trường mong đợi — cùng loại chữ viết cứng, nên cùng một kiểu mục ruỗng.
     # Đổi tên một trường trong manifest mà quên sửa ca thử thì ca đó lặng lẽ
     # TRƯỢT MÃI, và tệ hơn: bộ kiểm mất uy tín nên người ta bắt đầu bỏ qua nó.
@@ -385,7 +394,16 @@ def soat(tep: dict, canh: dict) -> list:
         tang = tang_cua(rel)
         if tang == "company":
             # P3 — company không gọi company. Dispatcher là đường duy nhất.
-            la = goi - lib
+            #
+            # NGOẠI LỆ CÓ TÊN, không phải lỗ hổng: §36 chuyển `lib/skillRun.py`
+            # sang `core/execution/brainRunner.py`, và hai company cần chạy một
+            # phiên LLM nhốt kín thì phải với tới nó. Ngoại lệ hẹp tới mức một
+            # module — company vẫn KHÔNG chạm được core/policy, core/audit hay
+            # bất cứ thứ gì khác trong core/.
+            #
+            # Ghi tên ở đây thay vì nới luật, để lần sau ai thêm một ngoại lệ
+            # nữa thì phải sửa ĐÚNG dòng này và nhìn thấy dòng chú thích này.
+            la = goi - lib - NGOAI_LE_CORE_CHO_COMPANY
             if la:
                 pham.append(f"P3 · {rel} import ngoài lib/: {', '.join(sorted(la))}")
         elif tang == "lib":
@@ -404,8 +422,13 @@ def soat(tep: dict, canh: dict) -> list:
             # lại phải dựng cả một lượt chạy thật.
             #
             # Chiều NGƯỢC LẠI thì được: ops/ gọi vào core/ là đúng hình.
+            # Gồm cả tên GÓI `core` — `from core.events import …` là core gọi
+            # core, hợp lệ. Bản đầu chỉ lấy basename file, mà basename của
+            # `core/events/__init__.py` là `__init__`, nên `core` không có
+            # trong tập và mọi import nội bộ dạng gói đều bị báo nhầm.
             trong_core = {os.path.splitext(os.path.basename(p))[0]
                           for r, p in tep.items() if tang_cua(r) == "core"}
+            trong_core.add("core")
             la = goi - lib - trong_core
             if la:
                 pham.append(f"C4.2 · {rel} phụ thuộc ra ngoài core/+lib/: "

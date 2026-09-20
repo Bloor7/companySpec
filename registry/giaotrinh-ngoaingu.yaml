@@ -1,7 +1,7 @@
 # Giáo trình Anh–Trung song song — 12 bài, học theo tiến độ admin tích.
 #
 # ĐÂY LÀ NGUỒN DUY NHẤT. Hai nơi dùng chung file này:
-#   · tin nhắn "Học sáng" mỗi 05:30  — ops/scheduler.py, section_hocsang()
+#   · tin nhắn "Học sáng" mỗi 05:30  — core/events/scheduler.py, section_hocsang()
 #   · trang web có nút bấm để nghe   — ops/dung_giaotrinh.py sinh ra từ file này
 # Sửa ở đây rồi chạy lại bộ sinh trang. Đừng sửa thẳng vào HTML: sửa hai chỗ
 # thì sớm muộn hai bản lệch nhau, và không ai biết bản nào đúng.

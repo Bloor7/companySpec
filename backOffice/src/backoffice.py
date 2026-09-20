@@ -21,7 +21,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, os.path.join(ROOT, "ops"))
+sys.path.insert(0, os.path.join(ROOT, "core", "policy"))
 import approvals  # noqa: E402
 
 sys.path.insert(0, os.path.join(ROOT, "lib"))

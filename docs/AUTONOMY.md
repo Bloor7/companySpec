@@ -127,7 +127,7 @@ Nói thẳng, vì một tài liệu autonomy nói quá lên thì chính nó là 
 | Thang mức, trần rủi ro, phép tính | **Xong** — `core/autonomy.py`, 30 ca thử |
 | Verification làm cổng lên mức 2 | **Xong** — `core/verification.py`, chạy trên mọi lời gọi company |
 | Sổ audit ghi đủ để TÍNH được mức | **Xong** — `policyDecision` + `verificationJson` trong `taskLog` |
-| Đọc được mức đã kiếm | **Xong** — `python3 ops/travis.py autonomy` |
+| Đọc được mức đã kiếm | **Xong** — `python3 gateway/cli/travis.py autonomy` |
 | `ops/` **áp** mức đó để bớt hỏi admin | **CHƯA** |
 | Hệ thật đang chạy ở | **mức 1** với mọi thứ: chạy được, nhưng mọi việc `write` vẫn hỏi admin |
 
@@ -154,7 +154,7 @@ python3 backOffice/src/backoffice.py report --days 30
 # 2. Xem mức nó đã KIẾM ĐƯỢC, và vì sao
 python3 -c "
 import sys; sys.path.insert(0, '.')
-from core.autonomy import TrackRecord, explainAutonomy
+from core.policy.autonomy import TrackRecord, explainAutonomy
 from core.contracts import RiskTier
 print(explainAutonomy(
     TrackRecord('expenseCompany', 'addExpense',

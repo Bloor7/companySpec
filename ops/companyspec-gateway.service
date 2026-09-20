@@ -1,7 +1,7 @@
 # Chạy adminGateway tự động, không phải gõ tay mỗi lần bật máy.
 #
 #   mkdir -p ~/.config/systemd/user
-#   cp ops/companyspec-gateway.service ~/.config/systemd/user/
+#   cp ops/companyspec-session.service ~/.config/systemd/user/
 #   systemctl --user daemon-reload
 #   systemctl --user enable --now companyspec-gateway
 #   loginctl enable-linger "$USER"      # chạy cả khi chưa đăng nhập
@@ -23,7 +23,7 @@ EnvironmentFile=%h/companySpec/ops/.env
 # claude CLI nằm trong nvm nên phải nói rõ PATH, service không đọc ~/.bashrc.
 Environment=PATH=%h/.nvm/versions/node/v22.22.3/bin:/usr/local/bin:/usr/bin:/bin
 
-ExecStart=/usr/bin/python3 %h/companySpec/ops/poller.py
+ExecStart=/usr/bin/python3 %h/companySpec/gateway/telegram/poller.py
 
 Restart=on-failure
 RestartSec=5

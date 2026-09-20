@@ -16,7 +16,7 @@ from core.memory import (  # noqa: E402
     newDecision, newFact, newInference, openStore, recall, remember,
     summariseForPrompt, supersede,
 )
-from core.projectRegistry import (  # noqa: E402
+from core.registry import (  # noqa: E402
     isProtectedBranch, loadProjects, mayEmployeeWorkOn, workspaceIsSafe,
 )
 

@@ -6,7 +6,7 @@
 #
 # Xem log:     journalctl --user -u companyspec-cau -f
 # Tắt:         systemctl --user disable --now companyspec-cau
-# Soát cấu hình mà KHÔNG mở cổng:  python3 ops/cau.py --tu-kiem
+# Soát cấu hình mà KHÔNG mở cổng:  python3 gateway/telegram/cau.py --tu-kiem
 
 [Unit]
 Description=companySpec cầu — cửa từ hộp openclaw vào dispatch
@@ -22,7 +22,7 @@ EnvironmentFile=%h/companySpec/ops/.env
 
 Environment=PATH=%h/.nvm/versions/node/v22.22.3/bin:/usr/local/bin:/usr/bin:/bin
 
-ExecStart=/usr/bin/python3 %h/companySpec/ops/cau.py
+ExecStart=/usr/bin/python3 %h/companySpec/gateway/telegram/cau.py
 
 Restart=on-failure
 RestartSec=5

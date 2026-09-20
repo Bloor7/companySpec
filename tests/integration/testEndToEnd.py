@@ -6,7 +6,7 @@ KHÁC GÌ VỚI tests/regression/
 ═══════════════════════════════════════════════════════════════════════
 
 `tests/regression/` kiểm TỪNG MẢNH, phần lớn bằng hàm thuần. Bộ này kiểm CẢ
-DÂY CHUYỀN, qua đúng `ops/dispatch.py` thật, đúng sổ thật, đúng cổng duyệt
+DÂY CHUYỀN, qua đúng `gateway/cli/dispatch.py` thật, đúng sổ thật, đúng cổng duyệt
 thật. Không có cờ nào chỉ dành cho test.
 
 Một hệ có 185 ca đơn vị xanh vẫn có thể hỏng ở chỗ nối. Bộ này canh chỗ nối.
@@ -33,11 +33,11 @@ import uuid
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, REPO_ROOT)
-sys.path.insert(0, os.path.join(REPO_ROOT, "ops"))
+sys.path.insert(0, os.path.join(REPO_ROOT, "core", "policy"))
 
 import approvals  # noqa: E402
 import core.audit as coreAudit  # noqa: E402
-from core.autonomy import earnedAutonomy, recordFromAuditRows  # noqa: E402
+from core.policy.autonomy import earnedAutonomy, recordFromAuditRows  # noqa: E402
 from core.contracts import RiskTier  # noqa: E402
 
 COMPANY = "travisSelfTestCompany"
@@ -51,7 +51,7 @@ def callDispatch(capability: str, payload: dict, *extraArgs,
     """Gọi đúng cổng thật. `--allow-internal` là cờ của TERMINAL, không phải
     của CEO — nó tồn tại sẵn từ trước, bộ test không thêm cửa nào."""
     traceId = f"{TRACE_PREFIX}{RUN_TOKEN}_{capability}{traceSuffix}"
-    argv = [sys.executable, os.path.join(REPO_ROOT, "ops", "dispatch.py"),
+    argv = [sys.executable, os.path.join(REPO_ROOT, "gateway", "cli", "dispatch.py"),
             "call", "--company", COMPANY, "--capability", capability,
             "--input", json.dumps(payload, ensure_ascii=False),
             "--trace", traceId, "--allow-internal", *extraArgs]

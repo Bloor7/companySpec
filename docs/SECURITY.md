@@ -41,7 +41,7 @@ Code quyết định **allow, deny, execute, verify, rollback, audit**.
 |---|---|
 | `riskTier` lấy từ manifest, không từ envelope (G3) | `core/policy.py` · `testPolicyParity` |
 | Quyết định quyền hạn là hàm THUẦN, không gọi model | `core/policy.decide` · `testSameRequestSameOutcome` |
-| CEO không tự duyệt được việc của mình | `ops/approvals.py` · không trả `payloadHash` cho model |
+| CEO không tự duyệt được việc của mình | `core/policy/approvals.py` · không trả `payloadHash` cho model |
 
 > Một luật chỉ viết trong prompt là luật model phá lúc nào cũng được mà không
 > ai biết. Đó là lý do mỗi dòng trên đều có cột thứ hai.
@@ -96,7 +96,7 @@ secret     → KHÔNG AI CẢ
 | Ưu tiên định tuyến **không nâng được** ranh giới | `core/brainRouter.routeBrains` · `testPreferredBrainIsDropped…` |
 | Mức chưa khai = **ĐÓNG**, không phải mở | `testUnknownClassificationIsClosedNotOpen` |
 | `private`/`sensitive` không sang nhà miễn phí | `testFreeProvidersNeverGetPrivateData` |
-| Cắt khối thì phải **nói với model là đã cắt** | `ops/nao.py:_bao_da_cat` |
+| Cắt khối thì phải **nói với model là đã cắt** | `brains/fallback.py:_bao_da_cat` |
 
 Bảng này sinh ra từ một phép đo, không từ suy luận: **27/08, một lượt đi ra
 37.282 byte**, trong đó có hồ sơ đời tư (giờ dậy, nghề, nơi ở) và số dư từng

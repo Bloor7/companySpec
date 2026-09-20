@@ -16,7 +16,7 @@
 #
 # ⚠ TÊN MODEL CŨ RẤT NHANH. Nhà cung cấp đổi/rút model liên tục và không báo ai.
 # Đừng tin danh sách này — soát bằng:
-#     python3 ops/nao.py kiem          # hỏi thật từng nhà, in cái nào sống
+#     python3 brains/fallback.py kiem          # hỏi thật từng nhà, in cái nào sống
 # Sai tên model thì nhà đó trả 404 và chuỗi tự nhảy sang nhà kế tiếp; hệ vẫn
 # chạy, nhưng đó là hỏng ngầm nên `kiem` phải chạy lại mỗi khi thấy lạ.
 
@@ -38,7 +38,7 @@ nha:
   #
   # `mienPhi: true` ở đây nghĩa là KHÔNG TRỪ THẺ, không có nghĩa là rẻ: nó ăn
   # vào hạn mức gói Pro — thứ đắt theo một kiểu khác, và là chính thứ mà cả cơ
-  # chế dự phòng này sinh ra để đỡ. Nên ĐỪNG bỏ nhà này vào `nao.chuoi`: chuỗi
+  # chế dự phòng này sinh ra để đỡ. Nên ĐỪNG bỏ nhà này vào `fallback.chuoi`: chuỗi
   # dự phòng chỉ chạy đúng lúc Claude đã câm.
   #
   # ĐO THẬT 2026-08-27, một lời gọi bốn token: 11.790 token ghi cache, $0,071.
@@ -109,7 +109,7 @@ nha:
     #   gemini-flash-latest, gemini-3.7-flash   → 503 "high demand" (cả ngày)
     #   gemini-3.5-flash 0,9s · 3.1-flash-lite 0,9s · 3.6-flash 2,9–10,4s
     # Nên KHÔNG dùng alias `-latest`: nó là chỗ cả thế giới đổ vào. Ghim tên
-    # cụ thể, và chạy `python3 ops/nao.py kiem` khi thấy lạ.
+    # cụ thể, và chạy `python3 brains/fallback.py kiem` khi thấy lạ.
     model:
       - gemini-3.1-flash-lite
       - gemini-3.5-flash
@@ -137,7 +137,7 @@ nha:
     giaRa: 0
     # Danh sách `:free` của openrouter đổi liên tục: 31/08 cả deepseek-v3 lẫn
     # llama-3.3 đều đã rời gói miễn phí ("use the paid slug instead"). Còn 18
-    # model đuôi :free, và chúng sẽ lại đổi — chạy `nao.py kiem` khi thấy lạ.
+    # model đuôi :free, và chúng sẽ lại đổi — chạy `fallback.py kiem` khi thấy lạ.
     model:
       - nvidia/nemotron-3-ultra-550b-a55b:free
       - z-ai/glm-5.2:free
@@ -146,7 +146,7 @@ nha:
   #
   # Cả hai đều nói giao thức OpenAI nên KHÔNG phải sửa một dòng mã nào: có khoá
   # thì thêm vào ops/.env, rồi thêm một dòng vào `hoiDong.thanhVien` và bật
-  # `hoiDong.chapNhanTraTien`. Chạy `python3 ops/nao.py kiem` để xem model nào
+  # `hoiDong.chapNhanTraTien`. Chạy `python3 brains/fallback.py kiem` để xem model nào
   # còn sống trước khi tin danh sách dưới đây.
   #
   # Đáng thêm vào hội đồng vì chúng KHÁC HỌ hẳn với đám llama/deepseek đang có:
@@ -225,7 +225,7 @@ nao:
   # BẬT, vì chuỗi trên là nhà tính tiền. Đây là lúc L8 được nới có chủ ý: não
   # phụ chạy giữa lượt nhắn tin nên không có nút duyệt nào chen vào được.
   # Thứ còn chặn là TRẦN THÁNG trong registry/gateway.yaml (`chiTieuNgoai.
-  # tranThangVnd`) — nao.py kiểm trước mỗi lượt, quá trần thì từ chối chạy và
+  # tranThangVnd`) — fallback.py kiểm trước mỗi lượt, quá trần thì từ chối chạy và
   # nói thẳng, chứ không tiêu lố rồi mới báo.
   chapNhanTraTien: true
 
@@ -240,7 +240,7 @@ nao:
   # đi ra 37.282 byte, system prompt 28.443 ký tự, bên trong có hồ sơ đời tư
   # (giờ dậy, nghề, nơi ở) và bức tranh hiện tại (số dư từng ví, kế hoạch,
   # lịch hôm nay). Xem lại bất cứ lúc nào, KHÔNG gửi đi đâu:
-  #     python3 ops/nao.py xem-goi "câu muốn thử"
+  #     python3 brains/fallback.py xem-goi "câu muốn thử"
   #
   #   dayDu    — y hệt Claude. Não phụ khôn nhất, rò nhiều nhất.
   #   canTrong — bỏ hồ sơ và bức tranh, giữ danh mục + sổ tay + vài tin gần đây.
@@ -272,7 +272,7 @@ hoiDong:
   # phần chạy được · đòi con số) — xem companies/hoiDongCompany/vai.yaml.
   # Khác nhà mới chỉ cho khác giọng; khác góc mới cho khác chỗ bỏ sót.
   thanhVien:
-    # THỨ TỰ NÀY LÀ KẾT QUẢ ĐO, không phải sở thích. Chạy `nao.py kiem` ngày
+    # THỨ TỰ NÀY LÀ KẾT QUẢ ĐO, không phải sở thích. Chạy `fallback.py kiem` ngày
     # 31/08: groq · mistral · openrouter/nemotron đều SỐNG; cerebras trả 402
     # "payment required" nên bị đẩy xuống cuối hàng — nó CÓ khoá nên bộ lọc
     # không loại được (bộ lọc chỉ biết thiếu khoá hay không), mà một ghế ngồi
@@ -293,7 +293,7 @@ hoiDong:
     - { nha: groq,       model: "qwen/qwen3.8-27b" }
     # Cerebras: khoá đã cắm nhưng nhà trả 402 "payment required" (31/08) —
     # gói miễn phí của họ đòi bật thanh toán trước. Để đây, tự dùng lại khi
-    # admin bật xong; `nao.py kiem` sẽ báo khi nó sống.
+    # admin bật xong; `fallback.py kiem` sẽ báo khi nó sống.
     - { nha: cerebras,   model: gemma-4-31b }
     # Có khoá Grok / GPT thì mở dòng tương ứng VÀ bật `chapNhanTraTien` bên
     # dưới, đồng thời nâng `giaUocVnd` trong companies/hoiDongCompany/

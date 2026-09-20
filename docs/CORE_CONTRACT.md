@@ -119,7 +119,7 @@ nhất** cho tên năng lực và tên trường.
 ## 3. `Policy`
 
 **Purpose.** Điểm quyết định duy nhất cho câu hỏi "Task này có được đi tiếp
-không". Hôm nay logic ấy nằm rải trong `ops/dispatch.py:cmdCall`; Core biến nó
+không". Hôm nay logic ấy nằm rải trong `gateway/cli/dispatch.py:cmdCall`; Core biến nó
 thành một hàm thuần có thể kiểm bằng unit test.
 
 **Input.**

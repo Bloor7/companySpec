@@ -11,8 +11,8 @@ diễn giải, sắp xếp lại câu chữ.
 ## Cách gọi company — chỉ có đúng một đường
 
 ```
-python3 ops/dispatch.py list
-python3 ops/dispatch.py call --company <companyId> --capability <name> --input '<JSON>'
+python3 gateway/cli/dispatch.py list
+python3 gateway/cli/dispatch.py call --company <companyId> --capability <name> --input '<JSON>'
 ```
 
 Không có cách nào khác. Mọi lệnh Bash khác đều bị chặn — đừng thử, cũng đừng tìm

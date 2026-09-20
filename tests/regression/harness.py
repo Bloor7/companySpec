@@ -76,7 +76,7 @@ def capabilitiesOf(spec: dict) -> dict:
 def sampleForSchema(schema: dict, fieldName: str = ""):
     """Sinh MỘT giá trị hợp lệ tối thiểu cho schema.
 
-    Chỉ đỡ đúng tập con từ khoá mà ops/dispatch.py:validate() hiểu. Thêm từ
+    Chỉ đỡ đúng tập con từ khoá mà gateway/cli/dispatch.py:validate() hiểu. Thêm từ
     khoá mới vào validate() thì phải thêm ở đây cùng một lần sửa — bài học
     "mở rộng một định dạng mà quên kéo hàng rào theo".
     """
@@ -96,7 +96,7 @@ def sampleForSchema(schema: dict, fieldName: str = ""):
             value[key] = sampleForSchema(properties.get(key, {}), key)
         # `anyOf`/`oneOf` cũng ra ràng buộc bắt buộc — thoả NHÁNH ĐẦU là đủ.
         #
-        # Thêm cùng ngày với `anyOf` trong ops/dispatch.py:validate(). Quên chỗ
+        # Thêm cùng ngày với `anyOf` trong gateway/cli/dispatch.py:validate(). Quên chỗ
         # này thì chính bộ đo lại dính đúng cái bẫy "mở rộng một định dạng mà
         # quên kéo hàng rào theo": validate() hiểu anyOf, bộ sinh mẫu thì không,
         # nên ca thử đỏ vì lý do sai.
@@ -182,7 +182,7 @@ def sampleInputFor(capability: dict) -> dict:
 
 def callDispatch(companyId: str, capabilityName: str, payload: dict,
                  dryRun: bool = True, extraArgs=None, traceSuffix: str = "") -> dict:
-    """Gọi ops/dispatch.py như CEO gọi, rồi trả về result đã parse.
+    """Gọi gateway/cli/dispatch.py như CEO gọi, rồi trả về result đã parse.
 
     Mặc định `--dry-run`: đã kiểm tra cả 22 company đều chặn dryRun TRƯỚC khi
     chạm handler và trước cả khi lấy token — nên đường này không đụng Notion,
@@ -191,7 +191,7 @@ def callDispatch(companyId: str, capabilityName: str, payload: dict,
     traceId = (f"{TRACE_PREFIX}{RUN_TOKEN}_{companyId}_"
                f"{capabilityName}{traceSuffix}")
     argv = [
-        sys.executable, os.path.join(REPO_ROOT, "ops", "dispatch.py"), "call",
+        sys.executable, os.path.join(REPO_ROOT, "gateway", "cli", "dispatch.py"), "call",
         "--company", companyId,
         "--capability", capabilityName,
         "--input", json.dumps(payload, ensure_ascii=False),

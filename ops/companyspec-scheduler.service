@@ -16,5 +16,5 @@ Type=oneshot
 WorkingDirectory=%h/companySpec
 EnvironmentFile=%h/companySpec/ops/.env
 Environment=PATH=%h/.nvm/versions/node/v22.22.3/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/usr/bin/python3 %h/companySpec/ops/scheduler.py run
+ExecStart=/usr/bin/python3 %h/companySpec/gateway/cli/scheduler.py run
 NoNewPrivileges=true

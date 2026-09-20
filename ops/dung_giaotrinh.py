@@ -49,7 +49,7 @@ def cau_cua_toi() -> list:
     trang đủ, và admin sẽ dùng nó tưởng đã có tất cả.
     """
     proc = subprocess.run(
-        [sys.executable, os.path.join(ROOT, "ops", "dispatch.py"), "call",
+        [sys.executable, os.path.join(ROOT, "gateway", "cli", "dispatch.py"), "call",
          "--company", "ngoaiNguCompany", "--capability", "dsCau",
          "--input", json.dumps({"trangThai": "tất cả"}, ensure_ascii=False)],
         capture_output=True, text=True, cwd=ROOT, timeout=30)

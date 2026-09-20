@@ -6,7 +6,7 @@ không nói vòng qua được. Nếu SYSTEM.md nói "chỉ gọi dispatch.py" m
 thử `rm -rf`, chính file này là thứ chặn lại.
 
 CÁCH SOÁT: tách câu lệnh ĐÚNG NHƯ SHELL TÁCH (shlex), rồi đối chiếu với một
-khuôn hẹp — `python3 ops/dispatch.py {list|call}` cộng vài cờ trong danh sách
+khuôn hẹp — `python3 gateway/cli/dispatch.py {list|call}` cộng vài cờ trong danh sách
 trắng. Mọi thứ khác là chặn.
 
 VÌ SAO KHÔNG TÌM KÝ TỰ XẤU NỮA: bản trước chặn hễ thấy `|`, `;`, `>`… ở BẤT KỲ
@@ -29,7 +29,7 @@ import json
 import shlex
 import sys
 
-CMD = ["python3", "ops/dispatch.py"]
+CMD = ["python3", "gateway/cli/dispatch.py"]
 LENH = {"list", "call"}
 
 # Cờ CEO được phép dùng. Danh sách trắng, không phải danh sách đen.
@@ -92,8 +92,8 @@ def main() -> None:
     if phan[:2] != CMD or len(phan) < 3 or phan[2] not in LENH:
         deny(
             "guard: CEO chỉ được gọi company qua dispatcher.\n"
-            "  Được phép:  python3 ops/dispatch.py list\n"
-            "              python3 ops/dispatch.py call --company … --capability … --input '…'\n"
+            "  Được phép:  python3 gateway/cli/dispatch.py list\n"
+            "              python3 gateway/cli/dispatch.py call --company … --capability … --input '…'\n"
             f"  Đã thử:     {command[:200]}"
         )
 
