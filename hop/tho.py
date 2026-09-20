@@ -283,8 +283,8 @@ def co_viec_de_nhan() -> tuple:
     ngày, trong khi quyền đứng admin cấp có trần 20 lần/ngày. Hết trần sau
     khoảng hai tiếng, và 220 vòng còn lại MỖI VÒNG đẻ một thẻ duyệt.
 
-    Đo 20/09, lưu lượng THẬT (đã bỏ nhãn bộ đo): `nhanViec` gọi 330 lần, chỉ
-    36 lần chạy được, **294 lần hỏi duyệt** — trong khi xưởng có đúng 3 việc
+    Đo 20/09, lưu lượng THẬT (đã bỏ nhãn bộ đo): `nhanViec` gọi 234 lần, chỉ
+    15 lần chạy được, **219 lần hỏi duyệt** — trong khi xưởng có đúng 3 việc
     và cả 3 đều ở `choXem`, tức là KHÔNG CÓ GÌ để nhận. Admin bấm "luôn cho
     phép" năm lần, sổ whitelist có năm dòng trùng nhau, và nó vẫn hỏi tiếp.
 

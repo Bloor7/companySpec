@@ -111,7 +111,7 @@ bộ kiểm đều xanh suốt:
 | `poller.GATEWAY` trỏ vào file chưa từng tồn tại | **Mọi tin nhắn admin** ra "Hệ gặp lỗi khi xử lý", từ §36 |
 | `session.py` tự gọi lại mình qua tên cũ | "Bức tranh hiện tại" không bao giờ làm mới — `Popen` nuốt cả stderr |
 | `codemap` tìm ca thử ở thư mục cũ | Hàng rào **tự tắt**, bỏ qua 29 ca, vẫn in "SOÁT LUẬT: sạch" |
-| Thợ hỏi "có việc không?" bằng lệnh GHI | **294 thẻ duyệt/ngày** cho một xưởng trống |
+| Thợ hỏi "có việc không?" bằng lệnh GHI | **219 thẻ duyệt/ngày** cho một xưởng trống |
 
 ⚠ Cái đầu nằm im **không ai biết** vì admin chưa nhắn lần nào sau khi đổi tên
 — journal có ĐÚNG 0 dòng `gateway lỗi`. Bài học chung: **ca thử xanh chỉ

@@ -2,22 +2,29 @@
 """Thợ hỏi "có việc không?" bằng lệnh ĐỌC, không bằng lệnh GHI.
 
 ═══════════════════════════════════════════════════════════════════════
-HOÁ ĐƠN CỦA CA NÀY — 294 THẺ DUYỆT TRONG MỘT NGÀY
+HOÁ ĐƠN CỦA CA NÀY — 219 THẺ DUYỆT TRONG MỘT NGÀY
 ═══════════════════════════════════════════════════════════════════════
 
 Bản cũ của `hop/tho.py:mot_vong` gọi `xuongCompany.nhanViec` ngay dòng đầu
 mỗi vòng — tức là hỏi một câu ĐỌC bằng một lời gọi GHI.
 
-Thợ chạy 6 phút/lần ≈ 240 vòng mỗi ngày. Quyền đứng admin cấp có trần 20
+Thợ chạy 5–6 phút/lần ≈ 240 vòng mỗi ngày. Quyền đứng admin cấp có trần 20
 lần/ngày. Hết trần sau khoảng hai tiếng, và mỗi vòng còn lại đẻ một thẻ duyệt.
 
-Đo 2026-09-20, lưu lượng THẬT (đã bỏ nhãn bộ đo `reg_ e2e_ demo_`):
+Đo 2026-09-20, lưu lượng THẬT (đã bỏ nhãn bộ đo `reg_ e2e_ demo_ drl_`):
 
-    nhanViec gọi 330 lần  →  36 chạy được  ·  294 HỎI DUYỆT
+    nhanViec gọi 234 lần  →  15 chạy được  ·  219 HỎI DUYỆT
 
 ...trong khi xưởng có đúng 3 việc và cả 3 đều ở `choXem`, tức là KHÔNG CÓ GÌ
 để nhận. Admin bấm "luôn cho phép" năm lần — sổ whitelist có năm dòng trùng —
 và nó vẫn hỏi tiếp, vì trần là 20/ngày chứ không phải vô hạn.
+
+⚠ Con số báo lần đầu là 330/36/294, và nó SAI. Câu truy vấn dùng
+`datetime('now','-24 hours')`, thứ sqlite trả về dạng `YYYY-MM-DD HH:MM:SS`
+(dấu CÁCH), đem so chuỗi với `startedAt` dạng `YYYY-MM-DDTHH:MM:SSZ` (chữ T).
+Ký tự `' '` nhỏ hơn `'T'` nên phép so nuốt luôn những ngày trước đó, và cửa
+sổ rộng hơn 24 giờ thật. Kết luận không đổi, nhưng con số thì phải đúng —
+cùng họ với bẫy "so chuỗi ngày nguyên bản" đã có sẵn trong bảng.
 
 Manifest còn ghi "một lần cho aiLam=hop là thợ nhận việc suốt 90 ngày không
 hỏi nữa". Ý định ghi rõ, hiệu lực thì ngược lại — đúng họ với bẫy "chú thích
