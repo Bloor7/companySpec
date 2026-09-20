@@ -533,8 +533,33 @@ def cmd_call(args) -> dict:
     # vô hạn và chưa từng bị `mayDo()` soát lần nào. Ca
     # `tests/regression/testCeoAsEmployee.py` đối chiếu trước khi chuyển —
     # nó duyệt toàn bộ danh mục và đòi hồ sơ `ceo` cho qua từng năng lực.
+    # Phiếu hẹn admin đã ký — TRA TRƯỚC khi chọn người, vì nó quyết định chọn ai.
+    hen_ok = False
+    if args.issued_by == "scheduledTrigger" and args.approval_id:
+        phieu = approvals.get(args.approval_id)
+        hen_ok = bool(phieu and phieu["henLuc"])
+
+    # ═══ AI ĐANG GỌI — và KHÔNG lời gọi nào được vô danh ═══
+    #
+    # Đo 20/09 sau khi nối employee: 17/49 lời gọi thật mang `employeeId`.
+    # 31 trong 32 dòng thiếu là `trc_cron_` — việc định kỳ. Mặc định cũ chỉ
+    # đặt `ceo` cho `issued_by == ceo`, nên cron chạy VÔ DANH: sổ không trả lời
+    # nổi câu §30 "ai làm", dù đó là nguồn lưu lượng LỚN NHẤT của hệ (5.304
+    # lời gọi trong ba tuần).
+    #
+    # `scheduler` là employee CHỈ ĐỌC, và con số trên nói nó khớp thực tế:
+    # 5.304/5.304 lời gọi cron đều là `read`, không một lần ghi. Nó biến S3 từ
+    # MỘT hàng rào (luật trong Policy) thành HAI — luật, cộng một hồ sơ quyền
+    # không có `modify` để mà dùng.
+    #
+    # ⚠ NGOẠI LỆ CÓ THẬT: phiếu hẹn admin ký sẵn cho phép cron GHI (S3 chừa
+    # đúng khe đó). Cổng employee chạy TRƯỚC Policy và không nhìn thấy phiếu,
+    # nên nếu để `scheduler` đứng tên thì nó chặn mất cửa thoát ấy — một hàng
+    # rào vô tình gỡ một cơ chế đã thiết kế. Có phiếu thì người đứng tên là
+    # `ceo`: chữ ký là của admin, và phiếu ấy sinh ra từ một cuộc nói chuyện
+    # với CEO.
     employeeId = getattr(args, "employee", None) or (
-        "ceo" if args.issued_by == "ceo" else None)
+        "ceo" if (args.issued_by == "ceo" or hen_ok) else "scheduler")
 
     # Môi trường của lời gọi. Mặc định `dev` — việc thường ngày. Chạm
     # production là chuyện phải KHAI RA, không phải chuyện rơi vào mặc định.
@@ -578,20 +603,35 @@ def cmd_call(args) -> dict:
             identity = IssuedBy.employee
             lastPolicy[0], lastPolicy[1] = "deny", (
                 f"`{employeeId}` không có quyền {resource.value}.{action.value}")
+            # ═══ CHẶN SỚM HƠN KHÔNG ĐƯỢC LÀM MẤT LÝ DO THẬT ═══
+            #
+            # Cổng employee chạy TRƯỚC Policy, nên từ 21/09 nó CHE MẤT S3:
+            # cron ghi bị chặn ở đây, và câu trả về chỉ nói "`scheduler` không
+            # được phép database.modify". Đúng, nhưng nó không nói vì sao CRON
+            # nói riêng bị cấm — mà đó mới là điều người đọc log cần biết.
+            #
+            # Hai bộ ca thử bắt được ngay (`testScheduledWriteIsRejected`,
+            # `testCronWriteIsDeniedByBoth`): cả hai đòi chữ "S3" trong câu
+            # trả lời, chứ không đòi một mã trạng thái.
+            #
+            # Nên giữ cả hai lớp, và nói cả hai lý do. Cùng bài học với "chặn ở
+            # cổng vào CŨNG là một quyết định, và phải ghi như một quyết định".
+            vi_sao_cron = ""
+            if args.issued_by == "scheduledTrigger":
+                vi_sao_cron = (
+                    " S3 — việc định kỳ chỉ được phép ĐỌC. Cron quan sát và "
+                    "chuẩn bị; muốn hành động thì chờ admin, hoặc dùng phiếu "
+                    "hẹn admin đã ký trước.")
             return bail(
                 f"`{employeeId}` không được phép "
                 f"{resource.value}.{action.value} — nên không gọi được "
                 f"{args.company}.{args.capability}. "
                 + (f"Luật cấm: {', '.join(employee.cannot)}"
                    if employee.isForbidden(f"{resource.value}.{action.value}")
-                   else "Không khai quyền này = không có (PM-1)."),
+                   else "Không khai quyền này = không có (PM-1).")
+                + vi_sao_cron,
                 status="denied")
         identity = IssuedBy.employee
-
-    hen_ok = False
-    if args.issued_by == "scheduledTrigger" and args.approval_id:
-        phieu = approvals.get(args.approval_id)
-        hen_ok = bool(phieu and phieu["henLuc"])
 
     # ─── TRA sự thật: mức tự chủ năng lực này ĐÃ KIẾM ĐƯỢC ───
     #

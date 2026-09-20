@@ -231,7 +231,14 @@ class TestScheduledTriggerParity(unittest.TestCase):
             result = callDispatch(companyId, name, payload, dryRun=False,
                                   extraArgs=["--issued-by", "scheduledTrigger"],
                                   traceSuffix="_cronParity")
-            dispatchDenies = (result["status"] == "rejected"
+            # Từ 21/09 cron mang danh tính `scheduler` (chỉ đọc), nên dispatch
+            # chặn ở cổng EMPLOYEE — trước Policy — và trả `denied` thay vì
+            # `rejected`. Hai mã, một kết cục. Phép đối chiếu hỏi "hai bên có
+            # cùng NÓI KHÔNG không", không hỏi "có cùng mã trạng thái không";
+            # trói vào mã thì ca này đỏ mỗi lần thêm một lớp phòng thủ.
+            #
+            # Nhưng vẫn đòi chữ "S3": chặn sớm hơn không được làm mất lý do.
+            dispatchDenies = (result["status"] in ("rejected", "denied")
                               and "S3" in result.get("summary", ""))
 
             if coreDenies != dispatchDenies:

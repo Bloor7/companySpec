@@ -134,6 +134,112 @@ class TestSwitchingCallerBreaksNothing(unittest.TestCase):
             + ". Bỏ đi — quyền không ai dùng là cửa mở sẵn chờ người đi qua.")
 
 
+class TestCronHasAnIdentityToo(unittest.TestCase):
+    """Không lời gọi nào được VÔ DANH — kể cả việc định kỳ.
+
+    Đo 20/09 sau khi nối employee: 17/49 lời gọi thật mang `employeeId`, và 31
+    trong 32 dòng thiếu là `trc_cron_`. Cron chạy vô danh, trong khi nó là
+    nguồn lưu lượng LỚN NHẤT của hệ — 5.304 lời gọi trong ba tuần.
+
+    Và nó là nguồn đáng có tên nhất: chạy lúc admin ngủ, 15 phút một lần,
+    không ai nhìn. Lời gọi của CEO thì admin vừa nhắn xong nên còn nhớ; lời
+    gọi của cron lúc 3 giờ sáng thì chỉ có sổ nhớ hộ.
+    """
+
+    def testSchedulerExists(self):
+        self.assertIn("scheduler", EMPLOYEES)
+
+    def testSchedulerCanOnlyRead(self):
+        """Khớp với thực tế đo được: 5.304/5.304 lời gọi cron đều là `read`."""
+        scheduler = EMPLOYEES["scheduler"]
+        self.assertTrue(scheduler.mayDo(ResourceKind.database, ActionKind.read))
+        for resource in (ResourceKind.database, ResourceKind.repository,
+                         ResourceKind.filesystem):
+            for action in (ActionKind.modify, ActionKind.delete,
+                           ActionKind.create):
+                with self.subTest(what=f"{resource.value}.{action.value}"):
+                    self.assertFalse(
+                        scheduler.mayDo(resource, action,
+                                        environment=MOI_TRUONG_MAC_DINH),
+                        "cron GHI được — S3 mất lớp phòng thủ thứ hai")
+
+    def testSchedulerCannotSendMessagesItself(self):
+        """Cron trả chữ về cho `scheduler.py`; chính chỗ đó mới quyết định có
+        nhắn không (luật chống nhắn lặp). Cho nó gửi thẳng là mở lại đúng con
+        đường đẻ ra 21 tin lúc nửa đêm."""
+        self.assertFalse(
+            EMPLOYEES["scheduler"].mayDo(ResourceKind.telegram,
+                                         ActionKind.send))
+
+    def testSchedulerCanReadEveryReadCapability(self):
+        """S3 viết "việc định kỳ chỉ được phép ĐỌC" — không viết "chỉ đọc sổ".
+
+        ⚠ Bản đầu của hồ sơ chỉ khai `database.read`, vì ba tuần qua cron chỉ
+        chạm sổ. `testPolicyParity` bắt ngay: core nói CHO, dispatch nói KHÔNG
+        với 10 năng lực `read` khác. Siết hơn S3 ở tầng employee nghe như cẩn
+        thận hơn, thật ra là dựng một luật THỨ HAI không ai biết — lịch nào
+        trỏ vào `browserCompany.kiemTraTrang` sẽ chết lặng lẽ, và người đi tìm
+        sẽ đọc S3 rồi kết luận là nó phải chạy được.
+
+        Nên bất biến đúng là: **đọc được MỌI thứ, làm thì không gì cả.**
+        """
+        scheduler = EMPLOYEES["scheduler"]
+        thieu = []
+        for companyId, name, capability in _ceoCallableCapabilities():
+            if capability.riskTier is not RiskTier.read:
+                continue
+            resource, action = capability.touches
+            if not scheduler.mayDo(resource, action,
+                                   environment=MOI_TRUONG_MAC_DINH):
+                thieu.append(f"{companyId}.{name} cần "
+                             f"{resource.value}.{action.value}")
+        self.assertEqual(
+            thieu, [],
+            "`scheduler` đọc không nổi — nó đang SIẾT HƠN S3, và lịch trỏ vào "
+            "những năng lực sau sẽ chết im lặng:\n  " + "\n  ".join(thieu))
+
+    def testSchedulerCanDoNothingButRead(self):
+        """Chiều kia, và đây mới là hàng rào thật.
+
+        Mở `read` ra toàn bộ thì cái phân biệt kẻ QUAN SÁT với kẻ HÀNH ĐỘNG
+        không còn nằm ở `permissions` nữa — nó nằm ở đây.
+        """
+        scheduler = EMPLOYEES["scheduler"]
+        for companyId, name, capability in _ceoCallableCapabilities():
+            if capability.riskTier is RiskTier.read:
+                continue
+            resource, action = capability.touches
+            with self.subTest(capability=f"{companyId}.{name}"):
+                self.assertFalse(
+                    scheduler.mayDo(resource, action,
+                                    environment=MOI_TRUONG_MAC_DINH),
+                    f"cron làm được {resource.value}.{action.value} — S3 mất "
+                    "lớp phòng thủ thứ hai")
+
+    def testSignedScheduleIsNotBlockedByTheEmployeeGate(self):
+        """⚠ NGOẠI LỆ CÓ THẬT, và nó dễ bị một hàng rào mới vô tình gỡ mất.
+
+        Phiếu hẹn admin ký sẵn cho phép cron GHI — S3 chừa đúng khe đó, khoá
+        vào một nội dung, dùng một lần. Nhưng cổng employee chạy TRƯỚC Policy
+        và KHÔNG nhìn thấy phiếu. Nếu `scheduler` (chỉ đọc) đứng tên mọi lời
+        gọi định kỳ thì nó chặn luôn cả khe ấy.
+
+        Nên `dispatch` cho `ceo` đứng tên khi có phiếu. Ca này đọc thẳng mã để
+        chắc luật đó còn nguyên — nếu ai đó "dọn cho gọn" thành `scheduler`
+        cho mọi trường hợp thì cơ chế hẹn giờ chết lặng lẽ.
+        """
+        with open(os.path.join(REPO_ROOT, "gateway", "cli", "dispatch.py"),
+                  encoding="utf-8") as fh:
+            nguon = fh.read()
+        viTri = nguon.find("employeeId = getattr(args,")
+        self.assertGreater(viTri, 0, "không tìm thấy chỗ chọn employee")
+        doan = nguon[viTri:viTri + 200]
+        self.assertIn("hen_ok", doan,
+                      "chỗ chọn employee KHÔNG xét phiếu hẹn — lời gọi mang "
+                      "chữ ký của admin sẽ bị `scheduler` chặn mất")
+        self.assertIn("scheduler", doan)
+
+
 class TestTheHardLimitsHold(unittest.TestCase):
     """`cannot` thắng `permissions`, và nó phải thắng cả với CEO."""
 

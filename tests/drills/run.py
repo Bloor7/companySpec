@@ -318,10 +318,13 @@ def bai_viec_nguy_hiem() -> KetQua:
     res = goi_dispatch("expenseCompany", "addExpense",
                        {"soTien": 1000, "danhMuc": "khác", "ghiChu": "diễn tập"},
                        "--issued-by", "scheduledTrigger", hau_to="_cron")
-    kq.doi(res.get("status") == "rejected"
+    # Chặn ở cổng EMPLOYEE (`scheduler` chỉ đọc) — trước Policy — nên mã là
+    # `denied`. Hai lớp cùng nói không; cái đáng đòi là câu trả lời vẫn NÓI
+    # RÕ vì sao cron bị cấm, chứ không phải một mã trạng thái cụ thể.
+    kq.doi(res.get("status") in ("rejected", "denied")
            and "S3" in str(res.get("summary")),
-           "S3 — cron KHÔNG ghi được, kể cả khi nội dung hợp lệ",
-           str(res.get("summary"))[:120])
+           "S3 — cron KHÔNG ghi được, và câu từ chối nói rõ vì sao",
+           str(res.get("summary"))[:130])
 
     # Cửa 5 — `guard.py` chặn CEO dùng Bash cho việc khác dispatcher.
     guard = os.path.join(REPO_ROOT, "ceo", "hooks", "guard.py")

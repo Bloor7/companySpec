@@ -147,9 +147,17 @@ class TestScheduledTriggerIsReadOnly(unittest.TestCase):
                               dryRun=False,
                               extraArgs=["--issued-by", "scheduledTrigger"],
                               traceSuffix="_cronWrite")
-        self.assertEqual(result["status"], "rejected",
-                         "cron ghi được — S3 thủng")
-        self.assertIn("S3", result["summary"])
+        # Từ 21/09 cron có danh tính `scheduler` (chỉ đọc), nên nó bị chặn ở
+        # cổng EMPLOYEE — chạy trước Policy — thay vì ở S3. Hai mã trạng thái
+        # khác nhau, cùng một kết cục: cron KHÔNG ghi được.
+        #
+        # Thứ ca này thật sự canh không phải mã trạng thái mà là CÂU TRẢ LỜI:
+        # nó phải nói vì sao CRON nói riêng bị cấm. Chặn sớm hơn không được
+        # làm mất lý do thật.
+        self.assertIn(result["status"], ("rejected", "denied"),
+                      "cron ghi được — S3 thủng")
+        self.assertIn("S3", result["summary"],
+                      "bị chặn nhưng câu trả lời không nói vì sao CRON bị cấm")
 
 
 class TestEveryCallLeavesATrace(unittest.TestCase):

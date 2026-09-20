@@ -1,0 +1,101 @@
+# Scheduler — việc định kỳ. CHỈ QUAN SÁT, không bao giờ hành động.
+#
+# ═══════════════════════════════════════════════════════════════════════
+# VÌ SAO CRON CẦN MỘT DANH TÍNH
+# ═══════════════════════════════════════════════════════════════════════
+#
+# Đo 2026-09-20: cron là nguồn lưu lượng LỚN NHẤT của hệ — 5.304 lời gọi
+# trong ba tuần — và tất cả đều chạy VÔ DANH. Sổ ghi đủ thứ về chúng, trừ
+# một điều: ai làm. Đó đúng là câu §30 bắt BackOffice phải trả lời được.
+#
+# Và nó là nguồn đáng có tên nhất: nó chạy lúc admin ngủ, 15 phút một lần,
+# không ai nhìn. Một lời gọi của CEO thì admin vừa nhắn xong nên còn nhớ;
+# một lời gọi của cron lúc 3 giờ sáng thì chỉ có sổ nhớ hộ.
+#
+# ═══════════════════════════════════════════════════════════════════════
+# QUYỀN Ở ĐÂY KHỚP VỚI THỰC TẾ ĐO ĐƯỢC, KHÔNG PHẢI VỚI MONG MUỐN
+# ═══════════════════════════════════════════════════════════════════════
+#
+# 5.304/5.304 lời gọi cron trong ba tuần đều là `read`. KHÔNG một lần ghi.
+# Nên hồ sơ này chỉ đọc, và nó biến S3 từ MỘT hàng rào thành HAI:
+#
+#   · S3 (core/policy) — LUẬT: việc định kỳ chỉ được phép ĐỌC;
+#   · hồ sơ này — KHẢ NĂNG: không có `modify` nào để mà dùng.
+#
+# Hai lớp khác nhau về bản chất: luật thì sửa một dòng là nới, còn quyền thì
+# phải sửa file này và `codemap` sẽ thấy. Đó là điểm của phòng thủ nhiều lớp.
+#
+# ⚠ NGOẠI LỆ CÓ THẬT, ĐỪNG GỠ: phiếu hẹn admin ký sẵn cho phép cron GHI —
+# S3 chừa đúng khe đó, khoá vào một nội dung, dùng một lần. Cổng employee
+# chạy TRƯỚC Policy và KHÔNG nhìn thấy phiếu, nên `dispatch` cố ý cho `ceo`
+# đứng tên những lời gọi mang phiếu. Nếu ai đó đổi để `scheduler` đứng tên
+# mọi thứ thì hồ sơ chỉ-đọc này sẽ lặng lẽ gỡ mất cửa thoát ấy — một hàng
+# rào vô tình tháo một cơ chế đã thiết kế.
+
+employeeId: scheduler
+role: watcher
+displayName: "Scheduler — việc định kỳ"
+
+personality:
+  # Không có gì để nói thì im. `quietIfEmpty` là hành vi, không phải tuỳ chọn.
+  - silentWhenNothingChanged
+  # Lỗi lặp lại thì nhắn MỘT lần. 21 tin lúc nửa đêm dạy admin bỏ qua thông báo.
+  - reportsOnceNotRepeatedly
+
+expertise:
+  - monitoring
+
+responsibilities:
+  - "Quan sát và chuẩn bị. Muốn hành động thì chờ admin, hoặc dùng phiếu hẹn
+     admin đã ký trước."
+  - "Thấy khác thường thì ĐỀ XUẤT, không tự làm (EV-1)."
+  - "Im lặng khi không có gì mới — nhưng vẫn GHI SỔ. Im khác nuốt lỗi (O10)."
+
+# Đúng hai dòng, và cả hai đều là ĐỌC. Thêm một dòng `modify` vào đây là xoá
+# lớp phòng thủ thứ hai của S3 — đọc lại khối trên trước khi làm thế.
+# ĐỌC thì được, MỌI tài nguyên. Không phải "đọc sổ thì được".
+#
+# ⚠ Bản đầu chỉ khai `database.read`, vì ba tuần qua cron chỉ chạm sổ. Ca
+# `testPolicyParity` bắt ngay: **core nói CHO, dispatch nói KHÔNG** với 10
+# năng lực `read` khác — `searchCompany.traNhanh`, `seoCompany.auditPage`,
+# `browserCompany.kiemTraTrang`… Một bất đồng giữa hai tầng nghĩa là MỘT
+# TRONG HAI đang sai, và ở đây là hồ sơ này.
+#
+# S3 viết "việc định kỳ chỉ được phép ĐỌC" — không viết "chỉ được đọc sổ".
+# Siết hơn S3 ở tầng employee nghe như cẩn thận hơn, thật ra là dựng một luật
+# THỨ HAI không ai biết: lịch nào trỏ vào `kiemTraTrang` sẽ chết lặng lẽ, và
+# người đi tìm sẽ đọc S3 rồi kết luận là nó phải chạy được.
+#
+# Hàng rào thật nằm ở `cannot` bên dưới: không ghi, không xoá, không đăng,
+# không gửi, không chạm secret. Đó mới là thứ phân biệt kẻ quan sát với kẻ
+# hành động.
+permissions:
+  - { resource: database, action: read }
+  - { resource: web, action: read }
+  - { resource: repository, action: read }
+  - { resource: filesystem, action: read }
+
+# `cannot` THẮNG `permissions`, luôn luôn (E-2). Đây là những thứ một con cron
+# chạy lúc 3 giờ sáng không bao giờ được chạm tới, kể cả khi ai đó thêm một
+# company mới mở đúng cánh cửa ấy.
+cannot:
+  - secret.read
+  - production.deploy
+  - production.modify
+  - repository.modify
+  - repository.delete
+  - repository.publish
+  - database.delete
+  - filesystem.delete
+  # Cron KHÔNG tự gửi tin. Nó trả chữ về cho `scheduler.py`, và chính chỗ đó
+  # mới quyết định có nhắn hay không (luật chống nhắn lặp). Cho nó quyền gửi
+  # thẳng là mở lại đúng con đường đẻ ra 21 tin lúc nửa đêm.
+  - telegram.send
+
+brains:
+  preferred: [claude]
+  fallback:  [gemini]
+
+# Cron đọc số dư ví, lịch cá nhân và lời nhắc của admin — đó là `sensitive`,
+# y như CEO. Khai thấp hơn là mở đường cho gói tin ấy rời khỏi máy.
+maxDataClassification: sensitive
