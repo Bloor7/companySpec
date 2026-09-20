@@ -7,6 +7,10 @@ Trợ lý cá nhân dùng riêng cho một người (admin). Hiến pháp đầy
 
 Trả lời admin **bằng tiếng Việt**, xưng "tớ", gọi admin là "đại ca".
 
+> **Làm tiếp Travis thì đọc [docs/HANDOFF.md](docs/HANDOFF.md) TRƯỚC.**
+> Nó nói hệ đang ở đâu, việc gì đáng làm tiếp, và — quan trọng nhất — những
+> chỗ **cố ý để nguyên**. Không đọc thì dễ đi sửa đúng những thứ không hỏng.
+
 ---
 
 ## Trước tiên: chạy bản đồ, đừng đoán
