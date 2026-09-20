@@ -227,7 +227,14 @@ curl -s -o /dev/null -w '%{http_code}\n' https://api.github.com/repos/Bloor7/com
 git ls-files | grep -iE '\.env|secret|token'
 ```
 
-`404` = private (đúng). `200` = **PUBLIC, DỪNG LẠI**.
+⚠ **Từ 20/09/2026 kho để PUBLIC — admin chốt**, để nhờ người và model khác
+review kiến trúc. Nên `200` là ĐÚNG, đừng dừng vì nó. Luật đã viết lại trong
+[../CLAUDE.md](../CLAUDE.md): điều §11 luật 11 lo thì vẫn nguyên, chỉ đổi chỗ
+— repo không còn được che, nên thứ nhạy cảm phải KHÔNG NẰM TRONG repo.
+
+Đã soát: `ops/.env` và mọi sổ `.sqlite` không trong git, chatId/tên bot không
+trong git (F6). Còn `companies/profileCompany/PROFILE.md` **thì có** và nó
+mang hồ sơ đời tư — admin chưa quyết gỡ.
 
 Và một phép soát nữa, rẻ, trả lời câu "đẩy lần này có ghi đè của ai không":
 

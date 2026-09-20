@@ -249,17 +249,35 @@ python3 ops/snapshot.py save expense   # budget|calendar|expense|income|journal|
 > và nơi R2 nói nhánh `main` chỉ admin được ghi. Một khoá dùng chung không phải
 > là một quyền dùng chung; ranh giới ở đây do luật này giữ, không do khoá giữ.
 
-**Soát trước mỗi lần đẩy** — ba thứ, đều rẻ, đều không rút lại được nếu sai:
+**Soát trước mỗi lần đẩy** — bốn thứ, đều rẻ, đều không rút lại được nếu sai.
+
+⚠ **Chạy chúng thành LỆNH RIÊNG, đọc kết quả, rồi mới đẩy.** Gộp chung một
+dòng với `git push` thì shell chạy tuần tự và lệnh đẩy xong trước khi người
+đọc kịp thấy con số — cái cổng vẫn còn đó, chỉ là đứng sai chỗ. Đã dính
+20/09/2026.
 
 ```bash
-git remote -v                     # đúng kho chưa
+git remote -v                     # đúng kho chưa — CHỈ companySpec
 curl -s -o /dev/null -w '%{http_code}\n' https://api.github.com/repos/Bloor7/companySpec
-                                  # 404 = private (đúng §11 luật 11) · 200 = PUBLIC, DỪNG
-git ls-files | grep -iE '\.env|secret|token'    # secret có lọt vào git không
+git ls-files | grep -iE '(^|/)\.env|\.pem$|id_ed25519|id_rsa'   # khoá có lọt vào git không
+git fetch origin && git merge-base --is-ancestor origin/main HEAD  # có ghi đè của ai không
 ```
 
-Kho **phải private**: nó có quyền ghi vào Notion, ví tiền và lịch của admin.
-Thấy `200` thì dừng lại và báo admin, đừng đẩy.
+**Kho đang để PUBLIC — admin chốt 20/09/2026**, để nhờ người và model khác
+review kiến trúc. Nên `200` là ĐÚNG, không phải cờ đỏ; đừng dừng vì nó.
+
+Nhưng điều mà §11 luật 11 lo thì vẫn còn nguyên, chỉ đổi chỗ: repo không còn
+là thứ được che, nên **thứ nhạy cảm phải KHÔNG NẰM TRONG repo** ngay từ đầu.
+Cụ thể, ba thứ đã soát và đang đúng:
+
+- `ops/.env` không được theo dõi, `.gitignore` chặn `.env` và `*.sqlite`;
+- chatId Telegram và tên bot không có trong git (F6);
+- ⚠ `companies/profileCompany/PROFILE.md` **thì có** — nó mang hồ sơ đời tư
+  của admin (giờ dậy, cơ cấu lương, nơi làm). Nó không cần thiết cho việc
+  review kiến trúc. Admin chưa quyết gỡ; hỏi lại trước khi thêm gì vào đó.
+
+Khoá vẫn không lọt ra, nên **không ai ghi được vào Notion hay ví của admin**.
+Thứ công khai là kiến trúc và một phần hồ sơ cá nhân.
 
 Việc quan trọng hơn cả đẩy là **đặt mốc** để còn quay về được.
 
