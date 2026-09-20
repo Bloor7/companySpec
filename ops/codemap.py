@@ -205,11 +205,26 @@ def soat_ten_truong(tep: dict) -> list:
     # (1) Lời gọi trong Python: hàm nào có dạng f("<x>Company", "<cap>", {...})
     for rel, p in sorted(tep.items()):
         try:
-            cay = ast.parse(open(p, encoding="utf-8").read())
+            nguon = open(p, encoding="utf-8").read()
+            cay = ast.parse(nguon)
         except (SyntaxError, OSError):
             continue
+        dong_nguon = nguon.splitlines()
         for n in ast.walk(cay):
             if not isinstance(n, ast.Call) or len(n.args) < 3:
+                continue
+
+            # CỬA THOÁT CÓ TÊN, cùng kiểu với `# sql-an-toan:`.
+            #
+            # Bộ diễn tập CỐ Ý gọi một năng lực không tồn tại để chứng minh nó
+            # bị chặn (bài `deny`). Không có cửa thoát thì hoặc phải bỏ cả
+            # `tests/` khỏi tầm soát — và mất luôn phần soát thật — hoặc phải
+            # giấu cái tên đi, mà giấu thì người đọc sau không hiểu vì sao.
+            #
+            # Đánh dấu thì ý định đọc được TỪ MẶT CHỮ, và cửa thoát hẹp đúng
+            # một dòng thay vì cả một thư mục.
+            quanh = dong_nguon[max(0, n.lineno - 3):n.lineno]
+            if any("ten-sai-co-y" in d for d in quanh):
                 continue
             a0, a1, a2 = n.args[0], n.args[1], n.args[2]
             if not (isinstance(a0, ast.Constant) and isinstance(a0.value, str)

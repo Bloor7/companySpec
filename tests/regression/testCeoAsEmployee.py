@@ -33,8 +33,13 @@ sys.path.insert(0, HERE)
 import yaml  # noqa: E402
 from harness import capabilitiesOf, loadManifests  # noqa: E402
 from core.contracts import (  # noqa: E402
-    ActionKind, Capability, ResourceKind, RiskTier,
+    ActionKind, Capability, Environment, ResourceKind, RiskTier,
 )
+
+#: Môi trường mà `dispatch.py` truyền vào cổng quyền khi không ai nói gì khác.
+#: Một hằng chứ không phải chữ viết rải: đổi mặc định ở dispatcher mà quên ca
+#: thử thì phép đối chiếu lặng lẽ đo sai thứ.
+MOI_TRUONG_MAC_DINH = Environment.dev
 from core.permissions import (  # noqa: E402
     loadEmployees, maxDataClassificationOf,
 )
@@ -87,7 +92,13 @@ class TestSwitchingCallerBreaksNothing(unittest.TestCase):
         for companyId, name, capability in _ceoCallableCapabilities():
             daSoat += 1
             resource, action = capability.touches
-            if not ceo.mayDo(resource, action):
+            # Hỏi ĐÚNG CÁCH dispatcher hỏi — kể cả `environment`. Bỏ tham số
+            # đó ra là giấu của `core` một thứ người gọi thật có, và phép đối
+            # chiếu không còn nói lên điều gì (cùng bài học với whitelist ở
+            # testPolicyParity). Bài diễn tập `suacode` đo ra rằng chính chỗ
+            # này từng là con bug: dispatcher không truyền environment nên
+            # `forge` bị cấm sửa code và `ceo` mở tới tận production.
+            if not ceo.mayDo(resource, action, environment=MOI_TRUONG_MAC_DINH):
                 thieu.append(
                     f"{companyId}.{name} cần `{resource.value}.{action.value}`"
                     f" (riskTier={capability.riskTier.value})")

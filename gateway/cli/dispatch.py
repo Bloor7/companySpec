@@ -50,7 +50,8 @@ BACKOFFICE = os.path.join(ROOT, "backOffice", "store.sqlite")
 # thì TRA Ở ĐÂY rồi đưa vào, nên cùng một câu hỏi luôn ra cùng một câu trả lời.
 sys.path.insert(0, ROOT)
 from core.contracts import (  # noqa: E402
-    Capability, IssuedBy, PolicyDecision, PolicyRequest, SecretRequest,
+    Capability, Environment, IssuedBy, PolicyDecision, PolicyRequest,
+    SecretRequest,
 )
 import core.secrets as coreSecrets  # noqa: E402
 from core.secrets import SecretLease  # noqa: E402
@@ -534,6 +535,15 @@ def cmd_call(args) -> dict:
     # nó duyệt toàn bộ danh mục và đòi hồ sơ `ceo` cho qua từng năng lực.
     employeeId = getattr(args, "employee", None) or (
         "ceo" if args.issued_by == "ceo" else None)
+
+    # Môi trường của lời gọi. Mặc định `dev` — việc thường ngày. Chạm
+    # production là chuyện phải KHAI RA, không phải chuyện rơi vào mặc định.
+    try:
+        moiTruong = Environment(getattr(args, "environment", None) or "dev")
+    except ValueError:
+        return bail(
+            f"`--environment {args.environment}` không hợp lệ. Chỉ có: "
+            + ", ".join(e.value for e in Environment))
     if employeeId:
         try:
             employees = loadEmployees()
@@ -545,7 +555,26 @@ def cmd_call(args) -> dict:
                 f"Không có employee `{employeeId}`. Có: "
                 f"{', '.join(sorted(employees)) or '(chưa ai)'}")
         resource, action = capabilityObject.touches
-        if not employee.mayDo(resource, action):
+
+        # ═══ MÔI TRƯỜNG PHẢI ĐƯỢC ĐƯA VÀO, KHÔNG ĐƯỢC BỎ TRỐNG ═══
+        #
+        # Bản cũ gọi `mayDo(resource, action)` không truyền `environment`, và
+        # chiều ấy khai trong MỌI hồ sơ employee thì chưa từng tới được cổng.
+        # Đo 2026-09-20 bằng bài diễn tập `suacode`:
+        #
+        #   forge.mayDo(repository, modify)  → False   ← thợ code bị cấm SỬA CODE
+        #   ceo.mayDo(repository, modify)    → True    ← kể cả environment=production
+        #
+        # Hỏng cả hai chiều cùng lúc, và đó là điều đáng sợ: quyền khai CÓ
+        # phạm vi thì bị chặn oan tới mức vô dụng, còn quyền khai KHÔNG phạm
+        # vi thì mở tới tận production. Cùng họ với `pattern:`/`anyOf`/
+        # `whitelistScope: []` — khai một hàng rào mà không ai đọc — nhưng
+        # nặng hơn, vì đây là chính bộ máy quyền.
+        #
+        # Mặc định `dev` khớp với `PolicyRequest.environment` và với sự thật:
+        # mọi lời gọi hôm nay đều là việc thường ngày, không phải deploy.
+        # Muốn chạm production thì phải NÓI RA bằng `--environment`.
+        if not employee.mayDo(resource, action, environment=moiTruong):
             identity = IssuedBy.employee
             lastPolicy[0], lastPolicy[1] = "deny", (
                 f"`{employeeId}` không có quyền {resource.value}.{action.value}")
@@ -1008,6 +1037,12 @@ def main() -> int:
     p.add_argument("--ttl", type=int, default=None,
                    help="ghi đè hạn chót (giây); bỏ trống thì lấy maxDurationSec của năng lực")
     p.add_argument("--issued-by", default="ceo", choices=["ceo", "scheduledTrigger"])
+    p.add_argument("--environment", default="dev",
+                   choices=[e.value for e in Environment],
+                   help="môi trường của lời gọi. Quyền CÓ PHẠM VI của employee "
+                        "soát theo đây — `forge` sửa được repo ở `dev` mà "
+                        "không sửa được ở `production`. Mặc định `dev`: chạm "
+                        "production là chuyện phải KHAI RA.")
     p.add_argument("--employee", help="giao việc cho một employee — quyền của "
                                       "người đó được soát trước Policy (E-2). "
                                       "Bỏ trống thì CEO gọi thẳng, như cũ")

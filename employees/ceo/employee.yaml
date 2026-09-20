@@ -73,7 +73,12 @@ permissions:
   # panharmonCompany.listPosts, writerCompany.vietBai
   - { resource: repository, action: read }
   # panharmonCompany.taoBaiNhap — bài NHÁP, chưa ai ngoài đọc được.
-  - { resource: repository, action: modify }
+  #
+  # CÓ PHẠM VI `dev`, và đó không phải trang trí: bài diễn tập `suacode` đo ra
+  # rằng khai KHÔNG phạm vi thì `ceo` sửa được repo ở cả `production` — tức là
+  # người điều phối có quyền ghi RỘNG HƠN `forge`, vốn bị khoá ở `dev`. Rộng
+  # hơn thợ code là dấu hiệu chắc chắn của một quyền khai lỏng.
+  - { resource: repository, action: modify, environment: dev }
   # panharmonCompany.dangBai — ĐĂNG CÔNG KHAI.
   #
   # Có mặt ở đây KHÔNG phải là được tự do đăng: nó là `irreversible`, nên
