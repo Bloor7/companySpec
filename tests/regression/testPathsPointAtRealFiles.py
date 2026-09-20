@@ -143,6 +143,52 @@ class TestHardcodedPathsExist(unittest.TestCase):
                                 f"{ten} nằm trong danh sách tuỳ chọn mà không nói vì sao")
 
 
+class TestNoMeasuringToolLeavesApprovalCards(unittest.TestCase):
+    """Phiếu duyệt không nằm yên trong sổ — nó là MỘT CÁI THẺ CÓ NÚT BẤM.
+
+    ═══════════════════════════════════════════════════════════════════
+    HOÁ ĐƠN: MỘT BẢN TRÌNH DIỄN TỰ CẤP CHO MÌNH MỘT QUYỀN THƯỜNG TRỰC
+    ═══════════════════════════════════════════════════════════════════
+
+    `travisDemo.py` cố ý đi qua cổng duyệt THẬT — đó là cả điểm của nó. Nhưng
+    nó không dọn, nên đo 21/09: **15 phiếu `demo_` còn nằm trong sổ**, và một
+    trong số đó admin đã bấm "luôn cho phép" trên Telegram → đẻ ra một quyền
+    đứng THẬT cho `travisSelfTestCompany.recordWrite`.
+
+    Lần này vô hại vì company ấy `internal: true` nên CEO không gọi được (C5).
+    Nhưng cái vô hại là do MAY, không do thiết kế.
+
+    `tests/regression` và `tests/drills` đều tự dọn; chỉ `travisDemo` quên.
+    Ca này hỏi câu chung cho cả ba: **bộ đo có để lại thẻ bấm nào không.**
+    """
+
+    def testApprovalLedgerHasNoLingeringTestCards(self):
+        import sqlite3
+        store = os.path.join(REPO_ROOT, "backOffice", "store.sqlite")
+        if not os.path.exists(store):
+            self.skipTest("chưa có sổ backOffice")
+
+        from core.audit import TEST_TRACE_PREFIXES
+        conn = sqlite3.connect(store)
+        try:
+            rows = conn.execute(
+                "SELECT traceId, companyId, capability, status "
+                "FROM approvalRequest").fetchall()
+        finally:
+            conn.close()
+
+        sot = [r for r in rows
+               if str(r[0]).startswith(tuple(TEST_TRACE_PREFIXES))]
+        self.assertEqual(
+            sot, [],
+            f"{len(sot)} phiếu duyệt của BỘ ĐO còn trong sổ thật. Mỗi phiếu "
+            "là một thẻ có nút trên Telegram của admin — bấm 'luôn cho phép' "
+            "một cái là đẻ ra quyền đứng THẬT.\n  "
+            + "\n  ".join(f"{r[0]} → {r[1]}.{r[2]} [{r[3]}]" for r in sot[:8])
+            + "\n\nMọi bộ đo phải tự dọn phiếu của LƯỢT CHẠY MÌNH "
+              "(xem `travisDemo.don_dep`, `drills.don_dep`).")
+
+
 class TestTheGatewaySpawnTargetActuallyRuns(unittest.TestCase):
     """Cái file mà poller ĐẺ RA cho mỗi tin nhắn phải chạy được.
 

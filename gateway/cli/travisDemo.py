@@ -112,7 +112,49 @@ def main() -> int:
 
     print("\n  Mọi thứ trên đi qua ĐÚNG dispatcher thật, ĐÚNG sổ thật, ĐÚNG")
     print("  cổng duyệt thật — không có cờ nào chỉ dành cho bản trình diễn.")
+
+    da_don = don_dep()
+    if da_don:
+        print(f"  Đã dọn {da_don} phiếu duyệt do bản trình diễn này đẻ ra.")
     return 0
+
+
+def don_dep() -> int:
+    """Xoá phiếu duyệt của CHÍNH LƯỢT CHẠY NÀY. Trả về số dòng đã xoá.
+
+    ═══ VÌ SAO PHẢI DỌN, DÙ ĐÂY CHỈ LÀ BẢN TRÌNH DIỄN ═══
+
+    Demo cố ý đi qua cổng duyệt THẬT — đó là cả điểm của nó. Nhưng phiếu duyệt
+    không nằm yên trong sổ: nó hiện thành MỘT CÁI THẺ trên Telegram của admin,
+    có nút bấm.
+
+    Đo 21/09: 15 phiếu `demo_` còn nằm lại trong sổ, và một trong số đó admin
+    đã bấm **"luôn cho phép"** — đẻ ra một quyền đứng THẬT
+    (`wl_7f5e254bdf53c200`) cho `travisSelfTestCompany.recordWrite`. Một bản
+    trình diễn vừa cấp cho mình một quyền thường trực.
+
+    Lần này vô hại: company ấy `internal: true` nên CEO không gọi được (C5).
+    Nhưng cái vô hại là do MAY, không do thiết kế — và lần sau bản trình diễn
+    có thể chạy qua một company thật.
+
+    Cùng họ với "ca thử tự chạy thật việc GHI", và với "bộ đo làm hỏng chính
+    phép đo": `tests/regression` và `tests/drills` đều tự dọn, chỉ file này
+    quên.
+
+    ⚠ Chỉ xoá đúng nhãn + token CỦA LƯỢT NÀY. Xoá mọi dòng `demo_` là xoá cả
+    dấu vết của những lượt trước mà ai đó có thể đang đọc.
+    """
+    conn = approvals.db_conn() if hasattr(approvals, "db_conn") else None
+    import sqlite3
+    conn = conn or sqlite3.connect(
+        os.path.join(ROOT, "backOffice", "store.sqlite"))
+    try:
+        n = conn.execute("DELETE FROM approvalRequest WHERE traceId LIKE ?",
+                         (f"demo_{RUN}_%",)).rowcount
+        conn.commit()
+        return n
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":
