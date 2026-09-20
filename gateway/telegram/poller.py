@@ -31,7 +31,15 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 sys.path.insert(0, os.path.join(ROOT, "lib"))
 import db  # noqa: E402
 
-GATEWAY = os.path.join(ROOT, "gateway", "telegram", "gateway.py")
+# ⚠ `session.py`, KHÔNG phải `gateway.py`. Module ấy đổi tên vì có một GÓI tên
+# `gateway/` rồi — nhưng lần đổi tên §36 (commit 75b8958) đổi luôn cả đường dẫn
+# ở đây thành `gateway/telegram/gateway.py`, một file CHƯA TỪNG tồn tại.
+#
+# Hậu quả: mọi tin nhắn của admin đều ra "Hệ gặp lỗi khi xử lý". Không ai phát
+# hiện suốt từ lúc đổi tên vì admin chưa nhắn lần nào sau đó — journal có ĐÚNG
+# 0 dòng `gateway lỗi`. Cửa vào không sập (O8 giữ đúng), nó chỉ luôn luôn từ
+# chối, và đó là kiểu hỏng khó thấy hơn.
+GATEWAY = os.path.join(ROOT, "gateway", "telegram", "session.py")
 CEO_STORE = os.path.join(ROOT, "ceo", "store.sqlite")
 
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")

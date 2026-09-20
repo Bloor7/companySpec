@@ -244,7 +244,11 @@ def soat_ten_truong(tep: dict) -> list:
     # trường mong đợi — cùng loại chữ viết cứng, nên cùng một kiểu mục ruỗng.
     # Đổi tên một trường trong manifest mà quên sửa ca thử thì ca đó lặng lẽ
     # TRƯỢT MÃI, và tệ hơn: bộ kiểm mất uy tín nên người ta bắt đầu bỏ qua nó.
-    ca_thu = os.path.join(ROOT, "ops", "evals", "cases.yaml")
+    # ⚠ `tests/evals/`, không phải `ops/evals/` — §36 dời thư mục ca thử mà
+    # quên dòng này. Nó có `if os.path.isfile(...)` bao ngoài nên KHÔNG lỗi:
+    # bộ soát chỉ lặng lẽ bỏ qua toàn bộ ca thử, tức là một hàng rào tự tắt mà
+    # vẫn in ra "SOÁT LUẬT: sạch". Cùng họ với "hàng rào giả".
+    ca_thu = os.path.join(ROOT, "tests", "evals", "cases.yaml")
     if os.path.isfile(ca_thu):
         try:
             ds = (yaml.safe_load(open(ca_thu, encoding="utf-8")) or {}).get("cases") or []

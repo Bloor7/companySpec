@@ -27,7 +27,12 @@ import db  # noqa: E402
 BACKOFFICE = os.path.join(ROOT, "backOffice", "store.sqlite")
 WHITELIST = os.path.join(ROOT, "registry", "whitelist.jsonl")
 GATEWAY_YAML = os.path.join(ROOT, "registry", "gateway.yaml")
-GATEWAY_LOCAL = os.path.join(ROOT, "registry", "session.local.yaml")
+# ⚠ `gateway.local.yaml` — bản đè của `gateway.yaml`, nên tên phải đi theo
+# file nó đè. §36 đổi tên hàng loạt `gateway` → `session` và trúng luôn dòng
+# này; hôm nay không mất gì vì admin chưa có file đè nào, nhưng ngày nào tạo
+# một cái theo đúng tên trong tài liệu thì nó sẽ KHÔNG BAO GIỜ được đọc —
+# `os.path.isfile` bao ngoài nên im lặng tuyệt đối.
+GATEWAY_LOCAL = os.path.join(ROOT, "registry", "gateway.local.yaml")
 
 
 # Cửa sổ còn chạy được sau giờ hẹn. Timer chạy mỗi phút, nhưng máy có thể ngủ
@@ -54,7 +59,7 @@ def new_id(prefix: str) -> str:
 
 
 def config() -> dict:
-    """gateway.yaml là bản gốc; session.local.yaml và biến môi trường đè lên (F6)."""
+    """gateway.yaml là bản gốc; gateway.local.yaml và biến môi trường đè lên (F6)."""
     with open(GATEWAY_YAML, encoding="utf-8") as fh:
         cfg = yaml.safe_load(fh) or {}
     if os.path.isfile(GATEWAY_LOCAL):

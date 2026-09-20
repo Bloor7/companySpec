@@ -773,8 +773,13 @@ def brief_block(conn) -> str:
         # QUÁ HẠN: vẫn trả bản cũ ngay, làm mới ở NỀN. Bức tranh cũ 10 phút vẫn
         # đúng gần hết; bắt admin chờ 6 giây để có số mới hơn vài phút là đổi
         # sai thứ. Chỉ lần đầu tiên đời (chưa có gì) mới phải chờ thật.
+        # ⚠ `session.py` — CHÍNH FILE NÀY. Cùng con bug với `poller.GATEWAY`:
+        # §36 đổi tên module rồi sửa đường dẫn thành `gateway.py`, một file
+        # chưa từng có. Chỗ này hỏng CÂM HƠN hẳn: `Popen` bắn đi là quên,
+        # stdout/stderr đều nuốt vào DEVNULL, nên "Bức tranh hiện tại" lặng lẽ
+        # không bao giờ được làm mới và admin chỉ thấy số liệu cũ dần.
         subprocess.Popen(
-            [sys.executable, os.path.join(ROOT, "gateway", "telegram", "gateway.py"), "refresh-brief"],
+            [sys.executable, os.path.abspath(__file__), "refresh-brief"],
             cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             start_new_session=True)
         return dong_gio() + bo_so_du(bo_dong_gio_cu(row["noiDung"] or ""))
