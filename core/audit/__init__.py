@@ -40,7 +40,7 @@ DEFAULT_STORE = os.path.join(ROOT, "backOffice", "store.sqlite")
 #:
 #: `trc_` KHÔNG nằm ở đây: đó là tiền tố mặc định của mọi lời gọi thật. Bộ đo
 #: nào còn dùng `trc_` thì phải tự đặt nhãn cho mình — xem `tests/evals/`.
-TEST_TRACE_PREFIXES = ("reg_", "evl_", "e2e_", "demo_")
+TEST_TRACE_PREFIXES = ("reg_", "evl_", "e2e_", "demo_", "drl_")
 
 ADDED_COLUMNS = {
     "policyDecision": "TEXT",

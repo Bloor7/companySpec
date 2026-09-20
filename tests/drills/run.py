@@ -67,9 +67,34 @@ from core.permissions import loadEmployees  # noqa: E402
 STORE = os.path.join(REPO_ROOT, "backOffice", "store.sqlite")
 DISPATCH = os.path.join(REPO_ROOT, "gateway", "cli", "dispatch.py")
 
-#: Nhãn riêng cho diễn tập. Cùng họ `reg_ evl_ e2e_ demo_` — xem
-#: `core.audit.TEST_TRACE_PREFIXES`.
-TRACE_PREFIX = "drl_"
+#: Nhãn riêng cho diễn tập.
+#:
+#: ⚠ LẤY TỪ `core.audit.TEST_TRACE_PREFIXES`, KHÔNG gõ lại chuỗi ở đây.
+#:
+#: Bản đầu viết thẳng `TRACE_PREFIX = "drl_"` mà quên thêm `drl_` vào danh
+#: sách chung. Hậu quả đo được ngay tối 20/09: bài `hong` cố ý làm
+#: `failOnPurpose` hỏng bốn kiểu, event bus (nối cùng ngày) thấy chúng trong
+#: `taskLog`, tưởng là sự cố THẬT, và nhắn admin:
+#:
+#:     "Em thấy mấy chuyện này, chưa làm gì cả:
+#:      · travisSelfTestCompany.failOnPurpose hỏng — báo admin, chờ admin quyết
+#:      · … còn 3 việc nữa"
+#:
+#: Tức là bộ đo tự báo động về chính nó. Đúng cái bẫy đã ghi hai lần trong
+#: bảng ("bộ đo tự kiếm quyền", "bộ đo làm hỏng chính phép đo") — và vẫn dính,
+#: vì phát minh ra một nhãn MỚI thì không có gì bắt phải đăng ký nó.
+#:
+#: Nên nhãn lấy TỪ danh sách chung. Thêm một bộ đo mới mà quên đăng ký thì
+#: `DRILL_PREFIX` không tồn tại và file này gãy ngay lúc nạp — ồn ào ở bàn
+#: làm việc, thay vì im lặng lúc 22 giờ trên máy admin.
+from core.audit import TEST_TRACE_PREFIXES  # noqa: E402
+
+DRILL_PREFIX = "drl_"
+assert DRILL_PREFIX in TEST_TRACE_PREFIXES, (
+    f"`{DRILL_PREFIX}` chưa có trong core.audit.TEST_TRACE_PREFIXES. "
+    "Chưa đăng ký thì mọi thứ bộ diễn tập đẻ ra sẽ bị đếm như việc THẬT: "
+    "event bus nhắn admin, mức tự chủ leo thang, sổ secret lấp đầy.")
+TRACE_PREFIX = DRILL_PREFIX
 RUN_TOKEN = uuid.uuid4().hex[:8]
 
 

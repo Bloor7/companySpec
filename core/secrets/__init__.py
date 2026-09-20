@@ -181,7 +181,7 @@ def resolveForProcess(leases: tuple, environment: dict,
 #: Tiền tố trace của bộ đo. Cùng danh sách với `core.audit.TEST_TRACE_PREFIXES`
 #: — KHÔNG import về để `core.secrets` không phụ thuộc `core.audit` cho một
 #: hằng; nhưng chúng phải khớp, và ca thử ép chúng khớp.
-TEST_TRACE_PREFIXES = ("reg_", "evl_", "e2e_", "demo_")
+TEST_TRACE_PREFIXES = ("reg_", "evl_", "e2e_", "demo_", "drl_")
 
 
 def auditTrail(conn: sqlite3.Connection, limit: int = 50,

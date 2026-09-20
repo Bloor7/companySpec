@@ -24,7 +24,8 @@ from core.audit import (  # noqa: E402
     TEST_TRACE_PREFIXES as PREFIXES, trackRecordRows,
 )
 from core.events import (  # noqa: E402
-    EventBus, NotificationThrottle, Rule, TaskProposal, defaultRules,
+    EventBus, NotificationThrottle, Rule, TaskProposal, decideNotification,
+    defaultRules,
     deterministicEventId, eventsFromFacts, proposalsAreReadOnly, record,
     openStore as eventsOpenStore, recentEvents, recordIfNew,
     silenceIsAnIncident,
@@ -298,6 +299,104 @@ class TestNotificationThrottle(unittest.TestCase):
         self.throttle.onFailure("notion-503")
         self.assertEqual(self.throttle.onFailure("telegram-429")["action"],
                          "notify")
+
+
+class TestSkippedIsNotRecovery(unittest.TestCase):
+    """"Bỏ qua" KHÁC "đã khỏi". Gộp lại là báo tin mừng 15 phút một lần.
+
+    ═══════════════════════════════════════════════════════════════════
+    HOÁ ĐƠN: 67 TIN "ĐÃ CHẠY LẠI ĐƯỢC"
+    ═══════════════════════════════════════════════════════════════════
+
+    `calendarWatch` chạy 15 phút/lần với `quietIfEmpty`, nên lịch trống thì nó
+    trả `skipped`. Người gọi cố ý BỎ QUA `skipped` khi đi tìm trạng thái trước
+    — để một lượt im không xoá dấu vết lần hỏng. Đúng ý định.
+
+    Nhưng bản cũ của `decideNotification` hỏi "lần này có hỏng không?" và coi
+    MỌI thứ không-hỏng là đã khỏi. Nên `skipped` → `notifyRecovery`, trong khi
+    dòng `failed` cũ nằm đó VĨNH VIỄN vì không lượt `skipped` nào thay được nó.
+
+    Đo 20/09: lần hỏng thật lúc 08:52 (do con bug `gateway.py` của §36). Vá
+    xong lúc 17:07, lịch hết hỏng — và từ đó cứ 15 phút admin nhận một tin
+    "Đã chạy lại được (hỏng 1 lần liên tiếp trước đó)". Sổ đếm **67** tin loại
+    này từ 17/08.
+
+    Trớ trêu: đây đúng là "21 tin lúc nửa đêm" mà chính hàm này sinh ra để
+    chặn, chỉ khác là tin BÁO TIN MỪNG. Và nó dạy admin bỏ qua thông báo y hệt.
+    """
+
+    def testSkippedAfterFailureStaysSilent(self):
+        quyet = decideNotification("failed", "skipped", 1)
+        self.assertEqual(
+            quyet["action"], "silent",
+            "một lượt BỎ QUA bị coi là đã khỏi — 15 phút một tin báo tin mừng")
+
+    def testSkippedDoesNotEraseTheMemoryOfFailure(self):
+        """Im lặng ở lượt `skipped`, nhưng lượt CHẠY THẬT sau đó vẫn phải báo.
+
+        Vá quá tay thành "không bao giờ báo khỏi" thì hỏng theo chiều kia:
+        admin biết hệ hỏng mà không bao giờ biết nó đã khỏi.
+        """
+        self.assertEqual(decideNotification("failed", "skipped", 3)["action"],
+                         "silent")
+        quyet = decideNotification("failed", "ok", 3)
+        self.assertEqual(quyet["action"], "notifyRecovery")
+        self.assertEqual(quyet["occurrences"], 3)
+
+    def testOnlyRealSuccessCountsAsRecovery(self):
+        """Danh sách TRẮNG: trạng thái lạ rơi vào im lặng, không vào "đã khỏi".
+
+        Thêm một trạng thái mới (`deferred`, `partial`…) mà quên khai thì nó
+        sai về phía KHÔNG nhắn — ồn ít đi, chứ không ồn thêm.
+        """
+        for la in ("skipped", "deferred", "partial", "unknown", ""):
+            with self.subTest(status=la):
+                self.assertEqual(
+                    decideNotification("failed", la, 1)["action"], "silent")
+        for that in ("ok", "completed"):
+            with self.subTest(status=that):
+                self.assertEqual(
+                    decideNotification("failed", that, 1)["action"],
+                    "notifyRecovery")
+
+    def testFailureReportingIsUnchanged(self):
+        """Ba nhánh cũ phải y nguyên — đây là bản vá CỘNG THÊM."""
+        self.assertEqual(decideNotification(None, "failed")["action"], "notify")
+        self.assertEqual(decideNotification("failed", "failed", 2)["action"],
+                         "suppress")
+        self.assertEqual(decideNotification("ok", "ok")["action"], "silent")
+
+
+class TestDrillTrafficIsRegisteredAsTestTraffic(unittest.TestCase):
+    """Bộ diễn tập phát minh nhãn mới thì phải ĐĂNG KÝ nó.
+
+    Tối 20/09, bài `hong` cố ý làm `failOnPurpose` hỏng bốn kiểu. Nhãn `drl_`
+    chưa có trong `TEST_TRACE_PREFIXES`, nên event bus thấy chúng trong
+    `taskLog`, tưởng là sự cố THẬT, và nhắn admin năm dòng
+    "travisSelfTestCompany.failOnPurpose hỏng — báo admin, chờ admin quyết".
+
+    Bộ đo tự báo động về chính nó. Bẫy này đã ghi HAI lần trong bảng, và vẫn
+    dính — vì phát minh một nhãn mới thì không có gì bắt phải đăng ký.
+    """
+
+    def testEveryKnownMeasuringPrefixIsRegistered(self):
+        for nhan in ("reg_", "evl_", "e2e_", "demo_", "drl_"):
+            with self.subTest(prefix=nhan):
+                self.assertIn(
+                    nhan, PREFIXES,
+                    f"`{nhan}` là nhãn của một bộ đo nhưng chưa đăng ký — "
+                    "mọi thứ nó đẻ ra sẽ bị đếm như việc THẬT")
+
+    def testTheDrillRunnerAsksForItsPrefix(self):
+        """Bộ diễn tập phải LẤY nhãn từ danh sách chung, không gõ lại chuỗi.
+
+        Gõ lại thì hai bản sẽ lệch đúng vào hôm ai đó thêm bộ đo thứ sáu.
+        """
+        duongDan = os.path.join(REPO_ROOT, "tests", "drills", "run.py")
+        with open(duongDan, encoding="utf-8") as fh:
+            nguon = fh.read()
+        self.assertIn("from core.audit import TEST_TRACE_PREFIXES", nguon)
+        self.assertIn("assert DRILL_PREFIX in TEST_TRACE_PREFIXES", nguon)
 
 
 class TestSilenceIsAnIncident(unittest.TestCase):

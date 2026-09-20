@@ -91,6 +91,15 @@ class EventBus:
 
 # ══════════════════════════ chống nhắn lặp ══════════════════════════
 
+#: Trạng thái nghĩa là "lượt chạy này THẬT SỰ làm được việc".
+#:
+#: Danh sách TRẮNG, không phải danh sách đen. Thêm một trạng thái mới
+#: (`deferred`, `partial`…) mà quên thêm vào đây thì nó rơi vào nhánh im
+#: lặng — sai về phía KHÔNG nhắn, tức là ồn ít đi chứ không ồn thêm. Dùng
+#: danh sách đen thì trạng thái mới lặng lẽ thành "đã khỏi".
+_SUCCESS_STATUSES = frozenset({"ok", "completed"})
+
+
 def decideNotification(previousStatus: Optional[str], currentStatus: str,
                        consecutiveFailures: int = 0) -> dict:
     """LUẬT chống nhắn lặp, dạng hàm THUẦN. Không sổ, không trạng thái.
@@ -112,6 +121,27 @@ def decideNotification(previousStatus: Optional[str], currentStatus: str,
       suppress       — đang lặp, im (VẪN GHI SỔ — im lặng khác nuốt lỗi, O10)
       notifyRecovery — vừa khỏi, báo KÈM số lần đã hỏng
       silent         — bình thường, không có gì để nói
+
+    ═══ `skipped` KHÔNG PHẢI "ĐÃ KHỎI" ═══
+
+    Bản đầu hỏi "lần này có hỏng không?" và coi MỌI thứ không-hỏng là đã khỏi.
+    `skipped` lọt vào nhóm đó, và nó gây ra đúng con bug mà cả hàm này sinh ra
+    để chặn.
+
+    Đo 20/09/2026: `calendarWatch` chạy 15 phút/lần với `quietIfEmpty`, nên
+    khi lịch trống nó trả `skipped`. Người gọi lại cố ý BỎ QUA `skipped` khi
+    đi tìm trạng thái trước (để một lần im không xoá dấu vết lần hỏng) — nên
+    dòng `failed` lúc 08:52 nằm đó VĨNH VIỄN, và cứ 15 phút admin lại nhận
+    "Đã chạy lại được (hỏng 1 lần liên tiếp trước đó)". Sổ đếm được **67** tin
+    loại này từ 17/08.
+
+    Trớ trêu: đây đúng là "21 tin lúc nửa đêm", chỉ khác là tin BÁO TIN MỪNG.
+    Và nó dạy admin bỏ qua thông báo y hệt.
+
+    Nên "đã khỏi" phải là một KẾT LUẬN CÓ BẰNG CHỨNG: lần này thật sự CHẠY
+    ĐƯỢC. Bỏ qua vì không có gì để làm thì không chứng minh được điều gì —
+    cùng một lý lẽ với V-1 ("xong" phải có bằng chứng) và với
+    `verification.skipped` ≠ `passed`.
     """
     failedNow = currentStatus == "failed"
     failedBefore = previousStatus == "failed"
@@ -120,6 +150,12 @@ def decideNotification(previousStatus: Optional[str], currentStatus: str,
         return {"action": "suppress", "occurrences": consecutiveFailures + 1}
     if failedNow:
         return {"action": "notify", "occurrences": 1}
+
+    # KHÔNG CHẠY thì không kết luận gì — giữ nguyên trí nhớ về lần hỏng, đợi
+    # một lượt chạy thật. Gộp nó vào "đã khỏi" là kết luận từ sự vắng mặt.
+    if currentStatus not in _SUCCESS_STATUSES:
+        return {"action": "silent", "occurrences": 0}
+
     if failedBefore:
         # "Đã khỏi" một mình không nói lên gì; "đã khỏi sau 21 lần hỏng trong
         # 6 tiếng" nói rằng có thứ cần sửa tận gốc.
