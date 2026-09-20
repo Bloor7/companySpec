@@ -262,7 +262,64 @@ def goi_nao(viec: dict, cho_lam: str, kho: bool) -> tuple:
 
 # ───────────────────────── một vòng ─────────────────────────
 
+#: Trạng thái mà `nhanViec` THẬT SỰ nhận được: việc tạm dừng tới giờ thử lại,
+#: việc đứt gánh, và việc mới. `choXem`/`daGop`/`bo`/`hong` thì không.
+#:
+#: Danh sách này phải khớp với thứ tự nhận khai trong `nhanViec.description`.
+#: Lệch thì hỏng về phía CHẶT (bỏ qua một việc đáng làm), nên ca `--xem` in ra
+#: số đếm để soi được bằng mắt.
+TRANG_THAI_NHAN_DUOC = ("moi", "dangLam", "tamDung")
+
+
+def co_viec_de_nhan() -> tuple:
+    """Hỏi "có việc không?" bằng một lời gọi ĐỌC. Trả (biết_chắc, có_việc).
+
+    ═══════════════════════════════════════════════════════════════════
+    VÌ SAO KHÔNG HỎI THẲNG `nhanViec`
+    ═══════════════════════════════════════════════════════════════════
+
+    `nhanViec` là `write`, và bản cũ gọi nó NGAY dòng đầu mỗi vòng — tức là
+    hỏi một câu ĐỌC bằng một lời gọi GHI. Thợ chạy 6 phút/lần ≈ 240 vòng mỗi
+    ngày, trong khi quyền đứng admin cấp có trần 20 lần/ngày. Hết trần sau
+    khoảng hai tiếng, và 220 vòng còn lại MỖI VÒNG đẻ một thẻ duyệt.
+
+    Đo 20/09, lưu lượng THẬT (đã bỏ nhãn bộ đo): `nhanViec` gọi 330 lần, chỉ
+    36 lần chạy được, **294 lần hỏi duyệt** — trong khi xưởng có đúng 3 việc
+    và cả 3 đều ở `choXem`, tức là KHÔNG CÓ GÌ để nhận. Admin bấm "luôn cho
+    phép" năm lần, sổ whitelist có năm dòng trùng nhau, và nó vẫn hỏi tiếp.
+
+    Chú thích trong manifest còn ghi "một lần cho aiLam=hop là thợ nhận việc
+    suốt 90 ngày không hỏi nữa" — ý định ghi rõ, hiệu lực thì ngược lại. Đúng
+    họ với bẫy "chú thích nói một đằng, giá trị làm một nẻo".
+
+    `dsViec` là `read` nên đi thẳng, không bao giờ hỏi ai, không tốn gì. Xưởng
+    trống thì thợ IM LẶNG — đó mới là hành vi admin mong đợi.
+
+    ═══ TRẢ VỀ HAI GIÁ TRỊ, CÓ CHỦ Ý ═══
+
+    `biết_chắc=False` nghĩa là KHÔNG ĐỌC ĐƯỢC sổ, không phải "xưởng trống".
+    Gộp hai câu đó lại là để một lỗi đọc sổ làm thợ ngủ mãi mãi trong im lặng
+    (O10 — số 0 không được trông giống một kết quả tốt).
+    """
+    kq = goi("xuongCompany", "dsViec", {})
+    if kq.get("status") != "ok":
+        return False, False
+    cac_viec = (kq.get("output") or {}).get("cacViec") or []
+    return True, any(v.get("trangThai") in TRANG_THAI_NHAN_DUOC
+                     for v in cac_viec)
+
+
 def mot_vong(kho: bool) -> int:
+    # CỬA ĐỌC ĐỨNG TRƯỚC CỬA GHI. Xem `co_viec_de_nhan` để biết vì sao.
+    biet_chac, co_viec = co_viec_de_nhan()
+    if biet_chac and not co_viec:
+        noi("xưởng trống — không nhận việc, không phiền đại ca.")
+        return 0
+    if not biet_chac:
+        # Không đọc được sổ thì VẪN thử nhận: thà tốn một lời gọi ghi còn hơn
+        # ngủ quên vì một lỗi đọc. Nhưng phải NÓI RA là đã không đọc được.
+        noi("không đọc được danh sách việc — vẫn thử nhận một lần.")
+
     kq = goi("xuongCompany", "nhanViec", {"aiLam": "hop"})
     if kq.get("status") == "needsApproval":
         # THOÁT 0, không phải mã lỗi. Đang chờ người bấm không phải là hỏng —
