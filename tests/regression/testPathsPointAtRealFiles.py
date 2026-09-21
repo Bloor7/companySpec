@@ -162,31 +162,79 @@ class TestNoMeasuringToolLeavesApprovalCards(unittest.TestCase):
     Ca này hỏi câu chung cho cả ba: **bộ đo có để lại thẻ bấm nào không.**
     """
 
-    def testApprovalLedgerHasNoLingeringTestCards(self):
-        import sqlite3
-        store = os.path.join(REPO_ROOT, "backOffice", "store.sqlite")
-        if not os.path.exists(store):
-            self.skipTest("chưa có sổ backOffice")
+    def _soTest(self):
+        """Mở sổ bằng cửa đã có (`coreAudit.openStore`) — có `row_factory`.
 
-        from core.audit import TEST_TRACE_PREFIXES
-        conn = sqlite3.connect(store)
+        Đọc theo index (`r[0]`, `r[1]`…) thì thêm một cột vào `SELECT` là
+        phải đếm lại ở mọi dòng dùng, và sai thì im lặng: `traceId` với
+        `companyId` đều là chuỗi, `startswith` vẫn chạy ngon.
+        """
+        import core.audit as coreAudit
+        if not os.path.exists(coreAudit.DEFAULT_STORE):
+            self.skipTest("chưa có sổ backOffice")
+        return coreAudit.openStore(), coreAudit.TEST_TRACE_PREFIXES
+
+    def testApprovalLedgerHasNoLingeringTestCards(self):
+        conn, prefixes = self._soTest()
         try:
-            rows = conn.execute(
+            # Lọc ngay trong SQL, đúng khuôn `core/audit` đang dùng.
+            # sql-an-toan: chỉ ghép `laTest` dựng từ hằng viết cứng
+            laTest = " OR ".join(f"traceId LIKE '{p}%'" for p in prefixes)
+            sot = [dict(r) for r in conn.execute(
                 "SELECT traceId, companyId, capability, status "
-                "FROM approvalRequest").fetchall()
+                f"FROM approvalRequest WHERE {laTest}")]
         finally:
             conn.close()
 
-        sot = [r for r in rows
-               if str(r[0]).startswith(tuple(TEST_TRACE_PREFIXES))]
         self.assertEqual(
             sot, [],
             f"{len(sot)} phiếu duyệt của BỘ ĐO còn trong sổ thật. Mỗi phiếu "
-            "là một thẻ có nút trên Telegram của admin — bấm 'luôn cho phép' "
-            "một cái là đẻ ra quyền đứng THẬT.\n  "
-            + "\n  ".join(f"{r[0]} → {r[1]}.{r[2]} [{r[3]}]" for r in sot[:8])
+            "là một thẻ có nút trên Telegram của admin.\n  "
+            + "\n  ".join(f"{r['traceId']} → {r['companyId']}.{r['capability']}"
+                          f" [{r['status']}]" for r in sot[:8])
             + "\n\nMọi bộ đo phải tự dọn phiếu của LƯỢT CHẠY MÌNH "
               "(xem `travisDemo.don_dep`, `drills.don_dep`).")
+
+    def testNoStandingGrantEverCameFromAMeasuringTool(self):
+        """Dọn cái THẺ mà để lại cái QUYỀN là vá nhầm tầng.
+
+        Sự cố 21/09 kể là "demo tự cấp cho mình một quyền thường trực", nhưng
+        bản vá đầu chỉ xoá `approvalRequest`. Quyền đứng do sự cố đẻ ra vẫn
+        sống — và còn bị commit vào repo.
+
+        Cửa thật chỉ có MỘT (`approvals.whitelist_add`) và nay nó từ chối mọi
+        phiếu mang nhãn bộ đo. Ca này canh KẾT QUẢ của luật ấy trên sổ thật:
+        không quyền đứng nào được sinh từ một phiếu của bộ đo.
+        """
+        import json
+        conn, prefixes = self._soTest()
+        try:
+            traceCua = {r["approvalId"]: r["traceId"] for r in conn.execute(
+                "SELECT approvalId, traceId FROM approvalRequest")}
+        finally:
+            conn.close()
+
+        duongDan = os.path.join(REPO_ROOT, "registry", "whitelist.jsonl")
+        if not os.path.exists(duongDan):
+            self.skipTest("chưa có sổ quyền đứng")
+        with open(duongDan, encoding="utf-8") as fh:
+            dong = [json.loads(l) for l in fh if l.strip()]
+
+        daThuHoi = {d["revoke"] for d in dong if "revoke" in d}
+        ban = []
+        for d in dong:
+            if not d.get("ruleId") or d["ruleId"] in daThuHoi:
+                continue
+            trace = traceCua.get(d.get("createdFromApprovalId") or "")
+            if trace and trace.startswith(tuple(prefixes)):
+                ban.append(f"{d['ruleId']} → {d['companyId']}.{d['capability']}"
+                           f" (từ trace `{trace}`)")
+
+        self.assertEqual(
+            ban, [],
+            "Có quyền ĐỨNG sinh ra từ phiếu của BỘ ĐO — một bản trình diễn "
+            "tự cấp cho mình quyền thường trực:\n  " + "\n  ".join(ban)
+            + "\n\nThu hồi bằng `approvals.whitelist_revoke(<ruleId>)`.")
 
 
 class TestTheGatewaySpawnTargetActuallyRuns(unittest.TestCase):

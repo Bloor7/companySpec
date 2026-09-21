@@ -39,7 +39,16 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 BACKOFFICE = os.path.join(ROOT, "backOffice", "store.sqlite")
 
 #: Nhãn của lời gọi do BỘ ĐO sinh ra — không phải việc thật của admin.
-TEST_TRACE_PREFIXES = ("reg_", "evl_", "e2e_", "demo_")
+#:
+#: ⚠ LẤY TỪ `core.audit`, KHÔNG gõ lại. Bản cũ chép tay và thiếu `drl_`, nên
+#: suốt từ lúc bộ diễn tập ra đời, bản soát tuần (§21) và đề xuất tự cải
+#: thiện (§34) vẫn đếm bốn lần hỏng CỐ Ý của bài `hong` như sự cố thật —
+#: chúng góp vào `FAILURE_RATE_THRESHOLD` và có thể đẻ ra một đề xuất về
+#: chính bộ đo.
+#:
+#: Đây là bản thứ BA của cùng một danh sách, và là bản duy nhất không ai
+#: canh. `core/events/scheduler.py` đã làm đúng từ đầu (import về).
+from ..audit import TEST_TRACE_PREFIXES  # noqa: E402
 
 #: Trượt quá tỉ lệ này trong tuần thì nêu tên.
 FAILURE_RATE_THRESHOLD = 0.2

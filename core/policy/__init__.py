@@ -30,6 +30,18 @@ from ..contracts import (
 )
 from .autonomy import describeLevel, mayActWithoutAsking
 
+#: VÌ SAO cron bị giới hạn, nói bằng ngôn ngữ của admin. Một bản duy nhất.
+#:
+#: Trước 21/09 câu này có BA thân: ở đây, gõ lại trong `dispatch.py`, và một
+#: bản rút gọn trong `employees/scheduler/employee.yaml`. Sửa câu chữ ở một
+#: nơi thì admin đọc hai lời giải thích khác nhau cho cùng một luật — đúng
+#: dòng "cùng một luật, BA thân" trong bảng bẫy.
+#:
+#: `dispatch.py` import hằng này khi cổng employee chặn cron, để câu trả lời
+#: ở hai tầng vẫn là MỘT câu.
+S3_VI_SAO = ("Cron quan sát và chuẩn bị; muốn hành động thì chờ admin, "
+             "hoặc dùng phiếu hẹn admin đã ký trước.")
+
 
 def decide(request: PolicyRequest) -> PolicyOutcome:
     """Quyết định cho một lời gọi. Thứ tự các luật ở đây là CÓ CHỦ Ý.
@@ -87,8 +99,7 @@ def _ruleScheduledTriggerIsReadOnly(request: PolicyRequest,
         decision=PolicyDecision.deny,
         reason=(f"S3 — việc định kỳ chỉ được phép ĐỌC. "
                 f"'{capability.name}' là '{capability.riskTier.value}'. "
-                "Cron quan sát và chuẩn bị; muốn hành động thì chờ admin, "
-                "hoặc dùng phiếu hẹn admin đã ký trước."))
+                + S3_VI_SAO))
 
 
 def _ruleExternalSpendCap(request: PolicyRequest, capability: Capability):

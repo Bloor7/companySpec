@@ -276,9 +276,19 @@ class TestSecretAuditSeparatesTestTraffic(SecretTestCase):
         có hai bản. Hai bản của cùng một danh sách thì sớm muộn lệch, và lệch
         ở đây nghĩa là một loại lưu lượng bộ đo lọt vào sổ mà không ai thấy.
         """
-        self.assertEqual(
-            tuple(sorted(secretsModule.TEST_TRACE_PREFIXES)),
-            tuple(sorted(coreAudit.TEST_TRACE_PREFIXES)))
+        chuan = tuple(sorted(coreAudit.TEST_TRACE_PREFIXES))
+        self.assertEqual(tuple(sorted(secretsModule.TEST_TRACE_PREFIXES)),
+                         chuan)
+
+        # Bản thứ BA và thứ TƯ. `core/events/review.py` từng chép tay và
+        # thiếu `drl_` — nên bản soát tuần đếm lỗi CỐ Ý của bộ diễn tập như
+        # sự cố thật. Không ca nào canh nó cho tới 21/09.
+        import core.events.review as review
+        import core.policy.approvals as approvals
+        self.assertEqual(tuple(sorted(review.TEST_TRACE_PREFIXES)), chuan,
+                         "`core/events/review` lệch danh sách nhãn bộ đo")
+        self.assertEqual(tuple(sorted(approvals.TEST_TRACE_PREFIXES)), chuan,
+                         "`core/policy/approvals` lệch danh sách nhãn bộ đo")
 
 
 class TestRedaction(unittest.TestCase):

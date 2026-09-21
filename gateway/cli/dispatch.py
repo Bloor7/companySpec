@@ -55,13 +55,15 @@ from core.contracts import (  # noqa: E402
 )
 import core.secrets as coreSecrets  # noqa: E402
 from core.secrets import SecretLease  # noqa: E402
-from core.policy import decide as decidePolicy  # noqa: E402
+from core.policy import S3_VI_SAO, decide as decidePolicy  # noqa: E402
 from core.policy.autonomy import (  # noqa: E402
     earnedAutonomy, recordFromAuditRows,
 )
 from core.execution import ProcessLimits, runCompanyProcess  # noqa: E402
 from core.verification import verifyCompanyCall  # noqa: E402
-from core.permissions import EmployeeManifestError, loadEmployees  # noqa: E402
+from core.permissions import (  # noqa: E402
+    EmployeeManifestError, loadEmployeeById, loadEmployees,
+)
 import core.audit as coreAudit  # noqa: E402
 
 LOOP_GUARD_MAX = 2  # L4 — cùng dấu vân tay quá số này trong một trace là chặn
@@ -81,6 +83,12 @@ def _capPhieuSecret(companyId: str, capability: str, declared: tuple,
     kêu ra stderr và lùi về danh sách manifest, tức là quay đúng về cách hệ
     chạy trước khi có broker: không mất an toàn, chỉ mất sổ tra.
     """
+    # Company không khai secret nào thì không có gì để cấp — đừng mở sổ.
+    # Đo 21/09: `openStore()` tốn 0,129 ms và `todoCompany` (không khai secret)
+    # vẫn mở `core/secretLease.sqlite` mỗi lời gọi.
+    if not declared:
+        return ()
+
     try:
         conn = coreSecrets.openStore()
     except Exception as exc:
@@ -507,6 +515,27 @@ def cmd_call(args) -> dict:
     # `assert` thay vì phải dựng một lượt chạy thật.
     capabilityObject = Capability.fromManifest(args.company, cap,
                                                companyResource=spec.get("resource"))
+    # ═══ `identity` NÓI AI PHÁT RA VIỆC, KHÔNG NÓI AI ĐỨNG TÊN ═══
+    #
+    # ⚠ Đừng bao giờ ghi đè biến này ở dưới. Ngày 21/09 nó từng bị gán
+    # `IssuedBy.employee` mỗi khi cổng employee cho qua — và vì mặc định
+    # `employeeId` nay LUÔN có, phép gán ấy chạy cho MỌI lời gọi. Hệ quả:
+    # `core/policy._ruleScheduledTriggerIsReadOnly` mở đầu bằng
+    #
+    #     if request.identity is not IssuedBy.scheduledTrigger: return None
+    #
+    # nên **S3 không bao giờ chạy nữa**. Đo thật lúc đó: một lời gọi
+    # `--issued-by scheduledTrigger` GHI vào sổ chi tiêu đi lọt với
+    # `allowWithVerify · whitelist wl_…`. Nó chỉ không ghi được vì shell thiếu
+    # `NOTION_TOKEN` — tức là thoát nhờ MAY.
+    #
+    # Đúng thứ S3 sinh ra để cấm, và đúng thứ bảng bẫy đã viết: "whitelist
+    # KHÔNG nâng được S3". Ba ca thử vẫn xanh suốt, vì chữ "S3" lúc ấy do
+    # dispatcher tự ghép vào câu trả lời chứ không còn do Policy sinh ra —
+    # một hàng rào tắt điện mà đèn báo vẫn sáng.
+    #
+    # Ai đứng tên thì đã có `employeeId` và cột `taskLog.employeeId`. Hai câu
+    # hỏi khác nhau, hai chỗ trả lời khác nhau.
     identity = (IssuedBy.scheduledTrigger
                 if args.issued_by == "scheduledTrigger" else IssuedBy.ceo)
 
@@ -552,14 +581,16 @@ def cmd_call(args) -> dict:
     # MỘT hàng rào (luật trong Policy) thành HAI — luật, cộng một hồ sơ quyền
     # không có `modify` để mà dùng.
     #
-    # ⚠ NGOẠI LỆ CÓ THẬT: phiếu hẹn admin ký sẵn cho phép cron GHI (S3 chừa
-    # đúng khe đó). Cổng employee chạy TRƯỚC Policy và không nhìn thấy phiếu,
-    # nên nếu để `scheduler` đứng tên thì nó chặn mất cửa thoát ấy — một hàng
-    # rào vô tình gỡ một cơ chế đã thiết kế. Có phiếu thì người đứng tên là
-    # `ceo`: chữ ký là của admin, và phiếu ấy sinh ra từ một cuộc nói chuyện
-    # với CEO.
+    # ⚠ Cron có phiếu hẹn thì VẪN đứng tên `scheduler`. Bản đầu cho nó mượn
+    # tên `ceo` để lách cổng employee — nhưng sổ sinh ra để trả lời "AI LÀM",
+    # và mượn tên là ghi một câu trả lời SAI. Vô danh thì còn biết là chưa
+    # biết; một cái tên sai thì `travis why` nói "CEO làm" cho việc chạy lúc
+    # 3 giờ sáng.
+    #
+    # Cửa thoát của phiếu hẹn được mở ở ĐÚNG CHỖ nó thuộc về — cổng employee,
+    # ngay dưới — chứ không bằng cách đổi tên người gọi.
     employeeId = getattr(args, "employee", None) or (
-        "ceo" if (args.issued_by == "ceo" or hen_ok) else "scheduler")
+        "ceo" if args.issued_by == "ceo" else "scheduler")
 
     # Môi trường của lời gọi. Mặc định `dev` — việc thường ngày. Chạm
     # production là chuyện phải KHAI RA, không phải chuyện rơi vào mặc định.
@@ -570,15 +601,22 @@ def cmd_call(args) -> dict:
             f"`--environment {args.environment}` không hợp lệ. Chỉ có: "
             + ", ".join(e.value for e in Environment))
     if employeeId:
+        # Nạp ĐÚNG MỘT hồ sơ. Đo 21/09: `loadEmployees()` đọc + parse cả 7
+        # file (22,18 ms) khi chỉ cần một (3,99 ms) — ~12% thời gian của cả
+        # tiến trình dispatch, và mỗi lời gọi là một tiến trình MỚI. Cron gọi
+        # ~5.000 lần mỗi ba tuần, tức ~31.800 lượt đọc thừa chắc chắn.
+        #
+        # Nạp cả thư mục chỉ ở nhánh LỖI, nơi thật sự cần liệt kê "Có: ...".
         try:
-            employees = loadEmployees()
+            employee = loadEmployeeById(employeeId)
         except EmployeeManifestError as exc:
             return bail(f"Hồ sơ employee hỏng: {exc}")
-        employee = employees.get(employeeId)
         if employee is None:
-            return bail(
-                f"Không có employee `{employeeId}`. Có: "
-                f"{', '.join(sorted(employees)) or '(chưa ai)'}")
+            try:
+                co = ", ".join(sorted(loadEmployees())) or "(chưa ai)"
+            except EmployeeManifestError as exc:
+                co = f"(không liệt kê được: {exc})"
+            return bail(f"Không có employee `{employeeId}`. Có: {co}")
         resource, action = capabilityObject.touches
 
         # ═══ MÔI TRƯỜNG PHẢI ĐƯỢC ĐƯA VÀO, KHÔNG ĐƯỢC BỎ TRỐNG ═══
@@ -599,8 +637,14 @@ def cmd_call(args) -> dict:
         # Mặc định `dev` khớp với `PolicyRequest.environment` và với sự thật:
         # mọi lời gọi hôm nay đều là việc thường ngày, không phải deploy.
         # Muốn chạm production thì phải NÓI RA bằng `--environment`.
-        if not employee.mayDo(resource, action, environment=moiTruong):
-            identity = IssuedBy.employee
+        # Phiếu hẹn admin ĐÃ KÝ là chữ ký cho ĐÚNG MỘT nội dung, dùng một lần,
+        # khoá bằng `payloadHash`. Lúc ấy kẻ hành động thật sự là admin, nên
+        # cổng employee — vốn hỏi "loại actor này có được làm loại việc này
+        # không" — không phải câu hỏi đúng nữa. Policy vẫn soát đủ: S3 chừa khe
+        # cho phiếu, và phiếu vẫn phải `consume()` được.
+        if hen_ok:
+            pass
+        elif not employee.mayDo(resource, action, environment=moiTruong):
             lastPolicy[0], lastPolicy[1] = "deny", (
                 f"`{employeeId}` không có quyền {resource.value}.{action.value}")
             # ═══ CHẶN SỚM HƠN KHÔNG ĐƯỢC LÀM MẤT LÝ DO THẬT ═══
@@ -618,10 +662,9 @@ def cmd_call(args) -> dict:
             # cổng vào CŨNG là một quyết định, và phải ghi như một quyết định".
             vi_sao_cron = ""
             if args.issued_by == "scheduledTrigger":
-                vi_sao_cron = (
-                    " S3 — việc định kỳ chỉ được phép ĐỌC. Cron quan sát và "
-                    "chuẩn bị; muốn hành động thì chờ admin, hoặc dùng phiếu "
-                    "hẹn admin đã ký trước.")
+                # Câu chữ LẤY TỪ `core/policy`, không gõ lại — xem `S3_VI_SAO`.
+                vi_sao_cron = (" S3 — việc định kỳ chỉ được phép ĐỌC. "
+                               + S3_VI_SAO)
             return bail(
                 f"`{employeeId}` không được phép "
                 f"{resource.value}.{action.value} — nên không gọi được "
@@ -631,7 +674,6 @@ def cmd_call(args) -> dict:
                    else "Không khai quyền này = không có (PM-1).")
                 + vi_sao_cron,
                 status="denied")
-        identity = IssuedBy.employee
 
     # ─── TRA sự thật: mức tự chủ năng lực này ĐÃ KIẾM ĐƯỢC ───
     #

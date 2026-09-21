@@ -216,28 +216,71 @@ class TestCronHasAnIdentityToo(unittest.TestCase):
                     f"cron làm được {resource.value}.{action.value} — S3 mất "
                     "lớp phòng thủ thứ hai")
 
-    def testSignedScheduleIsNotBlockedByTheEmployeeGate(self):
-        """⚠ NGOẠI LỆ CÓ THẬT, và nó dễ bị một hàng rào mới vô tình gỡ mất.
+    def testS3StillStopsCronFromWriting(self):
+        """⚠ CA NÀY CANH MỘT LỖ HỔNG ĐÃ TỪNG MỞ THẬT.
 
-        Phiếu hẹn admin ký sẵn cho phép cron GHI — S3 chừa đúng khe đó, khoá
-        vào một nội dung, dùng một lần. Nhưng cổng employee chạy TRƯỚC Policy
-        và KHÔNG nhìn thấy phiếu. Nếu `scheduler` (chỉ đọc) đứng tên mọi lời
-        gọi định kỳ thì nó chặn luôn cả khe ấy.
+        Ngày 21/09, khi cron có danh tính, dispatcher gán
+        `identity = IssuedBy.employee` mỗi lần cổng employee cho qua. Vì mặc
+        định `employeeId` nay LUÔN có, phép gán ấy chạy cho MỌI lời gọi — và
+        `core/policy._ruleScheduledTriggerIsReadOnly` mở đầu bằng
+        `if request.identity is not IssuedBy.scheduledTrigger: return None`.
 
-        Nên `dispatch` cho `ceo` đứng tên khi có phiếu. Ca này đọc thẳng mã để
-        chắc luật đó còn nguyên — nếu ai đó "dọn cho gọn" thành `scheduler`
-        cho mọi trường hợp thì cơ chế hẹn giờ chết lặng lẽ.
+        Nên **S3 tắt điện**. Đo thật lúc đó: một lời gọi
+        `--issued-by scheduledTrigger` GHI vào sổ chi tiêu đi lọt với
+        `allowWithVerify · whitelist wl_…`. Nó chỉ không ghi được vì shell
+        thiếu `NOTION_TOKEN` — thoát nhờ MAY.
+
+        Ba ca thử vẫn xanh suốt, vì chữ "S3" lúc ấy do dispatcher tự ghép vào
+        câu trả lời chứ không còn do Policy sinh ra: một hàng rào tắt điện mà
+        đèn báo vẫn sáng.
+
+        Nên ca này KHÔNG đọc mã nguồn. Nó gọi dispatcher THẬT với một employee
+        CÓ quyền ghi, và đòi Policy nói không.
         """
-        with open(os.path.join(REPO_ROOT, "gateway", "cli", "dispatch.py"),
-                  encoding="utf-8") as fh:
-            nguon = fh.read()
-        viTri = nguon.find("employeeId = getattr(args,")
-        self.assertGreater(viTri, 0, "không tìm thấy chỗ chọn employee")
-        doan = nguon[viTri:viTri + 200]
-        self.assertIn("hen_ok", doan,
-                      "chỗ chọn employee KHÔNG xét phiếu hẹn — lời gọi mang "
-                      "chữ ký của admin sẽ bị `scheduler` chặn mất")
-        self.assertIn("scheduler", doan)
+        import json
+        import subprocess
+        trace = f"reg_s3guard_{os.getpid()}"
+        proc = subprocess.run(
+            [sys.executable,
+             os.path.join(REPO_ROOT, "gateway", "cli", "dispatch.py"), "call",
+             # Company NỘI BỘ, không phải sổ chi tiêu thật. Nếu S3 vỡ lần
+             # nữa thì ca thử này sẽ CHẠY THẬT lời gọi ghi — và nó phải chạy
+             # vào sqlite của chính company giả, không vào Notion của admin.
+             # Một ca thử canh lỗ hổng mà tự rơi qua lỗ hổng ấy là ca thử
+             # đắt nhất có thể viết.
+             "--company", "travisSelfTestCompany",
+             "--capability", "recordWrite",
+             "--input", json.dumps({"label": "alpha", "value": "canh S3"}),
+             "--trace", trace,
+             "--issued-by", "scheduledTrigger", "--allow-internal",
+             # `ceo` CÓ `database.modify`, nên cổng employee sẽ cho qua và
+             # câu trả lời phải đến từ Policy. Đi bằng `scheduler` thì cổng
+             # employee chặn trước và ca này đo nhầm tầng.
+             "--employee", "ceo"],
+            capture_output=True, text=True, cwd=REPO_ROOT, timeout=120)
+        ketQua = json.loads(proc.stdout)
+
+        self.assertEqual(
+            ketQua["status"], "rejected",
+            "cron GHI được khi đi bằng một employee có quyền — S3 đã tắt "
+            f"điện. Nhận về: {ketQua.get('summary', '')[:160]}")
+        self.assertIn("S3", ketQua.get("summary", ""))
+
+        # Và lý do phải vào SỔ, không chỉ vào câu trả lời — §30 hỏi "vì sao".
+        import core.audit as coreAudit
+        conn = coreAudit.openStore()
+        try:
+            row = conn.execute(
+                "SELECT policyDecision, policyReason FROM taskLog "
+                "WHERE traceId = ?", (trace,)).fetchone()
+            self.assertTrue(row, "lời gọi bị chặn mà không để lại dòng nào")
+            self.assertEqual(row["policyDecision"], "deny")
+            self.assertIn("S3", row["policyReason"] or "",
+                          "sổ không nói được vì sao cron bị cấm")
+            conn.execute("DELETE FROM taskLog WHERE traceId = ?", (trace,))
+            conn.commit()
+        finally:
+            conn.close()
 
 
 class TestTheHardLimitsHold(unittest.TestCase):

@@ -13,6 +13,7 @@ import glob
 import os
 
 import yaml
+from typing import Optional
 
 from ..contracts import (
     ActionKind, DataClassification, Employee, Environment, Permission,
@@ -39,9 +40,37 @@ def loadEmployees(directory: str = EMPLOYEES_DIR) -> dict:
     return employees
 
 
+#: Parser YAML bằng C khi có. Đo 21/09 trên 7 hồ sơ, 50 vòng:
+#: `SafeLoader` thuần Python 21,57 ms · `CSafeLoader` 1,55 ms — **nhanh 14 lần**.
+#:
+#: Con số ấy chỉ quan trọng từ khi cổng employee chạy cho MỌI lời gọi: mỗi lời
+#: gọi là một tiến trình Python MỚI, và cron gọi ~5.000 lần mỗi ba tuần.
+#: `getattr` chứ không `import` thẳng: PyYAML biên dịch thiếu libyaml thì
+#: không có `CSafeLoader`, và ở đó lùi về bản thuần Python là đúng.
+_YAML_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+
+
+def loadEmployeeById(employeeId: str,
+                     directory: str = EMPLOYEES_DIR) -> Optional[Employee]:
+    """Nạp ĐÚNG MỘT hồ sơ. Trả None khi không có — người gọi tự nói câu lỗi.
+
+    Đo 21/09: `loadEmployees()` đọc + parse cả 7 file (22,18 ms) trong khi
+    dispatcher chỉ dùng đúng một (`employees.get(employeeId)`). Với ~5.000 lời
+    gọi cron mỗi ba tuần, đó là **31.824 lượt đọc thừa chắc chắn** — 6 hồ sơ
+    không ai hỏi tới, mỗi lời gọi.
+
+    Nạp cả thư mục vẫn đúng chỗ khi cần LIỆT KÊ (`travis employees`, hoặc câu
+    lỗi "Có: ..."), nên `loadEmployees` giữ nguyên.
+    """
+    path = os.path.join(directory, employeeId, "employee.yaml")
+    if not os.path.isfile(path):
+        return None
+    return loadEmployee(path)
+
+
 def loadEmployee(path: str) -> Employee:
     with open(path, encoding="utf-8") as fh:
-        raw = yaml.safe_load(fh) or {}
+        raw = yaml.load(fh, Loader=_YAML_LOADER) or {}
 
     employeeId = raw.get("employeeId")
     if not employeeId:
@@ -74,7 +103,7 @@ def maxDataClassificationOf(path: str) -> DataClassification:
     TUYẾN (brain nào được nhận), không phải thuộc tính của con người.
     """
     with open(path, encoding="utf-8") as fh:
-        raw = yaml.safe_load(fh) or {}
+        raw = yaml.load(fh, Loader=_YAML_LOADER) or {}
     value = raw.get("maxDataClassification", "internal")
     try:
         return DataClassification(value)

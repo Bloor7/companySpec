@@ -368,7 +368,36 @@ def whitelist_match(company_id, capability, inp, cap_spec):
     return None
 
 
+#: Tiền tố trace của BỘ ĐO. Cùng danh sách với `core.audit.TEST_TRACE_PREFIXES`
+#: — import về thì `core.policy` phụ thuộc `core.audit` chỉ vì một hằng, nên
+#: giữ bản riêng; ca `testCouncilSecretIsolation` ép các bản khớp nhau.
+TEST_TRACE_PREFIXES = ("reg_", "evl_", "e2e_", "demo_", "drl_")
+
+
 def whitelist_add(company_id, capability, inp, cap_spec, approval_id):
+    """Biến một chữ ký MỘT LẦN thành quyền ĐỨNG. Đây là cửa duy nhất.
+
+    ═══ PHIẾU CỦA BỘ ĐO KHÔNG BAO GIỜ ĐẺ RA QUYỀN THƯỜNG TRỰC ═══
+
+    Đo 21/09: `travisDemo.py` đi qua cổng duyệt thật (đúng thiết kế) nhưng
+    không dọn phiếu. Một thẻ demo hiện lên Telegram, admin bấm "luôn cho
+    phép", và một bản trình diễn tự cấp cho mình quyền đứng
+    `wl_7f5e254bdf53c200` cho `travisSelfTestCompany.recordWrite`.
+
+    Bản vá đầu là bắt từng bộ đo tự dọn thẻ. Nhưng phòng tuyến ấy nằm ở BA
+    nơi, mỗi nơi phải tự nhớ gọi — và một nơi đã quên trên nhánh thoát sớm.
+    Cửa thật thì chỉ có MỘT, và nó ở đây.
+
+    Chặn ở đây phủ luôn: lượt bị Ctrl-C, bộ đo thứ tư chưa ai viết, và mọi
+    lần quên dọn về sau. Cùng lý lẽ với "chặn ở CỬA VÀO, đừng dọn ở cửa ra".
+    """
+    phieu = get(approval_id) if approval_id else None
+    if phieu and str(phieu["traceId"] or "").startswith(TEST_TRACE_PREFIXES):
+        return None, ("phiếu này do BỘ ĐO sinh ra "
+                      f"(trace `{phieu['traceId']}`) — nó chạy được một lần, "
+                      "nhưng không cấp được quyền thường trực. Việc thật thì "
+                      "bấm lại trên thẻ thật.")
+
     cfg = config()["whitelist"]
     fields = cap_spec.get("whitelistScope")
     if not fields:
@@ -398,6 +427,32 @@ def whitelist_add(company_id, capability, inp, cap_spec, approval_id):
     with open(WHITELIST, "a", encoding="utf-8") as fh:
         fh.write(json.dumps(rule, ensure_ascii=False) + "\n")
     return rule, None
+
+
+def xoa_phieu_theo_trace(mau: str) -> int:
+    """Xoá phiếu duyệt theo mẫu traceId. Trả về số dòng đã xoá.
+
+    Một bản duy nhất, trong module SỞ HỮU bảng `approvalRequest`. Trước 21/09
+    cùng câu SQL này có BỐN thân — `travisDemo`, `tests/drills`,
+    `testPolicyParity`, `testPolicyBehaviour` — và chúng đã lệch nhau rồi:
+    hai bản trả `rowcount`, hai bản trả `None`; hai bản khoá theo token của
+    lượt chạy, hai bản xoá cả những lượt song song.
+
+    Đi qua `store()` nên có WAL + `busy_timeout` của `lib/db` — chạy demo lúc
+    scheduler đang ghi thì không dính "database is locked", đúng sự cố
+    2026-08-04 mà `lib/db.py` dựng ra để chặn.
+
+    ⚠ `mau` là mẫu LIKE do người gọi dựng. Luôn kèm token của LƯỢT CHẠY, đừng
+    xoá cả một tiền tố: dấu vết của lượt khác có thể đang được ai đó đọc.
+    """
+    conn = store()
+    try:
+        n = conn.execute("DELETE FROM approvalRequest WHERE traceId LIKE ?",
+                         (mau,)).rowcount
+        conn.commit()
+        return n
+    finally:
+        conn.close()
 
 
 def whitelist_revoke(rule_id: str):

@@ -26,12 +26,22 @@ import approvals  # noqa: E402
 COMPANY = "travisSelfTestCompany"
 RUN = uuid.uuid4().hex[:6]
 
+#: Nhãn trace của bản trình diễn — LẤY TỪ danh sách chung, không gõ lại.
+#: Cùng luật với `tests/drills/run.py`: bộ đo nào phát minh một nhãn mà quên
+#: đăng ký thì mọi thứ nó đẻ ra bị đếm như việc THẬT.
+sys.path.insert(0, ROOT)
+from core.audit import TEST_TRACE_PREFIXES  # noqa: E402
+
+DEMO_PREFIX = "demo_"
+assert DEMO_PREFIX in TEST_TRACE_PREFIXES, (
+    f"`{DEMO_PREFIX}` chưa có trong core.audit.TEST_TRACE_PREFIXES")
+
 
 def call(capability: str, payload: dict, *extra, label: str = "") -> dict:
     argv = [sys.executable, os.path.join(ROOT, "gateway", "cli", "dispatch.py"), "call",
             "--company", COMPANY, "--capability", capability,
             "--input", json.dumps(payload, ensure_ascii=False),
-            "--trace", f"demo_{RUN}_{label or capability}",
+            "--trace", f"{DEMO_PREFIX}{RUN}_{label or capability}",
             "--allow-internal", *extra]
     proc = subprocess.run(argv, capture_output=True, text=True, cwd=ROOT,
                           timeout=120)
@@ -113,9 +123,6 @@ def main() -> int:
     print("\n  Mọi thứ trên đi qua ĐÚNG dispatcher thật, ĐÚNG sổ thật, ĐÚNG")
     print("  cổng duyệt thật — không có cờ nào chỉ dành cho bản trình diễn.")
 
-    da_don = don_dep()
-    if da_don:
-        print(f"  Đã dọn {da_don} phiếu duyệt do bản trình diễn này đẻ ra.")
     return 0
 
 
@@ -144,18 +151,21 @@ def don_dep() -> int:
     ⚠ Chỉ xoá đúng nhãn + token CỦA LƯỢT NÀY. Xoá mọi dòng `demo_` là xoá cả
     dấu vết của những lượt trước mà ai đó có thể đang đọc.
     """
-    conn = approvals.db_conn() if hasattr(approvals, "db_conn") else None
-    import sqlite3
-    conn = conn or sqlite3.connect(
-        os.path.join(ROOT, "backOffice", "store.sqlite"))
-    try:
-        n = conn.execute("DELETE FROM approvalRequest WHERE traceId LIKE ?",
-                         (f"demo_{RUN}_%",)).rowcount
-        conn.commit()
-        return n
-    finally:
-        conn.close()
+    return approvals.xoa_phieu_theo_trace(f"{DEMO_PREFIX}{RUN}_%")
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # `finally` chứ không phải dòng cuối của `main()`: `main` có một nhánh
+    # thoát SỚM ("đã có whitelist khớp") — và đó đúng là lượt chạy đáng dọn
+    # nhất, vì nó xảy ra ngay sau khi một quyền đứng vừa được cấp. Một cú
+    # Ctrl-C hay một `json.loads` vỡ giữa chừng cũng để phiếu nằm lại.
+    #
+    # Dọn dẹp chỉ nằm trên nhánh ĐẸP thì nó không phải dọn dẹp.
+    try:
+        _ma = main()
+    finally:
+        _daDon = don_dep()
+        if _daDon:
+            print(f"\n  Đã dọn {_daDon} phiếu duyệt do bản trình diễn này "
+                  "đẻ ra.")
+    sys.exit(_ma)

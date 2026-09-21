@@ -54,3 +54,4 @@
 {"ruleId": "wl_f8e42956a589ead2", "companyId": "xuongCompany", "capability": "xongViec", "scope": {"trangThai": "bo"}, "maxPerDay": 20, "expiresAt": "2026-12-19T23:09:22Z", "createdFromApprovalId": "apr_4f175bd493b8d08b", "createdAt": "2026-09-20T23:09:22Z"}
 {"ruleId": "wl_a373d52e3f50b3a8", "companyId": "xuongCompany", "capability": "xongViec", "scope": {"trangThai": "bo"}, "maxPerDay": 20, "expiresAt": "2026-12-19T23:09:31Z", "createdFromApprovalId": "apr_85085caeed1bf091", "createdAt": "2026-09-20T23:09:31Z"}
 {"ruleId": "wl_594f8715ddd5c3d2", "companyId": "xuongCompany", "capability": "xongViec", "scope": {"trangThai": "bo"}, "maxPerDay": 20, "expiresAt": "2026-12-19T23:09:41Z", "createdFromApprovalId": "apr_8b58a7b9adcf9215", "createdAt": "2026-09-20T23:09:41Z"}
+{"revoke": "wl_7f5e254bdf53c200", "revokedAt": "2026-09-21T00:09:52Z"}

@@ -51,11 +51,11 @@ def tearDownModule():
     path = os.path.join(REPO_ROOT, "backOffice", "store.sqlite")
     if not os.path.exists(path):
         return
-    conn = sqlite3.connect(path)
-    conn.execute("DELETE FROM approvalRequest WHERE traceId LIKE ?",
-                 (TRACE_PREFIX + "%",))
-    conn.commit()
-    conn.close()
+    # Phép xoá sống ở module SỞ HỮU bảng — một bản duy nhất, và nó đi qua
+    # `lib/db` (WAL + busy_timeout) nên không dính "database is locked".
+    sys.path.insert(0, os.path.join(REPO_ROOT, "core", "policy"))
+    import approvals
+    approvals.xoa_phieu_theo_trace(TRACE_PREFIX + "%")
 
 
 class TestInputGate(unittest.TestCase):

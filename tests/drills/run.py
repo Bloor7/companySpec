@@ -162,14 +162,16 @@ def dong_so(task_id: str) -> dict:
 
 
 def don_dep():
-    """Xoá dấu vết của LƯỢT CHẠY NÀY. Chỉ nhãn `drl_` + token của lượt."""
-    conn = sqlite3.connect(STORE)
-    try:
-        conn.execute("DELETE FROM approvalRequest WHERE traceId LIKE ?",
-                     (f"{TRACE_PREFIX}{RUN_TOKEN}%",))
-        conn.commit()
-    finally:
-        conn.close()
+    """Xoá dấu vết của LƯỢT CHẠY NÀY. Chỉ nhãn `drl_` + token của lượt.
+
+    Phép xoá sống ở module SỞ HỮU bảng (`core.policy.approvals`). Trước 21/09
+    cùng câu SQL có BỐN thân, và chúng đã lệch nhau rồi: hai bản trả
+    `rowcount`, hai bản trả `None`; hai bản khoá theo token của lượt chạy,
+    hai bản xoá cả những lượt song song.
+    """
+    sys.path.insert(0, os.path.join(REPO_ROOT, "core", "policy"))
+    import approvals
+    return approvals.xoa_phieu_theo_trace(f"{TRACE_PREFIX}{RUN_TOKEN}%")
 
 
 # ══════════════════════════ BÀI 1 ══════════════════════════
@@ -338,14 +340,26 @@ def bai_viec_nguy_hiem() -> KetQua:
     kq.doi(chan, "guard — CEO không chạy được lệnh Bash ngoài dispatcher",
            (proc.stdout or proc.stderr).strip()[:140])
 
-    # Và một việc GHI bình thường thì KHÔNG bị chặn — nó chỉ phải HỎI.
-    # Không có bước này thì một hệ chặn sạch mọi thứ cũng "đạt" bài kiểm.
-    res = goi_dispatch("expenseCompany", "addExpense",
-                       {"soTien": 1000, "danhMuc": "khác", "ghiChu": "diễn tập"},
-                       hau_to="_hoi")
-    kq.doi(res.get("status") == "needsApproval",
-           "đối chứng: việc GHI hợp lệ thì HỎI, không phải chặn",
-           str(res.get("summary"))[:100])
+    # ĐỐI CHỨNG — không có bước này thì một hệ chặn sạch mọi thứ cũng "đạt".
+    #
+    # ⚠ Bản đầu trỏ vào `expenseCompany.addExpense` với `danhMuc: "khác"` —
+    # tức là SỔ CHI TIÊU THẬT của admin. Ngày 21/09 nó tự chạy thật: sang
+    # ngày mới, trần whitelist 20/ngày reset, quyền đứng khớp, và lời gọi đi
+    # thẳng. Nó chỉ không ghi được vì shell thiếu `NOTION_TOKEN` — thoát nhờ
+    # MAY, đúng dòng "ca thử tự chạy thật việc GHI" trong bảng bẫy.
+    #
+    # Nay dùng company NỘI BỘ: tác động tối đa là một dòng trong sqlite của
+    # chính nó, không Notion, không ví.
+    #
+    # Và đòi "KHÔNG bị chặn" chứ không đòi đúng `needsApproval`: một quyền
+    # đứng admin đã cấp cũng là một câu "không chặn" hợp lệ. Trói vào một mã
+    # duy nhất là để bài diễn tập đỏ mỗi khi admin bấm "luôn cho phép".
+    res = goi_dispatch("travisSelfTestCompany", "recordWriteAuto",
+                       {"label": "beta", "value": "đối chứng diễn tập"},
+                       "--allow-internal", hau_to="_hoi")
+    kq.doi(res.get("status") not in ("rejected", "denied"),
+           "đối chứng: việc GHI hợp lệ KHÔNG bị chặn",
+           f"{res.get('status')} · {str(res.get('summary'))[:80]}")
     return kq
 
 
