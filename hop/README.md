@@ -170,10 +170,12 @@ trước Ubuntu ba giây, systemd 249 của Ubuntu chết `219/CGROUP`, và cả
 không có poller, không cron, không hẹn giờ — dù terminal mở suốt. Hôm trước
 Ubuntu tới trước nên chạy được: một cuộc đua, không phải một cấu hình.
 
-Sửa một lần, chạy từ Windows (thợ đang làm dở thì đợi xong):
+Sửa một lần, chạy từ Windows (thợ đang làm dở thì đợi xong, và ĐÓNG mọi tab
+terminal openclaw — một phiên `-bash` của `hop` còn mở là `usermod` từ chối
+"user hop is currently used by process", đã dính lần chạy đầu 26/09):
 
 ```powershell
-wsl -d openclaw -u root -- sh -c "loginctl disable-linger hop; systemctl stop user@1000; pkill -u hop; sleep 1; usermod -u 2000 hop && groupmod -g 2000 hop && chown -R hop:hop /home/hop && loginctl enable-linger hop"
+wsl -d openclaw -u root -- sh -c "loginctl disable-linger hop; loginctl terminate-user hop; systemctl stop user@1000; pkill -9 -u hop; sleep 2; usermod -u 2000 hop && groupmod -g 2000 hop && chown -R hop:hop /home/hop; loginctl enable-linger hop; id hop"
 wsl -d Ubuntu-22.04 -u root -- systemctl restart user@1000   # dừng user@1000 bên hộp có thể giết cgroup chung
 python ops/soatHop.py                                        # phải in "uid tách nhau"
 ```
