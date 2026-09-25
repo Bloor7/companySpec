@@ -312,6 +312,29 @@ def do_actions(actions: list, da_tra_loi_bam: bool = False, chat_id=None):
             log("action lạ:", kind)
 
 
+def _bao_tin_bo_qua(bo_qua: list) -> str:
+    """Câu báo tin bị bỏ lúc khởi động — DẪN LẠI từng tin, không chỉ đếm.
+
+    Bản cũ chỉ nói "có 2 tin cũ em không đọc nữa". Ngày 2026-09-25 hệ chết cả
+    ngày (user manager của WSL không lên được), admin nhắn hai lần vào khoảng
+    trống ấy, rồi nửa đêm nhận về một con số — phải tự nhớ lại mình đã hỏi gì.
+    Dẫn giờ và vài chục ký tự đầu thì admin biết ngay tin nào còn cần.
+    """
+    dong = []
+    for upd in bo_qua[:5]:
+        m = upd.get("message") or {}
+        if not m:
+            dong.append("· (một lần bấm nút)")
+            continue
+        chu = (m.get("text") or m.get("caption") or "(tệp/ảnh)").replace("\n", " ")
+        gio = time.strftime("%H:%M %d/%m", time.localtime(m.get("date") or 0))
+        dong.append(f"· {gio}: {chu[:80]}{'…' if len(chu) > 80 else ''}")
+    if len(bo_qua) > 5:
+        dong.append(f"· …và {len(bo_qua) - 5} tin nữa")
+    return (f"Em vừa khởi động lại. Có {len(bo_qua)} tin cũ em không xử lý nữa — "
+            "đại ca nhắn lại giúp em tin nào còn cần:\n" + "\n".join(dong))
+
+
 def main() -> int:
     if not TOKEN:
         log("Thiếu TELEGRAM_BOT_TOKEN trong ops/.env — chạy lại: bash ops/setup-bot.sh")
@@ -354,9 +377,7 @@ def main() -> int:
 
     if bo_qua_cu:
         log(f"bỏ qua {len(bo_qua_cu)} tin cũ hơn {NHAN_LAI_PHUT} phút")
-        telegram.send_message(
-            ADMIN, f"Em vừa khởi động lại. Có {len(bo_qua_cu)} tin nhắn cũ em "
-                   "không đọc nữa — đại ca nhắn lại giúp em nếu còn cần.")
+        telegram.send_message(ADMIN, _bao_tin_bo_qua(bo_qua_cu))
     log(f"sẵn sàng, đang chờ tin nhắn… ({len(ton_dong)} tin vừa gửi sẽ xử lý ngay)"
         if ton_dong else "sẵn sàng, đang chờ tin nhắn…")
 

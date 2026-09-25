@@ -161,6 +161,23 @@ Ba lý do đi thẳng company thay vì qua CEO, xếp theo sức nặng: **rẻ*
 CEO tốn hạn mức gói Pro — thứ đang là nút thắt), **chắc** (việc đã biết trước
 cách làm thì viết thẳng), **rõ** (thực đơn đếm được).
 
+## `hop` KHÔNG được mang uid 1000
+
+Các distro WSL2 chạy chung một máy ảo, nên chung **một cây cgroup**. `tsix`
+(Ubuntu) và `hop` cùng uid 1000 thì cùng tranh
+`/user.slice/user-1000.slice/user@1000.service`. Ngày 25/09/2026 hộp dựng
+trước Ubuntu ba giây, systemd 249 của Ubuntu chết `219/CGROUP`, và cả ngày
+không có poller, không cron, không hẹn giờ — dù terminal mở suốt. Hôm trước
+Ubuntu tới trước nên chạy được: một cuộc đua, không phải một cấu hình.
+
+Sửa một lần, chạy từ Windows (thợ đang làm dở thì đợi xong):
+
+```powershell
+wsl -d openclaw -u root -- sh -c "loginctl disable-linger hop; systemctl stop user@1000; pkill -u hop; sleep 1; usermod -u 2000 hop && groupmod -g 2000 hop && chown -R hop:hop /home/hop && loginctl enable-linger hop"
+wsl -d Ubuntu-22.04 -u root -- systemctl restart user@1000   # dừng user@1000 bên hộp có thể giết cgroup chung
+python ops/soatHop.py                                        # phải in "uid tách nhau"
+```
+
 ## Cách kiểm
 
 ```bash

@@ -78,6 +78,40 @@ def _wsl(*lenh) -> "_KetQuaWsl":
         capture_output=True, timeout=120))
 
 
+#: Distro chạy hệ chính. Chỉ dùng để so uid — soát không đọc gì khác ở đó.
+DISTRO_CHINH = "Ubuntu-22.04"
+
+
+def _soat_uid() -> int:
+    """Hai distro có dùng CHUNG một uid không? Trả số chỗ lệch (0 hoặc 1).
+
+    Ngày 2026-09-25 hệ chết trọn một ngày dù terminal mở suốt: các distro WSL2
+    chạy chung một máy ảo nên dùng chung MỘT cây cgroup, và `tsix` (Ubuntu) với
+    `hop` (hộp) cùng mang uid 1000 → cùng tranh `/user.slice/user-1000.slice/
+    user@1000.service`. Hộp dựng lúc 07:14:14, Ubuntu tới lúc 07:14:17, chậm
+    ba giây: systemd 249 của Ubuntu chết `219/CGROUP` → không poller, không
+    cron, không hẹn giờ. Hôm trước Ubuntu tới trước nên chạy được — tức là một
+    cuộc đua, thắng thua do may.
+    """
+    uid = {}
+    for distro in (DISTRO_CHINH, DISTRO):
+        kq = _KetQuaWsl(subprocess.run(["wsl.exe", "-d", distro, "--", "id", "-u"],
+                                       capture_output=True, timeout=60))
+        uid[distro] = kq.stdout.strip() if kq.returncode == 0 else None
+
+    if None in uid.values():
+        print(f"✗ không đọc được uid: {uid}")
+        return 1
+    if uid[DISTRO_CHINH] == uid[DISTRO]:
+        print(f"✗ {DISTRO_CHINH} và {DISTRO} CÙNG uid {uid[DISTRO]} — chung một "
+              f"cgroup user@{uid[DISTRO]}.service.")
+        print("    → distro nào bật sau có thể chết cả ngày (219/CGROUP). Đổi uid "
+              "của hộp: xem hop/README.md.")
+        return 1
+    print(f"✓ uid tách nhau: {DISTRO_CHINH}={uid[DISTRO_CHINH]} · {DISTRO}={uid[DISTRO]}")
+    return 0
+
+
 def _bam(noi_dung: bytes) -> str:
     return hashlib.sha256(noi_dung).hexdigest()[:12]
 
@@ -109,7 +143,7 @@ def main() -> int:
               file=sys.stderr)
         return 2
 
-    lech = 0
+    lech = _soat_uid()
     for trong_repo, trong_hop in DONG_BO:
         duong_dan = os.path.join(ROOT, trong_repo)
         with open(duong_dan, "rb") as fh:
