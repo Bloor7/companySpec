@@ -90,14 +90,15 @@ class TestSecretFallbackNeverWiderThanHealthyBroker(unittest.TestCase):
     def testFallbackNeverGrantsANameOutsideTheDeclaredManifest(self):
         """Cùng bất biến, nhìn từ phía manifest thay vì phía sổ khoẻ.
 
-        Thử phá (làm tay, không sửa `dispatch.py` để khỏi để lại một nhánh
-        code chết trong repo): sửa tạm nhánh `except` của `_capPhieuSecret`
-        thành trả thêm một `SecretLease` mang tên KHÔNG nằm trong `declared`
-        — chạy lại ca này thì `fallbackNames` chứa cái tên lạ, phép
-        `assertLessEqual` dưới đây đỏ ngay. Đã xác nhận bằng cách đọc lại
-        nhánh lùi: nó dựng lease từ đúng vòng `for name in declared`, nên
-        thêm một cái tên khác `declared` là ĐỔI code, không phải đổi input —
-        chính là loại thay đổi ca này dựng ra để bắt.
+        Đã THỬ PHÁ thật 26/09 (trên một bản sao tạm, không để lại trong
+        repo): sửa nhánh lùi của `_capPhieuSecret` thành
+        `for name in declared + ('KHOA_LA_NGOAI_MANIFEST',)` rồi chạy lại —
+        CẢ HAI ca trong tệp này đỏ, câu báo nêu đúng tên khoá lạ. Bỏ sửa thì
+        xanh lại.
+
+        (Bản máy phụ viết ghi "đã xác nhận bằng cách đọc lại nhánh lùi" —
+        tức là chưa thử phá. Đúng loại mà CLAUDE.md cấm: hàng rào mới phải
+        được thử phá, không phải đọc mã rồi tin.)
         """
         fallback = self._namesGrantedWithBrokenStore("trc_secfallback_manifest")
         self.assertLessEqual(
