@@ -113,6 +113,38 @@ def lay_khoa() -> str:
     return khoa
 
 
+def dong_bo_main() -> None:
+    """Kéo `main` của repo THẬT vào gương, ngay trước khi hộp fetch.
+
+    Đo 26/09: `main` của gương đứng ở commit 19/09 ("Cái hộp…") — một tuần và
+    hàng chục commit sau. Không có đường nào đẩy main sang gương cả: hook
+    `update` (đúng thiết kế) chặn mọi lần đẩy vào main, và không ai nhớ kéo
+    tay. Thợ vẫn `fetch origin main` mỗi việc, vẫn tạo nhánh, vẫn chạy test
+    xanh — trên mã cũ. Việc sửa lịch 24/09 (`y/y_29719f1c20`) làm trên nền ấy.
+    Cùng họ "vá trong repo, nhưng thứ ĐANG CHẠY nằm ở máy khác".
+
+    Đồng bộ ở đây vì đây là lúc DUY NHẤT nó quan trọng: ngay trước khi hộp
+    đọc. `fetch` vào kho bare KHÔNG chạy hook `update` — hook chỉ canh đường
+    push, nên hàng rào "hộp không ghi vào main" còn nguyên. Ép (`+`) vì chỉ
+    host được ghi main của gương; lệch là do gương cũ, không phải do ai sửa.
+
+    Hỏng thì kêu nhưng vẫn phục vụ (O8) — hộp lấy main cũ còn hơn không lấy
+    được gì, và dòng log nói rõ nó cũ.
+    """
+    kho = os.path.join(GUONG, "hop.git")
+    try:
+        proc = subprocess.run(
+            ["git", "-C", kho, "fetch", "--quiet", "--no-tags", ROOT,
+             "+refs/heads/main:refs/heads/main"],
+            capture_output=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        ghi(f"KHÔNG đồng bộ được main sang gương ({type(exc).__name__}) — hộp sẽ lấy main CŨ")
+        return
+    if proc.returncode != 0:
+        ghi("KHÔNG đồng bộ được main sang gương — hộp sẽ lấy main CŨ: "
+            + proc.stderr.decode("utf-8", "replace")[-300:])
+
+
 def ghi(*phan) -> None:
     """Nhật ký ra stderr — systemd gom hộ, không đẻ thêm một cái sổ nữa."""
     print(f"[cau {time.strftime('%H:%M:%S')}]", *phan, file=sys.stderr,
@@ -301,6 +333,8 @@ class Cua(BaseHTTPRequestHandler):
             return self._tra(503, {"loi": f"chưa có kho gương ở {GUONG}"})
 
         duong, _, truy_van = self.path[len("/git"):].partition("?")
+        if "git-upload-pack" in duong or "service=git-upload-pack" in truy_van:
+            dong_bo_main()
         dai = int(self.headers.get("Content-Length") or 0)
         if dai > GIT_THAN_TOI_DA:
             return self._tra(413, {"loi": "thân git quá lớn"})
