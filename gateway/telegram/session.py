@@ -99,6 +99,49 @@ def esc(text: str) -> str:
     return (text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
 
 
+# Mẫu neo theo dòng dùng `[ \t]`, KHÔNG dùng `\s`: `\s` khớp cả dấu xuống dòng
+# nên `^\s*` nuốt luôn dòng trước, và hai dòng dính vào nhau. Ca thử bắt được.
+_MD_RAO = re.compile(r"^[ \t]*```[\w+-]*[ \t]*(\n|$)", re.M)           # ```bash
+_MD_KE = re.compile(r"^[ \t]*([-*_])([ \t]*\1){2,}[ \t]*(\n|$)", re.M)  # --- *** ___
+_MD_BANG_KE = re.compile(
+    r"^[ \t]*\|?[ \t]*:?-{3,}:?[ \t]*(\|[ \t]*:?-{3,}:?[ \t]*)*\|?[ \t]*(\n|$)", re.M)
+_MD_BANG = re.compile(r"^[ \t]*\|(.*)\|[ \t]*$", re.M)
+_MD_TIEU_DE = re.compile(r"^[ \t]{0,3}#{1,6}[ \t]+(.*?)[ \t]*#*[ \t]*$", re.M)
+_MD_DAM = re.compile(r"\*\*(\S(?:.*?\S)?)\*\*|(?<!\w)__(\S(?:.*?\S)?)__(?!\w)")
+_MD_MA = re.compile(r"`([^`\n]+)`")
+_MD_LINK = re.compile(r"\[([^\]\n]+)\]\((https?://[^)\s]+)\)")
+_MD_SAO_DAU_DONG = re.compile(r"^([ \t]*)[*+][ \t]+", re.M)
+
+
+def bo_markdown(text: str) -> str:
+    """Gỡ Markdown khỏi câu CEO gửi admin — lớp CODE sau lời dặn trong SYSTEM.md.
+
+    SYSTEM.md cấm Markdown từ đầu, 18/08 thêm cả ví dụ cụ thể, vậy mà đo
+    26/09 trên hội thoại thật: 7/41 tin vẫn có ký tự thô — khối ```, backtick
+    quanh tên file, đường kẻ `---`. Telegram (parse_mode HTML, `esc` thoát sạch)
+    không dựng lại cái nào, admin thấy nguyên dấu giữa câu. Cùng họ
+    `_so_khong_nguon`: lớp prompt thì model phá lúc nào cũng được mà không ai
+    biết, nên thứ tra được bằng máy thì chặn bằng máy.
+
+    Chỉ gỡ DẤU, không đụng chữ: nội dung trong khối mã, tên file, lệnh giữ
+    nguyên vị trí. Cố ý KHÔNG đụng `*` đơn (phép nhân, "5*3") và `_` đơn
+    (snake_case) — đoán sai ở đó là làm hỏng chữ, tệ hơn để thừa một dấu.
+    Dòng `- ` giữ nguyên: Telegram hiện nó như một gạch đầu dòng đọc được.
+    """
+    if not text:
+        return text
+    t = _MD_RAO.sub("", text)
+    t = _MD_KE.sub("", t)
+    t = _MD_BANG_KE.sub("", t)
+    t = _MD_BANG.sub(lambda m: " · ".join(o.strip() for o in m.group(1).split("|")), t)
+    t = _MD_TIEU_DE.sub(r"\1", t)
+    t = _MD_DAM.sub(lambda m: m.group(1) or m.group(2), t)
+    t = _MD_MA.sub(r"\1", t)
+    t = _MD_LINK.sub(r"\1 (\2)", t)
+    t = _MD_SAO_DAU_DONG.sub(r"\1- ", t)
+    return re.sub(r"\n{3,}", "\n\n", t).strip()
+
+
 def markup_json(markup) -> str:
     """Telegram cần reply_markup dạng chuỗi. Không có nút thì bàn phím rỗng."""
     return json.dumps(markup or {"inline_keyboard": []}, ensure_ascii=False)
@@ -1984,7 +2027,11 @@ def handle_message(update, cfg):
     record_run(trace_id, session_id, data)
     # 1200 chứ không phải 800: câu này còn bị cắt lần nữa lúc nạp lại (CAT_BOT),
     # nên cắt sâu ngay từ lúc lưu là mất chữ hai lần cho cùng một mục đích.
-    luu_tin(conn, thread_id, "bot", (data.get("result") or "")[:1200])
+    # Lưu bản ĐÃ gỡ Markdown — đúng thứ admin đọc. Lưu bản thô thì phiên sau
+    # nạp lại lịch sử và CEO tự thấy mình từng viết Markdown, tức là dạy nó viết
+    # tiếp. Muốn đo model còn viết Markdown không thì dùng tests/evals — bộ ấy
+    # soát câu THÔ của model, trước lớp này.
+    luu_tin(conn, thread_id, "bot", bo_markdown(data.get("result") or "")[:1200])
 
     conn.execute("UPDATE thread SET turns=turns+1, lastAt=? WHERE threadId=?",
                  (now(), thread_id))
@@ -2030,7 +2077,7 @@ def build_reply(chat_id, thread_id, session_id, data, since):
     tin riêng. Đổi lại admin thấy rõ mình đang duyệt CÁI GÌ ở mỗi nút, thay vì
     một nút mơ hồ nằm dưới đoạn văn nói về hai việc.
     """
-    text = (data.get("result") or "").strip() or "(CEO không trả lời gì)"
+    text = bo_markdown((data.get("result") or "").strip()) or "(CEO không trả lời gì)"
     cho = pending_for_session(session_id, since)
 
     if len(cho) == 1:

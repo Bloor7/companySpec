@@ -248,6 +248,9 @@ MARKDOWN = [
     (re.compile(r"^#{1,6} ", re.M), "tiêu đề ##"),
     (re.compile(r"`"),             "dấu backtick"),
     (re.compile(r"^\s*\|.*\|", re.M), "bảng Markdown"),
+    # Thêm 26/09: đo trên hội thoại thật thấy CEO dùng `---` làm đường kẻ
+    # giữa các đoạn, mà bộ soát chưa từng tìm nó.
+    (re.compile(r"^[ \t]*-{3,}[ \t]*$", re.M), "đường kẻ ---"),
 ]
 
 
