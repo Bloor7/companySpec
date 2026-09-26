@@ -169,6 +169,30 @@ def _dap_nhip(conn, viec_id: str) -> None:
 
 # ───────────────────────── thêm và liệt kê ─────────────────────────
 
+# ───────────────────── lời nói với người (docs/NOI_DE_HIEU.md) ─────────────────────
+#
+# Trường DỮ LIỆU giữ mã (`choXem`, `repo`, "ĐỨT GÁNH") — máy phụ và mã khác đọc
+# chúng. Còn câu TÓM TẮT là thứ CEO đọc rồi nói lại với admin, nên nó phải là
+# lời thường. 26/09: CEO nói "Hộp đã viết… chạy codemap… đẩy bản nháp lên
+# GitHub ở nhánh…" vì chính câu tóm tắt ở đây dạy nó những chữ ấy; luật nói
+# dễ hiểu trong SYSTEM.md không thắng được dữ liệu nó đọc mỗi lượt.
+TEN_TRANG_THAI = {
+    "moi": "chưa bắt đầu", "dangLam": "máy phụ đang làm",
+    "tamDung": "tạm dừng", "choXem": "chờ đại ca đồng ý",
+    "daGop": "đã đưa vào hệ", "bo": "đã bỏ", "hong": "làm không xong",
+    # Giữ nguyên SỨC NẶNG của "đứt gánh" — đừng làm tròn thành "đang làm".
+    "ĐỨT GÁNH": "BỊ NGẮT GIỮA CHỪNG",
+}
+TEN_LOAI = {"repo": "sửa hệ này", "duAn": "dự án riêng"}
+TEN_LY_DO = {"hetHanMuc": "hết lượt dùng AI", "matMang": "mất mạng",
+             "loi": "gặp lỗi", "admin": "đại ca bảo dừng",
+             "dutGanh": "bị ngắt giữa chừng"}
+
+
+def _tt(ma: str) -> str:
+    return TEN_TRANG_THAI.get(ma, ma)
+
+
 def them_viec(inp: dict) -> tuple:
     conn = connect()
     viec_id = "y_" + os.urandom(5).hex()
@@ -188,13 +212,13 @@ def them_viec(inp: dict) -> tuple:
     # Nói RÕ loại việc trong câu xác nhận. Hai loại làm ở hai chỗ khác hẳn
     # nhau, và ghi nhầm loại thì mã đẻ ra lạc chỗ — admin phải thấy được cái
     # sai ngay lúc xác nhận chứ không phải lúc đọc kết quả.
-    ten_loai = ("sửa chính repo companySpec" if loai == "repo"
-                else "dự án riêng, thư mục riêng trong hộp")
+    ten_loai = ("sửa chính hệ này" if loai == "repo"
+                else "dự án riêng, làm trong thư mục riêng của máy phụ")
     return ({"viecId": viec_id, "tieuDe": inp["tieuDe"].strip(),
              "soDangCho": cho, "loai": loai},
-            f"Đã ghi vào xưởng: {inp['tieuDe'][:80]} (mã {viec_id}, "
-            f"loại {loai} — {ten_loai}). "
-            f"Hàng đợi còn {cho} việc chưa làm xong.",
+            f"Đã giao cho máy phụ: {inp['tieuDe'][:80]} (mã việc {viec_id} — "
+            f"{ten_loai}). Máy phụ tự nhận việc trong vài phút. "
+            f"Đang có {cho} việc chờ làm.",
             [{"type": "idea.add", "target": viec_id,
               "idempotencyKey": f"xuong|{inp['tieuDe'][:60]}",
               "reversible": True}])
@@ -237,20 +261,25 @@ def ds_viec(inp: dict) -> tuple:
                                                       "tamDung"))
     if not ds:
         return ({"cacViec": [], "tong": tong, "dangDo": 0, "choXem": 0},
-                "Xưởng trống — không có việc nào đang mở.", [])
+                "Máy phụ đang rảnh — không có việc nào đang mở.", [])
     dong = []
     for d in ds:
-        phu = f" · {d['buocKeTiep'][:70]}" if d["buocKeTiep"] else ""
+        phu = f"\n   Bước tiếp theo: {d['buocKeTiep'][:90]}" if d["buocKeTiep"] else ""
         if d["trangThai"] == "ĐỨT GÁNH":
-            phu += f" (nhịp tim cuối {d['nhipTim']} — máy tắt hoặc tiến trình chết)"
+            phu += (f"\n   Máy phụ không còn báo sống từ {d['nhipTim']} — máy tắt "
+                    "hoặc bị treo. Lần bật sau nó làm tiếp từ chỗ dở.")
         if d["trangThai"] == "tamDung" and d["lyDoDung"]:
-            phu += f" (dừng vì {d['lyDoDung']}"
-            phu += f", thử lại {d['tiepLuc'][:16]})" if d["tiepLuc"] else ")"
-        dong.append(f"[{d['trangThai']}·{d['loai']}] {d['tieuDe'][:55]} — "
-                    f"{d['viecId']} · {d['soBuoc']} bước{phu}")
+            phu += f"\n   Dừng vì {TEN_LY_DO.get(d['lyDoDung'], d['lyDoDung'])}"
+            phu += f", thử lại lúc {d['tiepLuc'][:16]}" if d["tiepLuc"] else ""
+        if d["trangThai"] == "choXem":
+            phu += f"\n   Xem những chỗ thay đổi: /tay xem {d['viecId']}"
+        dong.append(f"• {d['tieuDe'][:70]}\n   {_tt(d['trangThai'])} · "
+                    f"{TEN_LOAI.get(d['loai'], d['loai'])} · mã {d['viecId']} · "
+                    f"đã làm {d['soBuoc']} bước{phu}")
     return ({"cacViec": ds, "tong": tong, "dangDo": dang_do,
              "choXem": cho_xem},
-            f"{len(ds)} việc đang mở (tổng {tong} từ trước tới nay):\n"
+            f"Máy phụ có {len(ds)} việc đang mở"
+            + (f", {cho_xem} việc chờ đại ca đồng ý" if cho_xem else "") + ":\n"
             + "\n".join(dong), [])
 
 
@@ -442,8 +471,8 @@ def xong_viec(inp: dict) -> tuple:
     # nhận "…không được r) → choXem sau 5 bước. ??" và không hiểu gì).
     return ({"viecId": inp["viecId"], "trangThai": inp["trangThai"],
              "soBuoc": so, "tieuDe": r["tieuDe"], "soBuocHong": hong},
-            f"{inp['viecId']} ({r['tieuDe'][:50]}) → {inp['trangThai']} sau "
-            f"{so} bước. {inp['ketQua'][:200]}{canh}",
+            f"Việc «{r['tieuDe'][:80]}» (mã {inp['viecId']}) → "
+            f"{_tt(inp['trangThai'])}, sau {so} bước. {inp['ketQua'][:200]}{canh}",
             [{"type": "idea.close", "target": inp["viecId"],
               "idempotencyKey": f"xong|{inp['viecId']}|{inp['trangThai']}",
               "reversible": inp["trangThai"] != "daGop"}])
@@ -505,12 +534,12 @@ def nhat_ky(inp: dict) -> tuple:
     conn.close()
     if not ds:
         return ({"cacMuc": [], "tong": 0},
-                f"Xưởng chưa đóng việc nào trong {inp.get('soNgay') or 7} "
+                f"Máy phụ chưa xong việc nào trong {inp.get('soNgay') or 7} "
                 "ngày qua.", [])
     return ({"cacMuc": ds, "tong": len(ds)},
-            f"{len(ds)} việc đã đóng:\n" + "\n".join(
-                f"[{d['trangThai']}] {d['tieuDe'][:60]} ({d['xong']}, "
-                f"{d['soBuoc']} bước) — {d['ketQua'][:120]}" for d in ds),
+            f"Máy phụ đã xong {len(ds)} việc:\n" + "\n".join(
+                f"• {d['tieuDe'][:70]} — {_tt(d['trangThai'])}, {d['xong']} "
+                f"(mã {d['viecId']})\n   {d['ketQua'][:140]}" for d in ds),
             [])
 
 

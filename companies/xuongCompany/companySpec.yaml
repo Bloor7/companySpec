@@ -54,6 +54,9 @@ goiKhi: >
   việc CỦA HỆ. loai=duAn cho dự án riêng, loai=repo khi sửa companySpec.
   `moTa` viết MỘT DÒNG, dưới 300 chữ, chép ý admin — đừng viết đặc tả dài
   nhiều dòng: lệnh nhiều dòng bị guard chặn, và hộp tự hỏi chi tiết khi làm.
+  NÓI VỚI ADMIN: gọi hộp là "máy phụ", xưởng là "danh sách việc của máy phụ",
+  nhánh là "bản nháp". Muốn admin xem việc đã làm → xemThayDoi rồi chỉ
+  /tay xem <mã>. Bản nháp KHÔNG có trên GitHub.
 
 runtime: code
 entrypoint: ./src/main.py

@@ -706,10 +706,15 @@ def _dung_brief() -> str:
                 if v["trangThai"] in ("moi",):
                     continue
                 phu = f" — {v['buocKeTiep'][:60]}" if v.get("buocKeTiep") else ""
-                dong.append(f"  [{v['trangThai']}] {v['tieuDe'][:55]}{phu}")
+                # Lời thường, không mã (`choXem`): CEO nói lại đúng chữ nó đọc
+                # ở đây (26/09) — xem docs/NOI_DE_HIEU.md.
+                ten = {"choXem": "chờ đại ca đồng ý", "dangLam": "đang làm",
+                       "tamDung": "tạm dừng", "ĐỨT GÁNH": "BỊ NGẮT GIỮA CHỪNG"
+                       }.get(v["trangThai"], v["trangThai"])
+                dong.append(f"  [{ten}] {v['tieuDe'][:55]} (mã {v['viecId']}){phu}")
             if dong:
                 phan.append(
-                    f"Xưởng ý tưởng ({o.get('choXem', 0)} việc chờ đại ca xem, "
+                    f"Máy phụ ({o.get('choXem', 0)} việc chờ đại ca đồng ý, "
                     f"{o.get('dangDo', 0)} đang dở):\n" + "\n".join(dong)
                     + "\n  Chi tiết thì gọi xuongCompany.dsViec; đã làm được "
                       "những gì thì gọi xuongCompany.nhatKy.")

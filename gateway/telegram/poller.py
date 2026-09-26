@@ -133,14 +133,15 @@ def remember_bot_message(message_id: int, thread_id):
 # nó (timer trong distro openclaw) — nên ở đây không tồn tại chiều host→hộp
 # để mà lỡ nới ra.
 TAY_HUONG_DAN = (
-    "Thực đơn /tay — đi thẳng tới company, không đánh thức CEO:\n\n"
-    "/tay xem      — xưởng đang làm gì, việc nào chờ đại ca xem\n"
+    "Lệnh /tay — làm việc với MÁY PHỤ (máy ảo riêng nơi AI tự viết mã), "
+    "không tốn lượt của CEO:\n\n"
+    "/tay xem      — máy phụ đang làm gì, việc nào chờ đại ca đồng ý\n"
     "/tay xem <mã> — XEM những chỗ một việc đã thay đổi (gửi trang mở trên điện thoại)\n"
-    "/tay nhatky   — mấy hôm nay xưởng làm được những gì\n"
-    "/tay them <ý tưởng>  — SỬA HỆ NÀY: thêm/bớt/chữa trong companySpec\n"
-    "/tay duan <ý tưởng>  — DỰ ÁN RIÊNG: web, bot, script… làm ở thư mục riêng\n"
-    "/tay api <từ khoá>   — tra danh mục API công khai\n\n"
-    "Hộp tự lấy việc mỗi vài phút, không cần gọi."
+    "/tay nhatky   — mấy hôm nay máy phụ làm xong những gì\n"
+    "/tay them <ý tưởng>  — giao việc SỬA HỆ NÀY (thêm/bớt/chữa tính năng)\n"
+    "/tay duan <ý tưởng>  — giao DỰ ÁN RIÊNG: web, bot, script… làm ở thư mục riêng\n"
+    "/tay api <từ khoá>   — tra danh sách API công khai\n\n"
+    "Máy phụ tự nhận việc mỗi vài phút, không cần gọi."
 )
 
 
