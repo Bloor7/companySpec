@@ -180,6 +180,23 @@ wsl -d Ubuntu-22.04 -u root -- systemctl restart user@1000   # dừng user@1000 
 python ops/soatHop.py                                        # phải in "uid tách nhau"
 ```
 
+## Hộp cách ly tới đâu — ĐO 26/09, không đoán
+
+| Thứ | Hiện trạng |
+|---|---|
+| sudo, ổ Windows, `wsl.exe` | không có ✓ |
+| Tiến trình của Ubuntu | không thấy (pid namespace riêng) ✓ |
+| localhost của Ubuntu | chỉ với tới `8787` (cầu) ✓ |
+| RAM / swap / CPU / số tiến trình | có trần: `gioi-han-hop.conf` — thử phá xin 3,5 GB → OOM giết TRONG hộp, Ubuntu không hề hấn ✓ |
+| Kernel, cây cgroup | **chung** với Ubuntu ✗ — gốc của sự cố 25/09 |
+| Mạng ra Internet | **mở hoàn toàn** ✗ — CHƯA chặn vì thợ cần API Claude và npm/pip; chặn là quyết định của admin, không phải chỗ để đoán |
+| Tiến trình mở bằng `wsl -u hop` | rơi vào `init.scope`, **không** chịu trần slice. Thợ thật (`hop-tho.service`) thì chịu. Đừng đo trần bằng `wsl -u hop` — nó báo "không bị chặn" và sai |
+
+Tức là: hộp là **ranh giới quyền và dữ liệu** (không khoá, không ổ, một cửa),
+đã có **trần tài nguyên**, nhưng CHƯA là sandbox mạng hay sandbox kernel.
+Trước khi cho thợ chạy thứ lạ (skill người lạ, repo chưa soát) thì hai ô ✗
+cuối phải được quyết.
+
 ## Cách kiểm
 
 ```bash
