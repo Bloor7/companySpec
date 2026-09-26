@@ -437,8 +437,11 @@ def xong_viec(inp: dict) -> tuple:
         # hỏng là đúng hình dạng của bug `is_done()` cũ.
         canh = (f" ⚠ có {hong} bước HỎNG trong việc này — nói rõ với admin "
                 "trước khi bảo là xong.")
+    # tieuDe + soBuocHong trả ra để người BÁO admin (cau.bao_xong) viết được
+    # một câu đọc hiểu, thay vì cắt xén chuỗi summary kỹ thuật (26/09: admin
+    # nhận "…không được r) → choXem sau 5 bước. ??" và không hiểu gì).
     return ({"viecId": inp["viecId"], "trangThai": inp["trangThai"],
-             "soBuoc": so},
+             "soBuoc": so, "tieuDe": r["tieuDe"], "soBuocHong": hong},
             f"{inp['viecId']} ({r['tieuDe'][:50]}) → {inp['trangThai']} sau "
             f"{so} bước. {inp['ketQua'][:200]}{canh}",
             [{"type": "idea.close", "target": inp["viecId"],

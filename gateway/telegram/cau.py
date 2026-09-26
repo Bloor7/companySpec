@@ -263,7 +263,7 @@ def moi_duyet(kq: dict, company: str, capability: str) -> None:
         ghi(f"GỬI PHIẾU HỎNG ({ma}): {type(exc).__name__}: {exc}")
 
 
-def bao_xong(kq: dict, company: str, capability: str) -> None:
+def bao_xong(kq: dict, company: str, capability: str, inp: dict = None) -> None:
     """Hộp đóng xong một việc → NHẮN CHO ADMIN. Không có bước này thì cả cái
     dây chuyền chạy đúng mà vô nghĩa.
 
@@ -290,13 +290,44 @@ def bao_xong(kq: dict, company: str, capability: str) -> None:
         return
     try:
         import telegram
-        dau = ("Hộp làm xong một việc, chờ đại ca xem"
-               if o["trangThai"] == "choXem" else "Hộp làm KHÔNG xong một việc")
-        telegram.send_message(
-            chat, telegram.esc(f"{dau}\n\n{(kq.get('summary') or '')[:900]}"))
+        telegram.send_message(chat, telegram.esc(cau_bao_xong(o, inp or {})))
         ghi(f"đã báo admin: việc {o.get('viecId')} → {o['trangThai']}")
     except Exception as exc:
         ghi(f"BÁO XONG HỎNG: {type(exc).__name__}: {exc}")
+
+
+def cau_bao_xong(o: dict, inp: dict) -> str:
+    """Câu báo admin khi máy phụ xong (hay hỏng) một việc — viết cho NGƯỜI ĐỌC.
+
+    Bản cũ gửi nguyên summary kỹ thuật: "y_9b309f16ef (Ca thử: … không được r)
+    → choXem sau 5 bước. ?? tests/…". Admin (26/09): "anh không biết xem thế
+    nào luôn". Bốn lỗi trong một dòng: tên việc bị cắt giữa chữ, trạng thái để
+    nguyên mã (`choXem`), ký hiệu git (`??`), và KHÔNG nói admin phải làm gì.
+
+    Luật viết: docs/NOI_DE_HIEU.md — kết quả trước, từ thường, và câu cuối là
+    việc admin cần làm.
+    """
+    ma, ten = o.get("viecId", "?"), o.get("tieuDe") or "(không rõ tên)"
+    ket_qua = (inp.get("ketQua") or "").strip()
+    la_nhap = bool(inp.get("nhanh"))       # có nhánh = sửa chính hệ; không = dự án riêng
+    if o["trangThai"] == "hong":
+        return (f"Máy phụ KHÔNG làm xong việc: {ten}\n"
+                f"Mã việc: {ma}\n\n"
+                "Hệ đang chạy không bị thay đổi gì.\n"
+                f"Lý do (chi tiết kỹ thuật): {ket_qua[:500]}")
+    canh = ""
+    if o.get("soBuocHong"):
+        canh = (f"\n⚠ Có {o['soBuocHong']} bước bị lỗi giữa chừng — "
+                "cần kiểm kỹ trước khi dùng.")
+    if la_nhap:
+        buoc_sau = ("Việc này mới là BẢN NHÁP, chưa vào hệ đang chạy.\n"
+                    f"Muốn dùng: mở Claude Code và nói \"duyệt việc {ma}\" — "
+                    "Claude sẽ kiểm lại rồi mới đưa vào hệ.")
+    else:
+        buoc_sau = "Mở đường dẫn ở trên trong Windows Explorer để xem."
+    return (f"Máy phụ đã làm xong: {ten}\n"
+            f"Mã việc: {ma}\n\n"
+            f"{ket_qua[:700]}{canh}\n\n{buoc_sau}")
 
 
 class Cua(BaseHTTPRequestHandler):
@@ -451,7 +482,7 @@ class Cua(BaseHTTPRequestHandler):
         if kq.get("status") == "needsApproval":
             moi_duyet(kq, company, capability)
         else:
-            bao_xong(kq, company, capability)
+            bao_xong(kq, company, capability, inp)
         self._tra(200, kq)
 
 

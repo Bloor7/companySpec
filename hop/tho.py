@@ -69,6 +69,25 @@ def noi(*phan) -> None:
     print(f"[thợ {gio()}]", *phan, flush=True)
 
 
+def tep_doi(tinh_trang: str) -> str:
+    """Đầu ra `git status --porcelain` → một câu admin đọc được.
+
+    Bản cũ dán thẳng `?? tests/…` vào câu báo xong. `??` là cách git ghi "tệp
+    mới chưa theo dõi" — với admin nó trông như hệ đang hỏi lại, hoặc hỏng
+    (đo 26/09, ảnh chụp Telegram). Dịch ký hiệu ra chữ ở đây, một chỗ.
+    """
+    nhom = {"mới": [], "sửa": [], "xoá": []}
+    for dong in tinh_trang.splitlines():
+        if len(dong) < 4:
+            continue
+        ma, ten = dong[:2], dong[3:].strip()
+        loai = "mới" if "?" in ma or "A" in ma else "xoá" if "D" in ma else "sửa"
+        nhom[loai].append(ten)
+    phan = [f"{loai} {len(ds)} tệp ({', '.join(ds[:4])}{', …' if len(ds) > 4 else ''})"
+            for loai, ds in nhom.items() if ds]
+    return "; ".join(phan) or "không có tệp nào thay đổi"
+
+
 # ───────────────────────── nói chuyện với hệ qua cầu ─────────────────────────
 
 def goi(company: str, capability: str, inp: dict, tra: int = 90) -> dict:
@@ -455,9 +474,8 @@ def mot_vong(kho: bool) -> int:
                      + cho_lam.replace("/", "\\"))
         goi("xuongCompany", "xongViec",
             {"viecId": viec_id, "trangThai": "choXem",
-             "ketQua": f"Dự án nằm trong hộp: {cho_lam}\n"
-                       f"Mở từ Windows: {duong_win}\n{ra_luat}\n"
-                       f"{tinh_trang.strip()[-400:]}"})
+             "ketQua": f"Đã làm: {tep_doi(tinh_trang)}.\n"
+                       f"Mở xem trên Windows: {duong_win}\n{ra_luat}"})
         noi(f"XONG {viec_id} → {cho_lam} (mở Windows: {duong_win})")
         return 0
 
@@ -472,8 +490,10 @@ def mot_vong(kho: bool) -> int:
 
     goi("xuongCompany", "xongViec",
         {"viecId": viec_id, "trangThai": "choXem", "nhanh": nhanh,
-         "ketQua": f"{tinh_trang.strip()[-600:]}\ncodemap --check: sạch. "
-                   f"Nhánh {nhanh} đã đẩy lên gương, chờ đại ca xem rồi gộp."})
+         # Nhánh đã đi riêng trong trường `nhanh`; người báo admin tự nói
+         # "đây là bản nháp" — nhắc lại ở đây là lặp đúng một ý hai lần.
+         "ketQua": f"Đã làm: {tep_doi(tinh_trang)}.\n"
+                   "Tự kiểm tra cấu trúc hệ: đạt."})
     noi(f"XONG {viec_id} → nhánh {nhanh}, chờ đại ca xem")
     return 0
 

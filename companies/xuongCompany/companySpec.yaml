@@ -261,9 +261,11 @@ capabilities:
       additionalProperties: false
       required: [viecId, trangThai]
       properties:
-        viecId:    { type: string }
-        trangThai: { type: string }
-        soBuoc:    { type: integer }
+        viecId:     { type: string }
+        trangThai:  { type: string }
+        soBuoc:     { type: integer }
+        tieuDe:     { type: string }
+        soBuocHong: { type: integer }
 
   - name: donDep
     description: >
