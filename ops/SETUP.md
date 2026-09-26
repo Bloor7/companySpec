@@ -49,11 +49,20 @@ Bảng kế hoạch do cậu tự dựng — script chỉ nhận lại, không t
 
 ```bash
 mkdir -p ~/.config/systemd/user
-cp ops/companyspec-session.service ops/companyspec-scheduler.{service,timer} \
+cp ops/companyspec-gateway.service ops/companyspec-scheduler.{service,timer} \
    ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now companyspec-gateway companyspec-scheduler.timer
 loginctl enable-linger "$USER"
+```
+
+Rồi cài **bộ canh** — chạy bằng root, NẰM NGOÀI user manager mà nó canh.
+Không có nó thì user manager chết là cả hệ câm mà không ai báo (25/09). Sửa
+tên `tsix` trong `ExecStart` nếu máy khác:
+
+```bash
+sudo cp ops/companyspec-canh.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now companyspec-canh.timer
 ```
 
 Nhắn `/giupdo` cho bot để kiểm tra.
@@ -73,6 +82,7 @@ Polling thì ngược lại: máy tự hỏi Telegram, không ai gọi vào đư
 | Hiện tượng | Chỗ xem |
 |---|---|
 | Bot im lặng | `journalctl --user -u companyspec-gateway -f` |
+| Bộ canh đã dựng lại gì | `journalctl -u companyspec-canh -g canh` |
 | Sai chatId | `ops/.env` — sai thì gateway bỏ qua, đúng thiết kế |
 | Lịch không chạy | `systemctl --user list-timers companyspec-scheduler.timer` |
 | Muốn xem hệ nghĩ gì | `python3 gateway/telegram/session.py check` |

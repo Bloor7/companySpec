@@ -312,6 +312,40 @@ def do_actions(actions: list, da_tra_loi_bam: bool = False, chat_id=None):
             log("action lạ:", kind)
 
 
+#: Dấu vết bộ canh cấp hệ thống (ops/canhHe.sh) để lại mỗi lần phải dựng lại.
+DAU_VET_CANH = os.path.join(ROOT, "ops", ".canhHe.log")
+
+
+def _bao_canh() -> str:
+    """Đọc rồi XOÁ dấu vết của bộ canh — trả câu báo admin, hoặc "" nếu không có.
+
+    Bộ canh chạy bằng root và không cầm token Telegram (T1: cửa ra là gateway),
+    nên nó chỉ ghi lại. Người nói ra là poller, vì mỗi lần bộ canh dựng lại
+    user manager thì poller cũng vừa khởi động — đúng lúc đọc.
+
+    Không báo thì lần dựng lại ấy vô hình: hệ tự khỏi, admin không bao giờ biết
+    nó đã chết, và sự cố lặp lại mỗi sáng trông y hệt một hệ khoẻ.
+    """
+    try:
+        with open(DAU_VET_CANH, encoding="utf-8") as fh:
+            dong = [d.rstrip("\n").split("\t", 1) for d in fh if d.strip()]
+        os.remove(DAU_VET_CANH)
+    except FileNotFoundError:
+        return ""
+    except OSError as exc:
+        # O10: đọc hỏng không phải "không có gì". Nói ra.
+        log(f"không đọc được {DAU_VET_CANH}: {exc}")
+        return f"Em không đọc được sổ của bộ canh ({type(exc).__name__}) — đại ca xem journal giúp em."
+    if not dong:
+        return ""
+    ra = [f"· {d[0][11:16]} {d[0][8:10]}/{d[0][5:7]}: {d[1] if len(d) > 1 else ''}"
+          for d in dong[-5:]]
+    if len(dong) > 5:
+        ra.insert(0, f"· …và {len(dong) - 5} lần trước đó")
+    return (f"Bộ canh vừa phải dựng lại hệ {len(dong)} lần — tức là trước đó em đã "
+            "chết mà không tự nói được:\n" + "\n".join(ra))
+
+
 def _bao_tin_bo_qua(bo_qua: list) -> str:
     """Câu báo tin bị bỏ lúc khởi động — DẪN LẠI từng tin, không chỉ đếm.
 
@@ -375,6 +409,9 @@ def main() -> int:
             m = upd.get("message") or upd.get("callback_query", {}).get("message") or {}
             (ton_dong if (m.get("date") or 0) >= nguong else bo_qua_cu).append(upd)
 
+    bao_canh = _bao_canh()
+    if bao_canh:
+        telegram.send_message(ADMIN, bao_canh)
     if bo_qua_cu:
         log(f"bỏ qua {len(bo_qua_cu)} tin cũ hơn {NHAN_LAI_PHUT} phút")
         telegram.send_message(ADMIN, _bao_tin_bo_qua(bo_qua_cu))

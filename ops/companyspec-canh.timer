@@ -1,0 +1,13 @@
+# Hai phút: đủ nhanh để admin nhắn tin thì hệ đã sống lại, đủ thưa để không
+# ai phải để ý. OnBootSec=90s cho user manager lượt thứ nhất tự lên trước —
+# canh sớm hơn là dựng lại thứ đang tự dựng.
+
+[Unit]
+Description=Canh companySpec mỗi 2 phút
+
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=2min
+
+[Install]
+WantedBy=timers.target

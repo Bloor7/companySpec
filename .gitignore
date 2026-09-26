@@ -38,6 +38,9 @@ workspaces/
 # n8n runtime
 ops/.env
 
+# Sổ tạm của bộ canh (ops/canhHe.sh) — poller đọc xong thì xoá
+ops/.canhHe.log
+
 # khoá tiến trình
 ops/.poller.lock
 

@@ -1,0 +1,13 @@
+# Bộ canh cấp HỆ THỐNG — xem đầu ops/canhHe.sh.
+# Cố ý là unit của root trong /etc/systemd/system/, KHÔNG phải unit --user:
+# thứ nó canh chính là user manager, và bộ canh chết cùng thứ nó canh thì vô
+# nghĩa (25/09).
+#
+# ⚠ Tên user viết cứng ở ExecStart. Máy khác thì sửa `tsix` cho đúng.
+
+[Unit]
+Description=companySpec — canh user manager và poller, chết thì dựng lại
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /home/tsix/companySpec/ops/canhHe.sh tsix
