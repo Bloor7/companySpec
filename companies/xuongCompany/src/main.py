@@ -514,9 +514,62 @@ def nhat_ky(inp: dict) -> tuple:
             [])
 
 
+#: Kho chứa bản nháp máy phụ đẩy về — cùng chỗ gateway/telegram/cau.py phục vụ.
+KHO_NHAP = os.environ.get("XUONG_KHO_NHAP") or os.path.expanduser("~/hop-guong/hop.git")
+#: Trần độ dài phần thay đổi trả ra. Đủ cho mọi việc máy phụ làm tới nay (lớn
+#: nhất ~10 KB); vượt thì CẮT và NÓI là đã cắt, đừng lặng lẽ trả một nửa.
+DIFF_TOI_DA = 200_000
+
+
+def _git_nhap(*lenh) -> str:
+    import subprocess
+    proc = subprocess.run(["git", "-C", KHO_NHAP, *lenh],
+                          capture_output=True, text=True, timeout=20)
+    if proc.returncode != 0:
+        raise RuntimeError(f"git {lenh[0]} hỏng: {proc.stderr.strip()[-300:]}")
+    return proc.stdout
+
+
+def xem_thay_doi(inp: dict) -> tuple:
+    """Những chỗ một việc đã thay đổi — để admin XEM TRỰC TIẾP trên Telegram.
+
+    26/09 admin hỏi CEO "show anh xem" và nhận về một lệnh terminal
+    (`git diff main...y/…`) cộng một câu SAI ("vào GitHub xem nhánh" — bản
+    nháp không có trên GitHub). Admin: "anh muốn xem trực tiếp". Năng lực này
+    trả đủ dữ liệu để gateway dựng một trang xem được trên điện thoại.
+
+    Chỉ ĐỌC kho bản nháp bằng git; không ghi gì, không chạm mạng.
+    """
+    conn = connect()
+    r = _lay(conn, inp["viecId"])
+    conn.close()
+    nhanh = (r["nhanh"] or "").strip()
+    if not nhanh:
+        raise ValueError(
+            f"Việc {r['viecId']} chưa có bản nháp để xem"
+            + (" — đây là dự án riêng, nằm trong máy phụ; đường mở trên Windows "
+               f"có trong kết quả: {(r['ketQua'] or '')[:300]}"
+               if r["ketQua"] else " (máy phụ chưa làm xong)."))
+    moc = f"refs/heads/main...refs/heads/{nhanh}"
+    tep = []
+    for dong in _git_nhap("diff", "--numstat", moc).splitlines():
+        them, bot, ten = (dong.split("\t", 2) + ["", "", ""])[:3]
+        tep.append({"ten": ten, "them": int(them) if them.isdigit() else 0,
+                    "bot": int(bot) if bot.isdigit() else 0})
+    diff = _git_nhap("diff", moc)
+    cat = len(diff) > DIFF_TOI_DA
+    tom = "; ".join(f"{t['ten']} (+{t['them']} −{t['bot']})" for t in tep[:6])
+    return ({"viecId": r["viecId"], "tieuDe": r["tieuDe"], "moTa": r["moTa"] or "",
+             "trangThai": r["trangThai"], "nhanh": nhanh, "tepDoi": tep,
+             "diff": diff[:DIFF_TOI_DA], "daCat": cat},
+            f"Việc «{r['tieuDe']}» thay đổi {len(tep)} tệp: {tom or 'không có gì'}."
+            + (" (Phần thay đổi quá dài nên đã cắt bớt.)" if cat else ""),
+            [])
+
+
 HANDLERS = {"themViec": them_viec, "dsViec": ds_viec, "nhanViec": nhan_viec,
             "ghiBuoc": ghi_buoc, "tamDung": tam_dung, "xongViec": xong_viec,
-            "donDep": don_dep, "nhatKy": nhat_ky}
+            "donDep": don_dep, "nhatKy": nhat_ky, "xemThayDoi": xem_thay_doi}
 
 
 def main() -> int:

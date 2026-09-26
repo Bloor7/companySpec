@@ -129,6 +129,38 @@ def send_message(chat_id, text: str, reply_markup_json: str | None = None,
     return res
 
 
+def send_document(chat_id, ten_tep: str, noi_dung: bytes, chu_thich: str = "",
+                  loai: str = "text/html") -> dict:
+    """Gửi một TỆP (trang HTML xem thay đổi…). Cùng cửa ra T1 với tin nhắn.
+
+    Tin nhắn Telegram trần 4096 ký tự và không tô màu được — không đủ để admin
+    "xem trực tiếp" một thay đổi mã (26/09). Một trang HTML gửi kèm thì bấm là
+    mở trên điện thoại. Dựng multipart bằng tay: không thêm thư viện nào.
+    """
+    ranh = "----companySpec" + os.urandom(8).hex()
+    phan = []
+    for ten, gia in (("chat_id", str(chat_id)), ("caption", chu_thich[:1000])):
+        phan.append(f"--{ranh}\r\nContent-Disposition: form-data; name=\"{ten}\"\r\n\r\n"
+                    f"{gia}\r\n".encode())
+    phan.append(f"--{ranh}\r\nContent-Disposition: form-data; name=\"document\"; "
+                f"filename=\"{ten_tep}\"\r\nContent-Type: {loai}\r\n\r\n".encode()
+                + noi_dung + b"\r\n")
+    phan.append(f"--{ranh}--\r\n".encode())
+    req = urllib.request.Request(
+        _api("sendDocument"), data=b"".join(phan),
+        headers={"Content-Type": f"multipart/form-data; boundary={ranh}"})
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", "replace")[:300]
+        print(f"[telegram] sendDocument lỗi {exc.code}: {body}", file=sys.stderr)
+        return {"ok": False, "error": body}
+    except Exception as exc:
+        print(f"[telegram] sendDocument lỗi: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return {"ok": False, "error": str(exc)}
+
+
 def answer_callback(callback_id: str, text: str = "") -> dict:
     return call("answerCallbackQuery",
                 {"callback_query_id": callback_id, "text": text[:200]})

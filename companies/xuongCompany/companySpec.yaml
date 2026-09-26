@@ -59,7 +59,7 @@ runtime: code
 entrypoint: ./src/main.py
 runtimeReason: >
   Không gọi model nào, không chạm mạng. Một bảng sqlite và vài phép đổi trạng
-  thái. Company này phải là thứ RẺ VÀ CHẮC nhất trong hệ, vì nó là chỗ mọi thứ
+  thái — cộng `xemThayDoi` ĐỌC kho bản nháp trên đĩa bằng git (26/09). Company này phải là thứ RẺ VÀ CHẮC nhất trong hệ, vì nó là chỗ mọi thứ
   khác quay về hỏi "tôi đang dở việc gì".
 
 dataStore: ./store.sqlite
@@ -314,3 +314,34 @@ capabilities:
       properties:
         cacMuc: { type: array }
         tong:   { type: integer }
+
+  - name: xemThayDoi
+    description: >
+      Những chỗ một việc của máy phụ đã thay đổi (tệp nào, thêm/bớt bao nhiêu
+      dòng, và toàn bộ phần thay đổi). Dùng khi admin muốn XEM việc máy phụ đã
+      làm: "show anh xem", "nó sửa gì", "cho anh xem trước khi đưa vào".
+      Kể lại cho admin bằng lời thường (tệp nào, để làm gì), rồi nói admin gõ
+      /tay xem <mã việc> để mở trang xem đầy đủ trên điện thoại.
+      ⚠ Bản nháp nằm trong kho trên MÁY NHÀ, KHÔNG có trên GitHub — đừng bảo
+      admin lên GitHub tìm. Đừng đưa lệnh git cho admin tự chạy.
+    riskTier: read
+    maxDurationSec: 30
+    inputSchema:
+      type: object
+      additionalProperties: false
+      required: [viecId]
+      properties:
+        viecId: { type: string, minLength: 4, maxLength: 40 }
+    outputSchema:
+      type: object
+      additionalProperties: false
+      required: [viecId, tieuDe, nhanh, tepDoi, diff, daCat]
+      properties:
+        viecId:    { type: string }
+        tieuDe:    { type: string }
+        moTa:      { type: string }
+        trangThai: { type: string }
+        nhanh:     { type: string }
+        tepDoi:    { type: array, items: { type: object } }
+        diff:      { type: string }
+        daCat:     { type: boolean }

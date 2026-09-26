@@ -147,6 +147,7 @@ viết vội, mỗi chỗ một cơ hội hỏng vì lý do chẳng liên quan g
 |---|---|
 | `/tay` | in thực đơn |
 | `/tay xem` | xưởng đang làm gì, việc nào chờ đại ca xem |
+| `/tay xem <mã>` | **xem trực tiếp** những chỗ một việc đã thay đổi — gửi một trang HTML mở trên điện thoại (dòng thêm xanh, dòng bỏ đỏ) |
 | `/tay nhatky` | mấy hôm nay xưởng làm được những gì |
 | `/tay them <ý tưởng>` | **sửa hệ này** — việc loại `repo` |
 | `/tay duan <ý tưởng>` | **dự án riêng** — việc loại `duAn` |

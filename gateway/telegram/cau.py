@@ -321,6 +321,7 @@ def cau_bao_xong(o: dict, inp: dict) -> str:
                 "cần kiểm kỹ trước khi dùng.")
     if la_nhap:
         buoc_sau = ("Việc này mới là BẢN NHÁP, chưa vào hệ đang chạy.\n"
+                    f"Xem những chỗ thay đổi: gõ /tay xem {ma}\n"
                     f"Muốn dùng: mở Claude Code và nói \"duyệt việc {ma}\" — "
                     "Claude sẽ kiểm lại rồi mới đưa vào hệ.")
     else:

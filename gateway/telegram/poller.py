@@ -135,6 +135,7 @@ def remember_bot_message(message_id: int, thread_id):
 TAY_HUONG_DAN = (
     "Thực đơn /tay — đi thẳng tới company, không đánh thức CEO:\n\n"
     "/tay xem      — xưởng đang làm gì, việc nào chờ đại ca xem\n"
+    "/tay xem <mã> — XEM những chỗ một việc đã thay đổi (gửi trang mở trên điện thoại)\n"
     "/tay nhatky   — mấy hôm nay xưởng làm được những gì\n"
     "/tay them <ý tưởng>  — SỬA HỆ NÀY: thêm/bớt/chữa trong companySpec\n"
     "/tay duan <ý tưởng>  — DỰ ÁN RIÊNG: web, bot, script… làm ở thư mục riêng\n"
@@ -202,6 +203,28 @@ def _tra_loi_company(chat_id, kq: dict, company: str, capability: str) -> list:
     return [_tin(chat_id, chu)]
 
 
+def _xem_thay_doi(chat_id, viec_id: str) -> list:
+    """`/tay xem <mã>` → một câu tóm tắt + một TRANG HTML xem trên điện thoại.
+
+    26/09 admin hỏi "show anh xem" và nhận về lệnh `git diff` để tự chạy. Đây
+    là đường xem trực tiếp: đọc (read) nên không cần duyệt, không đánh thức CEO.
+    """
+    kq = goi_company("xuongCompany", "xemThayDoi", {"viecId": viec_id[:40]})
+    if kq.get("status") != "ok":
+        return _tra_loi_company(chat_id, kq, "xuongCompany", "xemThayDoi")
+    o = kq.get("output") or {}
+    import trang
+    gui = telegram.send_document(
+        chat_id, f"thay-doi-{o.get('viecId', 'viec')}.html",
+        trang.dung_trang(o).encode("utf-8"),
+        chu_thich="Bấm vào tệp để mở trang xem những chỗ thay đổi.")
+    if not gui.get("ok"):
+        # O10 — gửi tệp hỏng thì nói ra, và vẫn đưa phần tóm tắt.
+        return [_tin(chat_id, f"{kq.get('summary', '')}\n\nKhông gửi được trang xem "
+                              f"chi tiết: {gui.get('error', '')[:200]}")]
+    return [_tin(chat_id, kq.get("summary") or "")]
+
+
 def xu_ly_tay(chu: str, chat_id) -> list:
     phan = chu.split(None, 2)          # ['/tay', '<mục>', '<phần còn lại>']
     muc = (phan[1].lower() if len(phan) > 1 else "").strip()
@@ -209,6 +232,8 @@ def xu_ly_tay(chu: str, chat_id) -> list:
 
     if muc in ("", "help", "?"):
         return [_tin(chat_id, TAY_HUONG_DAN)]
+    if muc == "xem" and con_lai:
+        return _xem_thay_doi(chat_id, con_lai.split()[0])
     if muc == "xem":
         return _tra_loi_company(chat_id, goi_company("xuongCompany", "dsViec", {}),
                                 "xuongCompany", "dsViec")
